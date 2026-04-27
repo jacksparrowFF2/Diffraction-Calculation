@@ -1,3 +1,4 @@
+% 输入（匿名函数，物面尺寸xy，物面xy方向分辨率，波长，传播距离，像面尺寸xy，像面xy方向分辨率）
 function [Uc1, Ud1, Ud] = fraunhofer_fft(Uc, xmin, xmax, ymin, ymax, m, n, lambda, z, Xmin, Xmax, Ymin, Ymax, M, N)
 %FRAUNHOFER_FFT 计算连续分布在特定取样条件下的夫琅禾费衍射积分（FFT版）
 %   小写字母为输入光场采样参数，大写字母为输出光场采样参数
