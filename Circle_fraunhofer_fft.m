@@ -9,8 +9,31 @@ z = 0.3;
 r = 20e-6;
 % 初始振幅
 U0 = 1;
-% 分辨率
-nn = 1024;
+% 分辨率，设定单个周期的分辨率
+nn = 100;
+% 设定物面X、Y方向周期
+Nx_period = 1;         % x方向周期数
+Ny_period = 1;         % y方向周期数
+% 设定周期尺寸
+Pitch = 50e-6;
+% 设定单个周期的最大与最小值
+x_cell_min = -Pitch/2;
+x_cell_max = Pitch/2;
+y_cell_min = -Pitch/2;
+y_cell_max = Pitch/2;
+x_cell = linspace(x_cell_min,x_cell_max,nn);
+y_cell = linspace(y_cell_min,y_cell_max,nn);
+
+[Xc, Yc] = meshgrid(x_cell, y_cell);
+
+cellPattern = double(Xc.^2 + Yc.^2 <= r^2);
+
+figure;
+imshow(cellPattern, []);
+title('Single Unit Cell: Circular Aperture'); 
+axis on;axis image;xlabel('x');ylabel('y')
+
+
 % 像面与物面尺寸之比
 ImageMaskRatio = 1e3;
 % 物面尺寸x方向最小值
@@ -49,11 +72,14 @@ Y = linspace(Ymin, Ymax, nn);
 k = 2 * pi / lambda;
 % 创建函数
 circle = @(x, y) x.^2 + y.^2 <= r^2;
+
 % circle2 = @(x, y) (x-10e-6).^2 + (y-10e-6).^2 <= r^2;
 % circle = @(x, y)circle1(x,y)&circle2(x,y);
 %% 数值解-优先计算数值解
 % [~, U2] = fraunhofer_fft(@(x, y)x.^2+y.^2 <= r^2, xmin, xmax, ymin, ymax, nn, nn, lambda, z, Xmin, Xmax, Ymin, Ymax, nn, nn);
-[~, U2] = fraunhofer_fft_SPH(circle, xmin, xmax, ymin, ymax, nn, nn, lambda, z, Xmin, Xmax, Ymin, Ymax, nn, nn,k);
+[~, U2] = fraunhofer_fft_SPH(circle, xmin, xmax, ymin, ymax, nn, nn, ...
+                        lambda, z, Xmin, Xmax, Ymin, Ymax, nn, nn, ...
+                        k,1);
 work(X, Y, U2, "数值解");
 
 

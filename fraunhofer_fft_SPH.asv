@@ -8,14 +8,11 @@ function [Uc1, Ud1, Ud] = fraunhofer_fft_SPH(Uc, xmin, xmax, ymin, ymax, m, n, l
     % WaveVector = 2 * pi / lambda;
     
     % 如果输入的是匿名函数，则需要进行离散化，flag为1
-    if flag == 1
-        % 对复合匿名函数进行离散化
-        Ud = discretize(Uc, xmin, xmax, ymin, ymax, m, n);
-    % 如果输入的是图片或离散化后的Mask,则flag为0,Ud=Uc
-    else
-        Ud = Uc;
-    end
+    
+    % 如果输入的是图片或离散化后的Mask,则flag为0
 
+    % 对复合匿名函数进行离散化
+    Ud = discretize(Uc, xmin, xmax, ymin, ymax, m, n);
     % 构建像面X方向矢量
     X = linspace(Xmin, Xmax, M);
     % 构建像面Y方向矢量
