@@ -14,8 +14,8 @@ flag = 0;
 % 分辨率，设定单个周期的分辨率
 nn = 1024;
 % 设定物面X、Y方向周期
-Nx_period = 3;         
-Ny_period = 3;         
+Nx_period = 2;         
+Ny_period = 2;         
 % 设定周期尺寸
 Pitch = 55e-6;
 % 设定目标像面尺寸，直观单位mm
@@ -126,13 +126,9 @@ axis on;axis image;xlabel('x');ylabel('y')
 
 %计算总能量（因为是计算比例，所以没有乘以像面xy步长）
 I_Total = sum(I,'all');
-fprintf('总能量：%g\n', I_Total);
+fprintf('总能量：%g x %g mm\n', I_Total, );
 % 计算2.5度范围内的能量
 I_Angle = sum(I.*AngleMask,'all');
-fprintf('总能量：%g\n', I_Angle);
-%计算雾度
-WD = 1-I_Angle/I_Total;
-fprintf('理论雾度：%g %%\n', WD*100);
 
 %% 理论解-圆孔衍射的理论解是一阶贝塞尔函数
 % U1 = @(x, y)exp(1j*k*(z + (x.^2 + y.^2) / (2 * z))) * r ./ (1j * sqrt(x.^2+y.^2)) .* besselj(1, 2*pi*r*sqrt(x.^2+y.^2)/(lambda * z));

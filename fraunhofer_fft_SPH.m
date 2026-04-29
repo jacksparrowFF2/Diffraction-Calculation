@@ -4,6 +4,7 @@ function [Uc1, Ud1, Ud] = fraunhofer_fft_SPH(Uc, xmin, xmax, ymin, ymax, m, n, l
     %   小写字母为输入光场采样参数，大写字母为输出光场采样参数
     %   lambda 波长
     %   z 传播距离
+    %  flag 控制离散化是否开启
     
     % WaveVector = 2 * pi / lambda;
     
