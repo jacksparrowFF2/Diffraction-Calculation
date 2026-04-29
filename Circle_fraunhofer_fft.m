@@ -12,7 +12,7 @@ U0 = 1;
 % 定义物面类型。flag
 flag = 0;
 % 分辨率，设定单个周期的分辨率
-nn = 1024;
+nn = 100;
 % 设定物面X、Y方向周期
 Nx_period = 3;         
 Ny_period = 3;         
@@ -27,6 +27,10 @@ Angle = 2.5;
 FocusR = tand(Angle)*z;
 fprintf('像面上2.5°范围半径为：%g mm\n', FocusR*1e3);
 
+
+% 导入光源信息（光源即为要被评估经过衍射后的图案）
+RGB = imread('.\input\输入图片2.jpg');
+InputPic = double(rgb2gray(RGB));
 
 % 设定单个周期的最大与最小值
 x_cell_min = -Pitch/2;
