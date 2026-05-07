@@ -9,7 +9,7 @@ function [Uc1, Ud1, Ud] = fraunhofer_fft_SPH(Uc, xmin, xmax, ymin, ymax, m, n, l
     % WaveVector = 2 * pi / lambda;
     
     % 如果输入的是匿名函数，则需要进行离散化，flag为1
-    if flag == 1
+    if flag == 2
         % 对复合匿名函数进行离散化
         Ud = discretize(Uc, xmin, xmax, ymin, ymax, m, n);
     % 如果输入的是图片或离散化后的Mask,则flag为0,Ud=Uc
