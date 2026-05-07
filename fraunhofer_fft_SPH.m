@@ -26,7 +26,7 @@ function [Uc1, Ud1, Ud] = fraunhofer_fft_SPH(Uc, xmin, xmax, ymin, ymax, m, n, l
     % 计算缩放因子，这个缩放因子来自于fraunhofer衍射积分中的相位因子，这样就可以将
     % fraunhofer衍射积分简化成傅里叶变换形式
     t = 1 / (lambda * z); 
-    Ud1 = myFFT2(Ud, xmin, xmax, ymin, ymax, Xmin*t, Xmax*t, Ymin*t, Ymax*t, M, N);
+    Ud1 = myFFT2_SPH(Ud, xmin, xmax, ymin, ymax, Xmin*t, Xmax*t, Ymin*t, Ymax*t, M, N);
     % 此处计算fraunhofer积分中的相位因子,来自于公式
     Ud0 = exp(1j*WaveVector*z+1j*WaveVector/(2 * z)*(X.^2 + Y.^2)) / (1j * lambda * z);
     Ud1 = Ud1 .* Ud0;
