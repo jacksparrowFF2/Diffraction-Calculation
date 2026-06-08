@@ -4,15 +4,15 @@ clear, clc, close all
 % 定义波长，e-9代表纳米
 lambdalist = [620e-9,550e-9,450e-9];
 % 传播距离,模拟人眼视距2~40cm
-z = 0.4;
+z = 0.2;
 % 设定物面单元尺寸
-objectunit = 1e-3;
+objectunit = 1e-6;
 % 设定像面单元尺寸
 Imageunit = 1e-3;
 % 设定周期尺寸,直观单位微米
-Pitch = 2*objectunit;
+Pitch = 50*objectunit;
 % 圆孔半径,e-6代表μm
-r = 0.5*objectunit;
+r = 10*objectunit;
 % 定义物面的光栅类型
 % flag=0代表使用相同离散矩阵（自定义的形状或者图片）
 % flag=1代表使用不相同的离散矩阵
@@ -26,11 +26,11 @@ nn = 1000;
 Nx_period = 2;         
 Ny_period = 2;         
 % 设定目标像面单边尺寸，直观单位mm
-Fx =5e-3;
-Fy =5e-3;
+Fx =20*Imageunit;
+Fy =20*Imageunit;
 % 设定物体在像面的尺寸，直观单位mm
-F_size_x = 20e-3;   % F在像面上的物理宽度
-F_size_y = 20e-3;   % F在像面上的物理高度
+F_size_x = 20*Imageunit;   % F在像面上的物理宽度
+F_size_y = 20*Imageunit;   % F在像面上的物理高度
 %设定目标角，用于寻找指定角度之外和之内的强度和，单位是°，黄度是2.5°
 Angle = 2.5;
 % 计算目标角对应传播距离下的长度
