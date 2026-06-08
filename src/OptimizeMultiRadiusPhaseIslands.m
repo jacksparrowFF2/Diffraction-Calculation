@@ -1,0 +1,380 @@
+%% 多半径圆形相位微岛 DOE 优化
+% 本脚本用于搜索“衍射效果最不明显 + haze 风险受限”的多半径圆形高折微岛设计。
+% 优化逻辑和可视化脚本分离：本脚本负责筛选候选设计，
+% CustomApertureWithPhase_fraunhofer_fft.m 负责对某一个设计做详细出图。
+
+clear, clc, close all
+
+%% DOE 运行模式
+% quick：用于快速调通流程；full：用于正式粗扫，seed 使用 1:10。
+doePreset = "full";
+
+switch doePreset
+    case "quick"
+        nn = 180;
+        seedList = 1:3;
+        radiusSetList_um = {
+            [1.0, 1.5]
+            [0.8, 1.2, 1.8]
+            [0.8, 1.2, 1.6, 2.0]
+        };
+        fillFactorList = [0.35, 0.40];
+        minDistanceFactorList = [1.0, 1.2];
+    case "full"
+        nn = 320;
+        seedList = 1:10;
+        radiusSetList_um = {
+            [1.0, 1.5]
+            [0.8, 1.2, 1.8]
+            [0.8, 1.2, 1.6, 2.0]
+            [0.6, 1.0, 1.4, 1.8]
+            [0.8, 1.0, 1.4, 1.8, 2.2]
+        };
+        fillFactorList = [0.30, 0.35, 0.40, 0.45];
+        minDistanceFactorList = [1.0, 1.2, 1.5];
+    otherwise
+        error('未知 DOE 预设：%s', doePreset);
+end
+
+%% 基础光学与几何参数
+% 固定高度、折射率差和双程相位，与当前可视化脚本保持一致。
+lambdalist = [620e-9, 550e-9, 450e-9];
+z = 0.2;
+objectunit = 1e-6;
+Imageunit = 1e-3;
+Pitch = 50 * objectunit;
+r = 10 * objectunit;
+Gratingflag = 1;
+
+Nx_period = 2;
+Ny_period = 2;
+Fx = 20 * Imageunit;
+Fy = 20 * Imageunit;
+Angle = 2.5;
+FocusR = tand(Angle) * z;
+
+n_high = 1.75;
+n_low = 1.55;
+delta_n = n_high - n_low;
+phaseHeight = 220e-9;
+
+% 目标函数权重。haze 超限时用二次惩罚放大。
+topK = 12;
+hazeLimitMultiplier = 1.20;
+weightPeakBackground = 0.35;
+weightHazePenalty = 5.0;
+
+%% 物面和像面网格
+x_cell = linspace(-Pitch/2, Pitch/2, nn);
+y_cell = linspace(-Pitch/2, Pitch/2, nn);
+[Xc, Yc] = meshgrid(x_cell, y_cell);
+
+xmin = -Nx_period * Pitch / 2;
+xmax = -xmin;
+ymin = -Ny_period * Pitch / 2;
+ymax = -ymin;
+
+ImageMaskRatioX = Fx / xmax;
+ImageMaskRatioY = Fy / ymax;
+Xmin = xmin * ImageMaskRatioX;
+Xmax = -Xmin;
+Ymin = ymin * ImageMaskRatioY;
+Ymax = -Ymin;
+
+Tnn = Nx_period * nn;
+xVector = linspace(xmin, xmax, Tnn);
+yVector = linspace(ymin, ymax, Tnn);
+[x, y] = meshgrid(xVector, yVector);
+XVector = linspace(Xmin, Xmax, Tnn);
+YVector = linspace(Ymin, Ymax, Tnn);
+[X, Y] = meshgrid(XVector, YVector);
+
+%% 构建基础周期孔径
+if Gratingflag == 1
+    cellunit = 2;
+    SinglePattern1 = CustomPattern(30, Xc, Yc, r, r, 0, 0);
+    SinglePattern2 = CustomPattern(0, Xc, Yc, r, r, 0, 0);
+    SinglePattern3 = CustomPattern(0, Xc, Yc, r, r, 0, 0);
+    SinglePattern4 = CustomPattern(-30, Xc, Yc, r, r, 0, 0);
+    apertureCell = [SinglePattern1 SinglePattern2; SinglePattern3 SinglePattern4];
+    BaseMask = repmat(apertureCell, Ny_period/cellunit, Nx_period/cellunit);
+else
+    error('当前优化脚本先针对 Gratingflag == 1 的四孔径晶胞。');
+end
+
+%% 预计算无相位层基准指标
+fprintf('开始预计算无相位层基准远场...\n');
+baseline = repmat(struct(), 1, numel(lambdalist));
+for c = 1:numel(lambdalist)
+    lambda = lambdalist(c);
+    k = 2 * pi / lambda;
+    [~, U2_NoPhase] = fraunhofer_fft_SPH(BaseMask, xmin, xmax, ymin, ymax, Tnn, Tnn, ...
+        lambda, z, Xmin, Xmax, Ymin, Ymax, Tnn, Tnn, k, 0);
+    I0 = abs(U2_NoPhase).^2;
+    baseline(c).I = I0;
+    baseline(c).topKMean = meanTopKLocalPeaks(I0, topK);
+    baseline(c).peakBackground = peakBackgroundRatio(I0, topK);
+    baseline(c).hazeRisk = hazeRiskByAngle(I0, X, Y, FocusR);
+end
+baselineHazeMean = mean([baseline.hazeRisk]);
+hazeRiskLimit = baselineHazeMean * hazeLimitMultiplier;
+fprintf('无相位层平均 2.5° 外能量比例：%.4f，haze 风险上限：%.4f\n', ...
+    baselineHazeMean, hazeRiskLimit);
+
+%% DOE 粗扫
+totalDesigns = numel(radiusSetList_um) * numel(fillFactorList) * ...
+    numel(minDistanceFactorList) * numel(seedList);
+fprintf('开始 DOE：%d 个设计，模式：%s\n', totalDesigns, doePreset);
+
+results = table();
+designIndex = 0;
+bestObjective = inf;
+bestDesign = struct();
+
+for radiusSetId = 1:numel(radiusSetList_um)
+    radiusList = radiusSetList_um{radiusSetId} * 1e-6;
+    maxRadius = max(radiusList);
+
+    for fillFactor = fillFactorList
+        for minDistanceFactor = minDistanceFactorList
+            minCenterDistance = minDistanceFactor * 2 * maxRadius;
+
+            for seed = seedList
+                designIndex = designIndex + 1;
+                fprintf('[%d/%d] radiusSet=%d, fill=%.2f, minDistFactor=%.2f, seed=%d\n', ...
+                    designIndex, totalDesigns, radiusSetId, fillFactor, minDistanceFactor, seed);
+
+                [h_map, phaseCenters, actualFillFactor] = generateMultiRadiusPoissonDiskHeightMap( ...
+                    x, y, xmin, xmax, ymin, ymax, phaseHeight, radiusList, ...
+                    minCenterDistance, fillFactor, seed);
+
+                metric = evaluatePhaseDesign(BaseMask, h_map, baseline, lambdalist, ...
+                    delta_n, xmin, xmax, ymin, ymax, Tnn, z, Xmin, Xmax, Ymin, Ymax, ...
+                    X, Y, FocusR, topK, hazeRiskLimit, weightPeakBackground, weightHazePenalty);
+
+                newRow = table( ...
+                    designIndex, radiusSetId, string(mat2str(radiusSetList_um{radiusSetId})), ...
+                    fillFactor, minDistanceFactor, seed, size(phaseCenters, 1), actualFillFactor, ...
+                    metric.TopKPeakRatio, metric.PeakBackgroundRatioPenalty, metric.HazeRisk, ...
+                    metric.HazeRiskPenalty, metric.Objective, ...
+                    'VariableNames', {'DesignIndex', 'RadiusSetId', 'RadiusSet_um', ...
+                    'TargetFillFactor', 'MinDistanceFactor', 'Seed', 'IslandCount', 'ActualFillFactor', ...
+                    'TopKPeakRatio', 'PeakBackgroundRatioPenalty', 'HazeRisk', ...
+                    'HazeRiskPenalty', 'Objective'});
+                results = [results; newRow]; %#ok<AGROW>
+
+                if metric.Objective < bestObjective
+                    bestObjective = metric.Objective;
+                    bestDesign.h_map = h_map;
+                    bestDesign.centers = phaseCenters;
+                    bestDesign.radiusSet_um = radiusSetList_um{radiusSetId};
+                    bestDesign.fillFactor = fillFactor;
+                    bestDesign.minDistanceFactor = minDistanceFactor;
+                    bestDesign.seed = seed;
+                    bestDesign.metric = metric;
+                    bestDesign.actualFillFactor = actualFillFactor;
+                end
+            end
+        end
+    end
+end
+
+results = sortrows(results, 'Objective', 'ascend');
+disp(results(1:min(10, height(results)), :));
+
+%% 保存结果
+outputDir = fullfile('..', 'ImageForShow');
+if ~exist(outputDir, 'dir')
+    mkdir(outputDir);
+end
+
+csvPath = fullfile(outputDir, 'multi_radius_phase_doe_results.csv');
+matPath = fullfile(outputDir, 'multi_radius_phase_doe_results.mat');
+writetable(results, csvPath);
+save(matPath, 'results', 'bestDesign', 'baselineHazeMean', 'hazeRiskLimit', 'doePreset');
+
+figure;
+imagesc(x(1,:) * 1e6, y(:,1) * 1e6, bestDesign.h_map * 1e9);
+axis image;
+set(gca, 'YDir', 'normal');
+xlabel('x / um');
+ylabel('y / um');
+title(sprintf('Best Multi-radius Phase Height Map, Obj=%.4f', bestDesign.metric.Objective));
+colormap gray;
+colorbar;
+exportgraphics(gcf, fullfile(outputDir, 'best_multi_radius_phase_height_map.png'), 'Resolution', 200);
+
+fprintf('\n最佳设计：\n');
+fprintf('radiusSet_um = %s\n', mat2str(bestDesign.radiusSet_um));
+fprintf('fillFactor = %.2f, minDistanceFactor = %.2f, seed = %d\n', ...
+    bestDesign.fillFactor, bestDesign.minDistanceFactor, bestDesign.seed);
+fprintf('actualFillFactor = %.4f\n', bestDesign.actualFillFactor);
+fprintf('TopKPeakRatio = %.4f\n', bestDesign.metric.TopKPeakRatio);
+fprintf('PeakBackgroundRatioPenalty = %.4f\n', bestDesign.metric.PeakBackgroundRatioPenalty);
+fprintf('HazeRisk = %.4f, HazeLimit = %.4f\n', bestDesign.metric.HazeRisk, hazeRiskLimit);
+fprintf('Objective = %.4f\n', bestDesign.metric.Objective);
+fprintf('结果已保存：%s\n', csvPath);
+
+%% 局部函数
+function metric = evaluatePhaseDesign(BaseMask, h_map, baseline, lambdalist, ...
+    delta_n, xmin, xmax, ymin, ymax, Tnn, z, Xmin, Xmax, Ymin, Ymax, ...
+    X, Y, FocusR, topK, hazeRiskLimit, weightPeakBackground, weightHazePenalty)
+    %EVALUATEPHASEDESIGN 计算单个相位层设计的目标函数。
+
+    topKRatioList = zeros(1, numel(lambdalist));
+    peakBackgroundRatioList = zeros(1, numel(lambdalist));
+    hazeRiskList = zeros(1, numel(lambdalist));
+
+    for c = 1:numel(lambdalist)
+        lambda = lambdalist(c);
+        k = 2 * pi / lambda;
+        phi_double = 4 * pi / lambda * delta_n * h_map;
+        ComplexMask = BaseMask .* exp(1j * phi_double);
+
+        [~, U2_WithPhase] = fraunhofer_fft_SPH(ComplexMask, xmin, xmax, ymin, ymax, Tnn, Tnn, ...
+            lambda, z, Xmin, Xmax, Ymin, Ymax, Tnn, Tnn, k, 0);
+        I = abs(U2_WithPhase).^2;
+
+        topKMean = meanTopKLocalPeaks(I, topK);
+        peakBackground = peakBackgroundRatio(I, topK);
+        hazeRisk = hazeRiskByAngle(I, X, Y, FocusR);
+
+        topKRatioList(c) = topKMean / baseline(c).topKMean;
+        peakBackgroundRatioList(c) = peakBackground / baseline(c).peakBackground;
+        hazeRiskList(c) = hazeRisk;
+    end
+
+    metric.TopKPeakRatio = mean(topKRatioList);
+    metric.PeakBackgroundRatioPenalty = mean(peakBackgroundRatioList);
+    metric.HazeRisk = mean(hazeRiskList);
+    metric.HazeRiskPenalty = max(0, metric.HazeRisk - hazeRiskLimit)^2;
+    metric.Objective = metric.TopKPeakRatio + ...
+        weightPeakBackground * metric.PeakBackgroundRatioPenalty + ...
+        weightHazePenalty * metric.HazeRiskPenalty;
+end
+
+function [hMap, centers, actualFillFactor] = generateMultiRadiusPoissonDiskHeightMap( ...
+    xGrid, yGrid, xmin, xmax, ymin, ymax, islandHeight, radiusList, ...
+    minCenterDistance, targetFillFactor, randomSeed)
+    %GENERATEMULTIRADIUSPOISSONDISKHEIGHTMAP 生成多半径圆形微岛高度图。
+    % 所有微岛仍为圆形 primitive，便于后续转 mask/GDS 或压印 master。
+
+    rng(randomSeed);
+    xVector = xGrid(1, :);
+    yVector = yGrid(:, 1);
+    hMap = zeros(size(xGrid));
+
+    maxRadius = max(radiusList);
+    validXmin = xmin + maxRadius;
+    validXmax = xmax - maxRadius;
+    validYmin = ymin + maxRadius;
+    validYmax = ymax - maxRadius;
+    if validXmin >= validXmax || validYmin >= validYmax
+        error('圆形微岛最大半径过大，已经超过当前物面尺寸。');
+    end
+
+    domainArea = (xmax - xmin) * (ymax - ymin);
+    meanIslandArea = mean(pi * radiusList.^2);
+    targetIslandCount = ceil(targetFillFactor * domainArea / meanIslandArea);
+    maxAttempts = max(20000, targetIslandCount * 1000);
+
+    centers = zeros(targetIslandCount, 3);
+    centerCount = 0;
+    coveredArea = 0;
+    targetArea = targetFillFactor * domainArea;
+    attemptCount = 0;
+
+    while coveredArea < targetArea && attemptCount < maxAttempts
+        attemptCount = attemptCount + 1;
+        candidateRadius = radiusList(randi(numel(radiusList)));
+        candidateX = validXmin + rand() * (validXmax - validXmin);
+        candidateY = validYmin + rand() * (validYmax - validYmin);
+
+        if centerCount == 0
+            acceptCandidate = true;
+        else
+            dx = centers(1:centerCount, 1) - candidateX;
+            dy = centers(1:centerCount, 2) - candidateY;
+            acceptCandidate = all(dx.^2 + dy.^2 >= minCenterDistance^2);
+        end
+
+        if acceptCandidate
+            centerCount = centerCount + 1;
+            if centerCount > size(centers, 1)
+                centers(end + targetIslandCount, :) = 0; %#ok<AGROW>
+            end
+            centers(centerCount, :) = [candidateX, candidateY, candidateRadius];
+            coveredArea = coveredArea + pi * candidateRadius^2;
+        end
+    end
+
+    centers = centers(1:centerCount, :);
+
+    for idx = 1:centerCount
+        cx = centers(idx, 1);
+        cy = centers(idx, 2);
+        islandRadius = centers(idx, 3);
+
+        xIndex = find(abs(xVector - cx) <= islandRadius);
+        yIndex = find(abs(yVector - cy) <= islandRadius);
+        [localX, localY] = meshgrid(xVector(xIndex), yVector(yIndex));
+        localCircle = (localX - cx).^2 + (localY - cy).^2 <= islandRadius^2;
+
+        localHeight = hMap(yIndex, xIndex);
+        localHeight(localCircle) = islandHeight;
+        hMap(yIndex, xIndex) = localHeight;
+    end
+
+    actualFillFactor = nnz(hMap > 0) / numel(hMap);
+end
+
+function value = meanTopKLocalPeaks(I, topK)
+    %MEANTOPKLOCALPEAKS 提取局部峰并计算前 K 个峰的平均强度。
+    localMaxMask = true(size(I));
+    for rowShift = -1:1
+        for colShift = -1:1
+            if rowShift == 0 && colShift == 0
+                continue
+            end
+            localMaxMask = localMaxMask & I >= shiftWithNegInf(I, rowShift, colShift);
+        end
+    end
+    localMaxMask([1 end], :) = false;
+    localMaxMask(:, [1 end]) = false;
+    localMaxMask = localMaxMask & I > 0;
+    peakValues = sort(I(localMaxMask), 'descend');
+    if isempty(peakValues)
+        value = max(I(:));
+        return
+    end
+    k = min(topK, numel(peakValues));
+    value = mean(peakValues(1:k));
+end
+
+function shifted = shiftWithNegInf(I, rowShift, colShift)
+    %SHIFTWITHNEGINF 平移矩阵，空出的边界填 -Inf，避免边界环绕。
+    shifted = -inf(size(I));
+    rowCount = size(I, 1);
+    colCount = size(I, 2);
+
+    sourceRows = max(1, 1 - rowShift):min(rowCount, rowCount - rowShift);
+    sourceCols = max(1, 1 - colShift):min(colCount, colCount - colShift);
+    targetRows = sourceRows + rowShift;
+    targetCols = sourceCols + colShift;
+
+    shifted(targetRows, targetCols) = I(sourceRows, sourceCols);
+end
+
+function ratio = peakBackgroundRatio(I, topK)
+    %PEAKBACKGROUNDRATIO 用前 K 个局部峰均值除以背景中位数，估计彩色峰可见风险。
+    peakValue = meanTopKLocalPeaks(I, topK);
+    threshold = prctile(I(:), 90);
+    background = median(I(I <= threshold));
+    ratio = peakValue / max(background, eps);
+end
+
+function hazeRisk = hazeRiskByAngle(I, X, Y, focusRadius)
+    %HAZERISKBYANGLE 使用 2.5° 对应半径外的能量比例近似 haze 风险。
+    angleMask = X.^2 + Y.^2 <= focusRadius^2;
+    hazeRisk = sum(I(~angleMask), 'all') / sum(I, 'all');
+end
