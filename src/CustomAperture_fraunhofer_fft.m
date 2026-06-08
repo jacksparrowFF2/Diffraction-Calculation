@@ -4,16 +4,16 @@ clear, clc, close all
 % 定义波长，e-9代表纳米
 lambdalist = [620e-9,550e-9,450e-9];
 % 传播距离,模拟人眼视距2~40cm
-z = 0.3;
+z = 0.4;
 % 设定周期尺寸,直观单位微米
-Pitch = 55e-6;
+Pitch = 2e-3;
 % 圆孔半径,e-6代表μm
-r = 10e-6;
+r = 5e-4;
 % 定义物面的光栅类型
 % flag=0代表使用相同离散矩阵（自定义的形状或者图片）
 % flag=1代表使用不相同的离散矩阵
 % flag=2代表使用连续函数
-Gratingflag = 0;
+Gratingflag = 1;
 % 定义是否仿真像面的衍射效果，平面波为0，图片为1
 Lightflag = 0;
 % 分辨率，设定单个周期的分辨率
@@ -22,8 +22,8 @@ nn = 1000;
 Nx_period = 2;         
 Ny_period = 2;         
 % 设定目标像面单边尺寸，直观单位mm
-Fx =40e-3;
-Fy =40e-3;
+Fx =5e-3;
+Fy =5e-3;
 % 设定物体在像面的尺寸，直观单位mm
 F_size_x = 20e-3;   % F在像面上的物理宽度
 F_size_y = 20e-3;   % F在像面上的物理高度
@@ -47,11 +47,11 @@ y_cell = linspace(y_cell_min,y_cell_max,nn);
 
 %% 计算物面及像面参数
 % 物面尺寸x方向总最小值
-xmin = -Nx_period*Pitch;
+xmin = -Nx_period*Pitch/2;
 % 物面尺寸x方向总最大值
 xmax = -xmin;
 % 物面尺寸y方向总最小值
-ymin = -Ny_period*Pitch;
+ymin = -Ny_period*Pitch/2;
 % 物面尺寸y方向总最大值
 ymax = -ymin;
 
@@ -92,7 +92,7 @@ RGB = zeros(Tnn, Tnn, 3);
 
 if Lightflag ==1
     % 导入要被衍射的图片
-    Input = imread('.\input\USAF500.png');
+    Input = imread('..\input\USAF500.png');
     U0 = double(rgb2gray(Input));
     figure(1);hold on;
     subplot(1,2,1);
@@ -101,12 +101,17 @@ if Lightflag ==1
     axis on;axis image;xlabel('x');ylabel('y')
 else
     U0 = 1; %不参与最终计算，输入光是平面波
+    subplot(1,2,1);
+    imshow(U0*ones(Nx_period*nn,Ny_period*nn));
+    title('初始振幅'); 
+    axis on;axis image;xlabel('x');ylabel('y')
 end
 
 
 if Gratingflag ==0
-    % 创建离散的单元函数
-    SinglePattern = CustomPattern(0,Xc,Yc,r,r,0,0);
+    % 创建离散的单元函数，长半轴为a，短半轴为b
+    a1 = r/0.8; b1=r;
+    SinglePattern = CustomPattern(0,Xc,Yc,a1,b1,0,0);
     % 在x和y方向上分别重复Nx_period、Ny_period次周期
     Mask = repmat(SinglePattern, Ny_period, Nx_period);
     % figure;
@@ -118,7 +123,7 @@ elseif Gratingflag ==1
     % 晶胞
     cellunit = 2;
     % 创建离散的单元函数1，长半轴为a，短半轴为b
-    a1 = r/0.8; b1=r;
+    a1 = r; b1=r;
     SinglePattern1 = CustomPattern(30,Xc,Yc,a1,b1,0,0);
     % 创建离散的单元函数2，长半轴为a，短半轴为b
     a2 = r; b2=r;
@@ -127,7 +132,7 @@ elseif Gratingflag ==1
     a3 = r; b3=r;
     SinglePattern3 = CustomPattern(0,Xc,Yc,a3,b3,0,0);
     % 创建离散的单元函数4，长半轴为a，短半轴为b
-    a4 = r/0.8; b4=r;
+    a4 = r; b4=r;
     SinglePattern4 = CustomPattern(-30,Xc,Yc,a4,b4,0,0);
     % 拼接晶胞矩阵
     cell = [SinglePattern1 SinglePattern2;SinglePattern3 SinglePattern4];
@@ -145,7 +150,7 @@ end
 % 连续函数形式
 % circle2 = @(x, y) (x-10e-6).^2 + (y-10e-6).^2 <= r^2;
 % circle = @(x, y)circle1(x,y)&circle2(x,y);
-
+figure;
 for c = 1:3
     lambda = lambdalist(c);
     % 计算波矢量
@@ -159,28 +164,42 @@ for c = 1:3
     A = abs(U2);
     % 强度分布
     I =A.^2;
-    % 对数压缩亮部
-    alpha = 300;
-    I_log = log(1 + alpha * I);
-    I_log = I_log ./ max(I_log(:));
-    % 伽马增强暗部
-    gamma = 0.25;
-    I_enhanced = I_log .^ gamma;
+    % % 对数压缩亮部
+    % alpha = 100;
+    % I_log = log(1 + alpha * I);
+    % I_log = I_log ./ max(I_log(:));
+    % % 伽马增强暗部
+    % gamma = 1;
+    % I_enhanced = I_log .^ gamma;
 
-    figure;subplot(1, 2, 1)
+    
+    I_norm = I ./ max(I(:));
+    I_sorted = sort(I_norm(:));
+    clipLevel = I_sorted(max(1, round(0.9985 * numel(I_sorted))));
+    I_clip = min(I_norm, clipLevel) ./ clipLevel;
+    alpha = 60;
+    gamma = 0.72;
+    I_vis = log(1 + alpha * I_clip) / log(1 + alpha);
+    I_vis = I_vis .^ gamma;
+
+    subplot(3, 2, 2*c-1)
     imagesc(X(1,:), Y(:,1), A)
     xlabel("x");ylabel("y");zlabel("|U|")
     axis image;title("光栅振幅图像"+num2str(lambda*1e9) +'nm')
     colormap gray;
     
-    subplot(1, 2, 2)
-    imagesc(X(1,:), Y(:,1), I_enhanced)
+    subplot(3, 2, 2*c)
+    imagesc(X(1,:), Y(:,1), I_vis)
     xlabel("x");ylabel("y");zlabel("|U|")
     axis image;title("光栅强度分布"+num2str(lambda*1e9) +'nm')
     colormap gray;
     
     % RGB(:,:,c) = (I./max(max(I))).^gamma;
-    RGB(:,:,c) = I_enhanced;
+    % 原版对比度
+    RGB_Origin(:,:,c) = A;
+    % 对比度增强版
+    RGB(:,:,c) = I_vis;
+    
 end
 
 %% RGB合成显示色分离
@@ -191,12 +210,26 @@ xlabel('x / mm');
 ylabel('y / mm');
 title('RGB Far-field Color Separation');
 set(gca, 'YDir', 'normal');
+clim([0 1]);
+exportgraphics(gcf, fullfile('..', 'ImageForShow', 'four_aperture_rgb_preview.png'), 'Resolution', 200);
+
+
+figure;
+imagesc(X(1,:)*1e3, Y(:,1)*1e3, RGB(:,:,2));
+axis image;
+xlabel('x / mm');
+ylabel('y / mm');
+title('Four-aperture diffraction, green channel');
+set(gca, 'YDir', 'normal');
+colormap gray;
+colorbar;
+clim([0 1]);
+exportgraphics(gcf, fullfile('..', 'ImageForShow', 'four_aperture_gray_preview.png'), 'Resolution', 200);
 
 % work(X, Y, U2, "数值解");
 
 %% 计算图像衍射结果
 if Lightflag ==1
-
     % 计算点扩散函数
     PSF = I;
     % 归一化
@@ -215,26 +248,29 @@ if Lightflag ==1
     imshow(Iout,[]);
     title('衍射后图像'); 
     axis on;axis image;xlabel('x');ylabel('y')
+
+
+    % 雾度计算
+    % 构建像面上在指定角度下的范围遮罩
+    AngleMask = double(X.^2 + Y.^2 <= FocusR^2);
+    figure;
+    imagesc(X(1,:),Y(:,1),AngleMask)
+    title('像面角度遮罩: Circular Aperture'); 
+    axis on;axis image;xlabel('x');ylabel('y')
+    
+    %计算总能量（因为是计算比例，所以没有乘以像面xy步长）
+    I_Total = sum(I,'all');
+    fprintf('总能量：%g\n', I_Total);
+    % 计算2.5度范围内的能量
+    I_Angle = sum(I.*AngleMask,'all');
+    fprintf('2.5度范围内总能量：%g\n', I_Angle);
+    %计算雾度
+    WD = 1-I_Angle/I_Total;
+    fprintf('理论雾度：%g %%\n', WD*100);
 end 
 
 
-%% 雾度计算
-% 构建像面上在指定角度下的范围遮罩
-AngleMask = double(X.^2 + Y.^2 <= FocusR^2);
-figure;
-imagesc(X(1,:),Y(:,1),AngleMask)
-title('像面角度遮罩: Circular Aperture'); 
-axis on;axis image;xlabel('x');ylabel('y')
 
-%计算总能量（因为是计算比例，所以没有乘以像面xy步长）
-I_Total = sum(I,'all');
-fprintf('总能量：%g\n', I_Total);
-% 计算2.5度范围内的能量
-I_Angle = sum(I.*AngleMask,'all');
-fprintf('2.5度范围内总能量：%g\n', I_Angle);
-%计算雾度
-WD = 1-I_Angle/I_Total;
-fprintf('理论雾度：%g %%\n', WD*100);
 
 %% 绘图函数
 function work(x, y, U, name)
