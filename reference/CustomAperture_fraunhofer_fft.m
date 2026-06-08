@@ -1,20 +1,21 @@
 %% 验证圆孔的夫琅禾费衍射公式
 clear, clc, close all
 %% 模型参量
+% 定义波长，e-9代表纳米
 lambdalist = [620e-9,550e-9,450e-9];
 % 传播距离,模拟人眼视距2~40cm
 z = 0.3;
 % 设定周期尺寸,直观单位微米
 Pitch = 55e-6;
-% 圆孔半径
+% 圆孔半径,e-6代表μm
 r = 10e-6;
 % 定义物面的光栅类型
 % flag=0代表使用相同离散矩阵（自定义的形状或者图片）
 % flag=1代表使用不相同的离散矩阵
 % flag=2代表使用连续函数
-Gratingflag = 1;
+Gratingflag = 0;
 % 定义是否仿真像面的衍射效果，平面波为0，图片为1
-Lightflag = 1;
+Lightflag = 0;
 % 分辨率，设定单个周期的分辨率
 nn = 1000;
 % 设定物面X、Y方向周期
@@ -99,7 +100,7 @@ if Lightflag ==1
     title('初始振幅'); 
     axis on;axis image;xlabel('x');ylabel('y')
 else
-    U0 = 1; %不参与最终计算
+    U0 = 1; %不参与最终计算，输入光是平面波
 end
 
 
@@ -141,7 +142,7 @@ elseif Gratingflag ==2
 end
 
 
-
+% 连续函数形式
 % circle2 = @(x, y) (x-10e-6).^2 + (y-10e-6).^2 <= r^2;
 % circle = @(x, y)circle1(x,y)&circle2(x,y);
 
