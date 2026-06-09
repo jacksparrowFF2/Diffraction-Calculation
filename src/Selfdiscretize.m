@@ -1,4 +1,4 @@
-function [Ud, X, Y] = discretize(Uc, xmin, xmax, ymin, ymax, M, N)
+function [Ud, X, Y] = Selfdiscretize(Uc, xmin, xmax, ymin, ymax, M, N)
 %DISCRETIZE 对给定连续分布离散取样
 %   Uc(x,y) 连续分布函数 Ud(X,Y) 离散分布矩阵
 %   xmin,xmax,ymin,ymax x,y方向分布范围

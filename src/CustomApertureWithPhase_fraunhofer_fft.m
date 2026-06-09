@@ -116,6 +116,8 @@ zeroOrderRadiusFactor = 0.45;  % 0 级主斑判读半径，按各波长一阶衍
 useBestDoeDesign = true;       % true 时自动读取 DOE 最优候选；读取失败则使用下方手动参数
 
 % 以下参数作为手动兜底值；自动导入成功时会被 DOE 最优候选覆盖。
+phasePatternMode = "circle";                   % circle/random_ellipse/blue_noise_circle/blue_noise_ellipse
+phaseAspectRatio = 1.0;                        % 椭圆长轴/短轴；圆形模式固定为 1
 phaseIslandRadiusList = [1.0, 1.5] * 1e-6; % 多半径圆形高折微岛半径，单位 m
 phaseFillFactor = 0.40;                    % 目标填充率，实际填充率由离散采样和拒绝采样共同决定
 phaseMinDistanceFactor = 1.00;             % 最小中心距系数，乘以 2*最大半径
@@ -128,12 +130,22 @@ if useBestDoeDesign
         if isfield(bestDoeDesign, 'phaseHeight')
             phaseHeight = bestDoeDesign.phaseHeight;
         end
+        if isfield(bestDoeDesign, 'phasePatternMode')
+            phasePatternMode = bestDoeDesign.phasePatternMode;
+        end
+        if isfield(bestDoeDesign, 'phaseAspectRatio')
+            phaseAspectRatio = bestDoeDesign.phaseAspectRatio;
+        end
         phaseIslandRadiusList = bestDoeDesign.phaseIslandRadiusList;
         phaseFillFactor = bestDoeDesign.phaseFillFactor;
         phaseMinDistanceFactor = bestDoeDesign.phaseMinDistanceFactor;
         phaseMinDistance = bestDoeDesign.phaseMinDistance;
         phaseSeed = bestDoeDesign.phaseSeed;
         fprintf('已导入 DOE 最优设计：%s\n', bestDoeDesign.sourcePath);
+        if isfield(bestDoeDesign, 'selectionInfo')
+            fprintf('DOE 选择策略：%s\n', bestDoeDesign.selectionInfo);
+        end
+        fprintf('DOE PatternMode = %s, AspectRatio = %.2f\n', phasePatternMode, phaseAspectRatio);
         fprintf('DOE phaseHeight = %.0f nm\n', phaseHeight * 1e9);
         fprintf('DOE Objective = %.4g\n', bestDoeDesign.objective);
     catch ME
@@ -200,19 +212,21 @@ end
 % 相位层需要和物面孔径在同一张离散网格上相乘。
 % 如果原孔径是连续函数，这里先离散化；后续 FFT 统一按离散复振幅处理。
 if Gratingflag == 2
-    BaseMask = discretize(Mask, xmin, xmax, ymin, ymax, Tnn, Tnn);
+    BaseMask = Selfdiscretize(Mask, xmin, xmax, ymin, ymax, Tnn, Tnn);
 else
     BaseMask = Mask;
 end
 FFTflag = 0;
 
-% 生成非周期泊松盘分布的多半径圆形高折微岛高度图。
+% 生成非周期泊松盘分布的圆形或随机旋角椭圆高折微岛高度图。
 % h_map 的单位是 m，只有微岛区域为 phaseHeight，其余区域为 0。
-[h_map, phaseCenters, actualFillFactor] = generateMultiRadiusPoissonDiskHeightMap( ...
-    x, y, xmin, xmax, ymin, ymax, phaseHeight, phaseIslandRadiusList, ...
-    phaseMinDistance, phaseFillFactor, phaseSeed);
-fprintf('相位层圆形微岛数量：%d\n', size(phaseCenters, 1));
-fprintf('相位层圆形微岛半径集合：%s um\n', mat2str(phaseIslandRadiusList * 1e6));
+[h_map, phaseCenters, actualFillFactor] = generatePoissonDiskPhaseHeightMap( ...
+    x, y, xmin, xmax, ymin, ymax, phaseHeight, phasePatternMode, phaseIslandRadiusList, ...
+    phaseAspectRatio, phaseMinDistance, phaseFillFactor, phaseSeed);
+fprintf('相位层 PatternMode：%s\n', phasePatternMode);
+fprintf('相位层微岛数量：%d\n', size(phaseCenters, 1));
+fprintf('相位层尺寸集合：%s um\n', mat2str(phaseIslandRadiusList * 1e6));
+fprintf('相位层椭圆长短轴比：%.2f\n', phaseAspectRatio);
 fprintf('相位层实际填充率：%.2f %%\n', actualFillFactor * 100);
 
 % 用 550 nm 作为代表波长显示双程相位 map；实际计算时 RGB 三个波长会分别换算相位。
@@ -225,7 +239,7 @@ imagesc(x(1,:) * 1e6, y(:,1) * 1e6, h_map * 1e9);
 axis image;
 set(gca, 'YDir', 'normal');
 xlabel('x / um'); ylabel('y / um');
-title('非周期泊松盘圆形高折微岛高度图 / nm');
+title(sprintf('非周期泊松盘 %s 高折微岛高度图 / nm', phasePatternMode));
 colormap gray; colorbar;
 
 subplot(1, 2, 2);
@@ -234,7 +248,7 @@ scatter(phaseCenters(:,1) * 1e6, phaseCenters(:,2) * 1e6, ...
 axis image;
 xlim([xmin xmax] * 1e6); ylim([ymin ymax] * 1e6);
 xlabel('x / um'); ylabel('y / um');
-title('多半径圆形微岛中心泊松盘分布');
+title('相位微岛中心泊松盘分布');
 grid on;
 colorbar;
 
@@ -565,50 +579,74 @@ end
 
 
 %% 局部函数
-function [hMap, centers, actualFillFactor] = generateMultiRadiusPoissonDiskHeightMap( ...
-    xGrid, yGrid, xmin, xmax, ymin, ymax, islandHeight, islandRadius, ...
-    minCenterDistance, targetFillFactor, randomSeed)
-    %GENERATEMULTIRADIUSPOISSONDISKHEIGHTMAP 生成非周期泊松盘多半径圆形微岛高度图
-    %   这里的微岛是可量产友好的圆形 primitive：
-    %   1. 每个微岛俯视图为圆形；
-    %   2. 中心点满足最小距离约束，避免形成规则周期；
-    %   3. 输出 hMap 后可直接换算为双程相位 phi(x,y)。
+function [hMap, centers, actualFillFactor] = generatePoissonDiskPhaseHeightMap( ...
+    xGrid, yGrid, xmin, xmax, ymin, ymax, islandHeight, patternMode, sizeList, ...
+    aspectRatio, minCenterDistance, targetFillFactor, randomSeed)
+    %GENERATEPOISSONDISKPHASEHEIGHTMAP 生成泊松盘圆形或随机旋角椭圆微岛高度图。
+    % centers = [cx, cy, majorAxis, minorAxis, rotationAngleRad]。
 
     rng(randomSeed);
-    radiusList = islandRadius(:)';
-    maxRadius = max(radiusList);
     xVector = xGrid(1, :);
     yVector = yGrid(:, 1);
     hMap = zeros(size(xGrid));
 
-    validXmin = xmin + maxRadius;
-    validXmax = xmax - maxRadius;
-    validYmin = ymin + maxRadius;
-    validYmax = ymax - maxRadius;
+    majorAxisList = sizeList(:).';
+    switch string(patternMode)
+        case {"circle", "blue_noise_circle"}
+            minorAxisList = majorAxisList;
+            shapeAreaList = pi * majorAxisList.^2;
+        case {"random_ellipse", "blue_noise_ellipse"}
+            minorAxisList = majorAxisList ./ aspectRatio;
+            shapeAreaList = pi * majorAxisList .* minorAxisList;
+        otherwise
+            error('未知 PatternMode：%s', string(patternMode));
+    end
+
+    maxMajorAxis = max(majorAxisList);
+    validXmin = xmin + maxMajorAxis;
+    validXmax = xmax - maxMajorAxis;
+    validYmin = ymin + maxMajorAxis;
+    validYmax = ymax - maxMajorAxis;
     if validXmin >= validXmax || validYmin >= validYmax
-        error('圆形微岛最大半径过大，已经超过当前物面尺寸。');
+        error('微岛最大长半轴过大，已经超过当前物面尺寸。');
     end
 
     domainArea = (xmax - xmin) * (ymax - ymin);
-    meanIslandArea = mean(pi * radiusList.^2);
+    meanIslandArea = mean(shapeAreaList);
     targetIslandCount = ceil(targetFillFactor * domainArea / meanIslandArea);
     maxAttempts = max(20000, targetIslandCount * 1000);
 
-    centers = zeros(targetIslandCount, 3);
+    centers = zeros(targetIslandCount, 5);
     centerCount = 0;
     coveredArea = 0;
     targetArea = targetFillFactor * domainArea;
     attemptCount = 0;
+    useBlueNoisePlacement = startsWith(string(patternMode), "blue_noise");
+    blueNoiseCandidateCount = 24;
+    blueNoiseSoftDistanceFactor = 0.65;
 
     % 简单拒绝采样版泊松盘。当前 100 um 级窗口、几百个微岛时足够直观稳定。
     while coveredArea < targetArea && attemptCount < maxAttempts
         attemptCount = attemptCount + 1;
-        candidateRadius = radiusList(randi(numel(radiusList)));
-        candidateX = validXmin + rand() * (validXmax - validXmin);
-        candidateY = validYmin + rand() * (validYmax - validYmin);
+        if useBlueNoisePlacement
+            [candidateX, candidateY, sizeIndex, nearestDistanceSquared] = chooseBlueNoiseCandidate( ...
+                centers, centerCount, validXmin, validXmax, validYmin, validYmax, ...
+                majorAxisList, blueNoiseCandidateCount);
+        else
+            sizeIndex = randi(numel(majorAxisList));
+            candidateX = validXmin + rand() * (validXmax - validXmin);
+            candidateY = validYmin + rand() * (validYmax - validYmin);
+            nearestDistanceSquared = inf;
+        end
+        candidateMajorAxis = majorAxisList(sizeIndex);
+        candidateMinorAxis = minorAxisList(sizeIndex);
+        candidateAngle = pi * rand();
 
         if centerCount == 0
             acceptCandidate = true;
+        elseif useBlueNoisePlacement
+            softMinDistance = blueNoiseSoftDistanceFactor * minCenterDistance;
+            acceptCandidate = nearestDistanceSquared >= softMinDistance^2;
         else
             dx = centers(1:centerCount, 1) - candidateX;
             dy = centers(1:centerCount, 2) - candidateY;
@@ -620,8 +658,8 @@ function [hMap, centers, actualFillFactor] = generateMultiRadiusPoissonDiskHeigh
             if centerCount > size(centers, 1)
                 centers(end + targetIslandCount, :) = 0; %#ok<AGROW>
             end
-            centers(centerCount, :) = [candidateX, candidateY, candidateRadius];
-            coveredArea = coveredArea + pi * candidateRadius^2;
+            centers(centerCount, :) = [candidateX, candidateY, candidateMajorAxis, candidateMinorAxis, candidateAngle];
+            coveredArea = coveredArea + pi * candidateMajorAxis * candidateMinorAxis;
         end
     end
 
@@ -631,23 +669,57 @@ function [hMap, centers, actualFillFactor] = generateMultiRadiusPoissonDiskHeigh
             targetArea, coveredArea);
     end
 
-    % 将矢量化圆形微岛栅格化成高度图；只更新局部包围盒，避免全图逐岛扫描。
+    % 将矢量化微岛栅格化成高度图；只更新局部包围盒，避免全图逐岛扫描。
     for idx = 1:centerCount
         cx = centers(idx, 1);
         cy = centers(idx, 2);
-        islandRadius = centers(idx, 3);
+        majorAxis = centers(idx, 3);
+        minorAxis = centers(idx, 4);
+        rotationAngle = centers(idx, 5);
 
-        xIndex = find(abs(xVector - cx) <= islandRadius);
-        yIndex = find(abs(yVector - cy) <= islandRadius);
+        xIndex = find(abs(xVector - cx) <= majorAxis);
+        yIndex = find(abs(yVector - cy) <= majorAxis);
         [localX, localY] = meshgrid(xVector(xIndex), yVector(yIndex));
-        localCircle = (localX - cx).^2 + (localY - cy).^2 <= islandRadius^2;
+        dx = localX - cx;
+        dy = localY - cy;
+        localMajorCoord = dx * cos(rotationAngle) + dy * sin(rotationAngle);
+        localMinorCoord = -dx * sin(rotationAngle) + dy * cos(rotationAngle);
+        localShape = (localMajorCoord / majorAxis).^2 + (localMinorCoord / minorAxis).^2 <= 1;
 
         localHeight = hMap(yIndex, xIndex);
-        localHeight(localCircle) = islandHeight;
+        localHeight(localShape) = islandHeight;
         hMap(yIndex, xIndex) = localHeight;
     end
 
     actualFillFactor = nnz(hMap > 0) / numel(hMap);
+end
+
+function [candidateX, candidateY, sizeIndex, nearestDistanceSquared] = chooseBlueNoiseCandidate( ...
+    centers, centerCount, validXmin, validXmax, validYmin, validYmax, majorAxisList, candidateCount)
+    %CHOOSEBLUENOISECANDIDATE Mitchell best-candidate 风格的蓝噪声中心选点。
+    candidateXList = validXmin + rand(candidateCount, 1) * (validXmax - validXmin);
+    candidateYList = validYmin + rand(candidateCount, 1) * (validYmax - validYmin);
+    sizeIndexList = randi(numel(majorAxisList), candidateCount, 1);
+
+    if centerCount == 0
+        scoreList = min([candidateXList - validXmin, validXmax - candidateXList, ...
+            candidateYList - validYmin, validYmax - candidateYList], [], 2).^2;
+    else
+        scoreList = zeros(candidateCount, 1);
+        for idx = 1:candidateCount
+            dx = centers(1:centerCount, 1) - candidateXList(idx);
+            dy = centers(1:centerCount, 2) - candidateYList(idx);
+            centerDistanceSquared = min(dx.^2 + dy.^2);
+            boundaryDistance = min([candidateXList(idx) - validXmin, validXmax - candidateXList(idx), ...
+                candidateYList(idx) - validYmin, validYmax - candidateYList(idx)]);
+            scoreList(idx) = min(centerDistanceSquared, boundaryDistance^2);
+        end
+    end
+
+    [nearestDistanceSquared, bestIndex] = max(scoreList);
+    candidateX = candidateXList(bestIndex);
+    candidateY = candidateYList(bestIndex);
+    sizeIndex = sizeIndexList(bestIndex);
 end
 
 function I_vis = enhanceIntensityForDisplay(I_norm, alpha, gamma)

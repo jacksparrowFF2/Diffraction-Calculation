@@ -1,5 +1,9 @@
-%% 多半径圆形相位微岛 DOE 优化
-% 本脚本用于搜索“非零级衍射峰最小 + 0 级主斑保持 + 少衍射环 + haze 风险受限”的多半径圆形高折微岛设计。
+%% 多形状相位微岛 DOE 优化
+% 本脚本用于搜索“非零级衍射峰最小 + 0 级主斑保持 + 少衍射环 + haze 风险受限”的高折微岛设计。
+% 当前支持 PatternMode:
+%   circle：多半径圆形相位微岛 baseline；
+%   random_ellipse：多长轴、随机旋角椭圆相位微岛；
+%   blue_noise_circle / blue_noise_ellipse：best-candidate 蓝噪声中心分布。
 % 优化逻辑和可视化脚本分离：本脚本负责筛选候选设计，
 % CustomApertureWithPhase_fraunhofer_fft.m 负责对某一个设计做详细出图。
 
@@ -17,10 +21,12 @@ switch doePreset
             [1.0, 1.5]
             [0.8, 1.2, 1.8]
             [0.8, 1.2, 1.6, 2.0]
-        };
-        phaseHeightList_nm = [60, 100, 140, 180, 220];
-        fillFactorList = [0.05, 0.10, 0.15, 0.20];
-        minDistanceFactorList = [1.5, 2.0, 2.5];
+        };        
+        patternModeList = ["circle", "random_ellipse", "blue_noise_circle", "blue_noise_ellipse"];
+        ellipseAspectRatioList = [1.5];
+        phaseHeightList_nm = [140, 160, 180];
+        fillFactorList = [0.10, 0.15];
+        minDistanceFactorList = [0.8, 1.0, 1.2];
     case "full"
         nn = 320;
         seedList = 1:10;
@@ -31,9 +37,11 @@ switch doePreset
             [0.6, 1.0, 1.4, 1.8]
             [0.8, 1.0, 1.4, 1.8, 2.2]
         };
+        patternModeList = ["circle", "random_ellipse", "blue_noise_circle", "blue_noise_ellipse"];
+        ellipseAspectRatioList = [1.5, 2.0, 2.5];
         phaseHeightList_nm = [60, 100, 140, 180, 220];
         fillFactorList = [0.05, 0.10, 0.15, 0.20, 0.25, 0.30];
-        minDistanceFactorList = [1.2, 1.5, 2.0, 2.5];
+        minDistanceFactorList = [0.8, 1.0, 1.2, 1.5, 2.0];
     otherwise
         error('未知 DOE 预设：%s', doePreset);
 end
@@ -59,6 +67,7 @@ n_high = 1.75;
 n_low = 1.55;
 delta_n = n_high - n_low;
 phaseHeightList = phaseHeightList_nm * 1e-9;
+patternConfigList = buildPatternConfigList(radiusSetList_um, patternModeList, ellipseAspectRatioList);
 
 % 目标函数权重。0 级主斑、近角衍射环和 haze 风险都作为强约束处理。
 topK = 12;
@@ -145,7 +154,7 @@ fprintf('无相位层径向环可见度：%.4f，上限：%.4f\n', ...
     baselineRingVisibilityMean, ringVisibilityLimit);
 
 %% DOE 粗扫
-totalDesigns = numel(radiusSetList_um) * numel(phaseHeightList) * numel(fillFactorList) * ...
+totalDesigns = numel(patternConfigList) * numel(phaseHeightList) * numel(fillFactorList) * ...
     numel(minDistanceFactorList) * numel(seedList);
 fprintf('开始 DOE：%d 个设计，模式：%s\n', totalDesigns, doePreset);
 
@@ -154,23 +163,28 @@ designIndex = 0;
 bestObjective = inf;
 bestDesign = struct();
 
-for radiusSetId = 1:numel(radiusSetList_um)
-    radiusList = radiusSetList_um{radiusSetId} * 1e-6;
-    maxRadius = max(radiusList);
+for patternConfigId = 1:numel(patternConfigList)
+    patternConfig = patternConfigList(patternConfigId);
+    sizeList = patternConfig.SizeSet_um * 1e-6;
+    distanceRadius = patternConfig.DistanceRadius_um * 1e-6;
 
     for phaseHeight = phaseHeightList
         for fillFactor = fillFactorList
             for minDistanceFactor = minDistanceFactorList
-                minCenterDistance = minDistanceFactor * 2 * maxRadius;
+                minCenterDistance = minDistanceFactor * 2 * distanceRadius;
 
                 for seed = seedList
                     designIndex = designIndex + 1;
-                    fprintf('[%d/%d] radiusSet=%d, height=%.0f nm, fill=%.2f, minDistFactor=%.2f, seed=%d\n', ...
-                        designIndex, totalDesigns, radiusSetId, phaseHeight * 1e9, fillFactor, minDistanceFactor, seed);
+                    fprintf('[%d/%d] mode=%s, sizeSet=%d, aspect=%.2f, height=%.0f nm, fill=%.2f, minDistFactor=%.2f, seed=%d\n', ...
+                        designIndex, totalDesigns, patternConfig.PatternMode, patternConfig.SizeSetId, ...
+                        patternConfig.AspectRatio, phaseHeight * 1e9, fillFactor, minDistanceFactor, seed);
 
-                    [h_map, phaseCenters, actualFillFactor] = generateMultiRadiusPoissonDiskHeightMap( ...
-                        x, y, xmin, xmax, ymin, ymax, phaseHeight, radiusList, ...
-                        minCenterDistance, fillFactor, seed);
+                    [h_map, phaseCenters, actualFillFactor] = generatePoissonDiskPhaseHeightMap( ...
+                        x, y, xmin, xmax, ymin, ymax, phaseHeight, patternConfig.PatternMode, ...
+                        sizeList, patternConfig.AspectRatio, minCenterDistance, fillFactor, seed);
+                    fillAchievementRatio = actualFillFactor / max(fillFactor, eps);
+                    fillShortfall = max(0, fillFactor - actualFillFactor);
+                    effectiveFillBin = round(actualFillFactor / 0.01) * 0.01;
 
                     metric = evaluatePhaseDesign(BaseMask, h_map, baseline, lambdalist, ...
                         delta_n, xmin, xmax, ymin, ymax, Tnn, z, Xmin, Xmax, Ymin, Ymax, ...
@@ -180,16 +194,20 @@ for radiusSetId = 1:numel(radiusSetList_um)
                         weightRingVisibilityPenalty, weightHazePenalty);
 
                     newRow = table( ...
-                        designIndex, radiusSetId, string(mat2str(radiusSetList_um{radiusSetId})), ...
-                        phaseHeight * 1e9, fillFactor, minDistanceFactor, seed, size(phaseCenters, 1), actualFillFactor, ...
+                        designIndex, patternConfigId, patternConfig.SizeSetId, string(patternConfig.PatternMode), ...
+                        string(mat2str(patternConfig.SizeSet_um)), patternConfig.AspectRatio, ...
+                        phaseHeight * 1e9, fillFactor, minDistanceFactor, seed, size(phaseCenters, 1), ...
+                        actualFillFactor, fillAchievementRatio, fillShortfall, effectiveFillBin, ...
                         metric.NonZeroTopKPeakRatio, metric.PeakBackgroundRatioPenalty, ...
                         metric.ZeroOrderRetention, metric.ZeroOrderLossPenalty, ...
                         metric.NearRingEnergyRatio, metric.NearRingEnergyPenalty, ...
                         metric.RingVisibility, metric.RingVisibilityRatio, metric.RingVisibilityPenalty, ...
                         metric.HazeRisk, metric.HazeRiskPenalty, metric.Objective, ...
-                        'VariableNames', {'DesignIndex', 'RadiusSetId', 'RadiusSet_um', ...
-                        'PhaseHeight_nm', 'TargetFillFactor', 'MinDistanceFactor', 'Seed', ...
-                        'IslandCount', 'ActualFillFactor', 'NonZeroTopKPeakRatio', ...
+                        'VariableNames', {'DesignIndex', 'PatternConfigId', 'SizeSetId', 'PatternMode', ...
+                        'RadiusSet_um', 'AspectRatio', 'PhaseHeight_nm', ...
+                        'TargetFillFactor', 'MinDistanceFactor', 'Seed', ...
+                        'IslandCount', 'ActualFillFactor', 'FillAchievementRatio', ...
+                        'FillShortfall', 'EffectiveFillBin', 'NonZeroTopKPeakRatio', ...
                         'PeakBackgroundRatioPenalty', 'ZeroOrderRetention', 'ZeroOrderLossPenalty', ...
                         'NearRingEnergyRatio', 'NearRingEnergyPenalty', ...
                         'RingVisibility', 'RingVisibilityRatio', 'RingVisibilityPenalty', ...
@@ -200,7 +218,10 @@ for radiusSetId = 1:numel(radiusSetList_um)
                         bestObjective = metric.Objective;
                         bestDesign.h_map = h_map;
                         bestDesign.centers = phaseCenters;
-                        bestDesign.radiusSet_um = radiusSetList_um{radiusSetId};
+                        bestDesign.patternMode = patternConfig.PatternMode;
+                        bestDesign.sizeSet_um = patternConfig.SizeSet_um;
+                        bestDesign.aspectRatio = patternConfig.AspectRatio;
+                        bestDesign.radiusSet_um = patternConfig.SizeSet_um;
                         bestDesign.phaseHeight = phaseHeight;
                         bestDesign.fillFactor = fillFactor;
                         bestDesign.minDistanceFactor = minDistanceFactor;
@@ -242,7 +263,8 @@ colorbar;
 exportgraphics(gcf, fullfile(outputDir, 'best_multi_radius_phase_height_map.png'), 'Resolution', 200);
 
 fprintf('\n最佳设计：\n');
-fprintf('radiusSet_um = %s\n', mat2str(bestDesign.radiusSet_um));
+fprintf('patternMode = %s\n', bestDesign.patternMode);
+fprintf('sizeSet_um = %s, aspectRatio = %.2f\n', mat2str(bestDesign.sizeSet_um), bestDesign.aspectRatio);
 fprintf('phaseHeight = %.0f nm\n', bestDesign.phaseHeight * 1e9);
 fprintf('fillFactor = %.2f, minDistanceFactor = %.2f, seed = %d\n', ...
     bestDesign.fillFactor, bestDesign.minDistanceFactor, bestDesign.seed);
@@ -257,6 +279,41 @@ fprintf('Objective = %.4f\n', bestDesign.metric.Objective);
 fprintf('结果已保存：%s\n', csvPath);
 
 %% 局部函数
+function patternConfigList = buildPatternConfigList(sizeSetList_um, patternModeList, ellipseAspectRatioList)
+    %BUILDPATTERNCONFIGLIST 展开圆形和随机旋角椭圆的 DOE pattern 配置。
+    patternConfigList = struct('PatternMode', {}, 'SizeSetId', {}, 'SizeSet_um', {}, ...
+        'AspectRatio', {}, 'DistanceRadius_um', {});
+
+    for mode = patternModeList
+        switch string(mode)
+            case {"circle", "blue_noise_circle"}
+                for sizeSetId = 1:numel(sizeSetList_um)
+                    patternConfigList(end + 1) = struct( ... %#ok<AGROW>
+                        'PatternMode', string(mode), ...
+                        'SizeSetId', sizeSetId, ...
+                        'SizeSet_um', sizeSetList_um{sizeSetId}, ...
+                        'AspectRatio', 1.0, ...
+                        'DistanceRadius_um', max(sizeSetList_um{sizeSetId}));
+                end
+
+            case {"random_ellipse", "blue_noise_ellipse"}
+                for sizeSetId = 1:numel(sizeSetList_um)
+                    for aspectRatio = ellipseAspectRatioList
+                        patternConfigList(end + 1) = struct( ... %#ok<AGROW>
+                            'PatternMode', string(mode), ...
+                            'SizeSetId', sizeSetId, ...
+                            'SizeSet_um', sizeSetList_um{sizeSetId}, ...
+                            'AspectRatio', aspectRatio, ...
+                            'DistanceRadius_um', max(sizeSetList_um{sizeSetId}) / sqrt(aspectRatio));
+                    end
+                end
+
+            otherwise
+                error('未知 PatternMode：%s', string(mode));
+        end
+    end
+end
+
 function metric = evaluatePhaseDesign(BaseMask, h_map, baseline, lambdalist, ...
     delta_n, xmin, xmax, ymin, ymax, Tnn, z, Xmin, Xmax, Ymin, Ymax, ...
     X, Y, FocusR, Pitch, topK, zeroOrderRadiusFactor, zeroOrderRetentionTarget, ...
@@ -321,45 +378,73 @@ function metric = evaluatePhaseDesign(BaseMask, h_map, baseline, lambdalist, ...
         weightHazePenalty * metric.HazeRiskPenalty;
 end
 
-function [hMap, centers, actualFillFactor] = generateMultiRadiusPoissonDiskHeightMap( ...
-    xGrid, yGrid, xmin, xmax, ymin, ymax, islandHeight, radiusList, ...
-    minCenterDistance, targetFillFactor, randomSeed)
-    %GENERATEMULTIRADIUSPOISSONDISKHEIGHTMAP 生成多半径圆形微岛高度图。
-    % 所有微岛仍为圆形 primitive，便于后续转 mask/GDS 或压印 master。
+function [hMap, centers, actualFillFactor] = generatePoissonDiskPhaseHeightMap( ...
+    xGrid, yGrid, xmin, xmax, ymin, ymax, islandHeight, patternMode, sizeList, ...
+    aspectRatio, minCenterDistance, targetFillFactor, randomSeed)
+    %GENERATEPOISSONDISKPHASEHEIGHTMAP 生成泊松盘圆形或随机旋角椭圆微岛高度图。
+    % centers = [cx, cy, majorAxis, minorAxis, rotationAngleRad]。
 
     rng(randomSeed);
     xVector = xGrid(1, :);
     yVector = yGrid(:, 1);
     hMap = zeros(size(xGrid));
 
-    maxRadius = max(radiusList);
-    validXmin = xmin + maxRadius;
-    validXmax = xmax - maxRadius;
-    validYmin = ymin + maxRadius;
-    validYmax = ymax - maxRadius;
+    majorAxisList = sizeList(:).';
+    switch string(patternMode)
+        case {"circle", "blue_noise_circle"}
+            minorAxisList = majorAxisList;
+            shapeAreaList = pi * majorAxisList.^2;
+        case {"random_ellipse", "blue_noise_ellipse"}
+            minorAxisList = majorAxisList ./ aspectRatio;
+            shapeAreaList = pi * majorAxisList .* minorAxisList;
+        otherwise
+            error('未知 PatternMode：%s', string(patternMode));
+    end
+
+    maxMajorAxis = max(majorAxisList);
+    validXmin = xmin + maxMajorAxis;
+    validXmax = xmax - maxMajorAxis;
+    validYmin = ymin + maxMajorAxis;
+    validYmax = ymax - maxMajorAxis;
     if validXmin >= validXmax || validYmin >= validYmax
-        error('圆形微岛最大半径过大，已经超过当前物面尺寸。');
+        error('微岛最大长半轴过大，已经超过当前物面尺寸。');
     end
 
     domainArea = (xmax - xmin) * (ymax - ymin);
-    meanIslandArea = mean(pi * radiusList.^2);
+    meanIslandArea = mean(shapeAreaList);
     targetIslandCount = ceil(targetFillFactor * domainArea / meanIslandArea);
     maxAttempts = max(20000, targetIslandCount * 1000);
 
-    centers = zeros(targetIslandCount, 3);
+    centers = zeros(targetIslandCount, 5);
     centerCount = 0;
     coveredArea = 0;
     targetArea = targetFillFactor * domainArea;
     attemptCount = 0;
+    useBlueNoisePlacement = startsWith(string(patternMode), "blue_noise");
+    blueNoiseCandidateCount = 24;
+    blueNoiseSoftDistanceFactor = 0.65;
 
     while coveredArea < targetArea && attemptCount < maxAttempts
         attemptCount = attemptCount + 1;
-        candidateRadius = radiusList(randi(numel(radiusList)));
-        candidateX = validXmin + rand() * (validXmax - validXmin);
-        candidateY = validYmin + rand() * (validYmax - validYmin);
+        if useBlueNoisePlacement
+            [candidateX, candidateY, sizeIndex, nearestDistanceSquared] = chooseBlueNoiseCandidate( ...
+                centers, centerCount, validXmin, validXmax, validYmin, validYmax, ...
+                majorAxisList, blueNoiseCandidateCount);
+        else
+            sizeIndex = randi(numel(majorAxisList));
+            candidateX = validXmin + rand() * (validXmax - validXmin);
+            candidateY = validYmin + rand() * (validYmax - validYmin);
+            nearestDistanceSquared = inf;
+        end
+        candidateMajorAxis = majorAxisList(sizeIndex);
+        candidateMinorAxis = minorAxisList(sizeIndex);
+        candidateAngle = pi * rand();
 
         if centerCount == 0
             acceptCandidate = true;
+        elseif useBlueNoisePlacement
+            softMinDistance = blueNoiseSoftDistanceFactor * minCenterDistance;
+            acceptCandidate = nearestDistanceSquared >= softMinDistance^2;
         else
             dx = centers(1:centerCount, 1) - candidateX;
             dy = centers(1:centerCount, 2) - candidateY;
@@ -371,8 +456,8 @@ function [hMap, centers, actualFillFactor] = generateMultiRadiusPoissonDiskHeigh
             if centerCount > size(centers, 1)
                 centers(end + targetIslandCount, :) = 0; %#ok<AGROW>
             end
-            centers(centerCount, :) = [candidateX, candidateY, candidateRadius];
-            coveredArea = coveredArea + pi * candidateRadius^2;
+            centers(centerCount, :) = [candidateX, candidateY, candidateMajorAxis, candidateMinorAxis, candidateAngle];
+            coveredArea = coveredArea + pi * candidateMajorAxis * candidateMinorAxis;
         end
     end
 
@@ -381,19 +466,53 @@ function [hMap, centers, actualFillFactor] = generateMultiRadiusPoissonDiskHeigh
     for idx = 1:centerCount
         cx = centers(idx, 1);
         cy = centers(idx, 2);
-        islandRadius = centers(idx, 3);
+        majorAxis = centers(idx, 3);
+        minorAxis = centers(idx, 4);
+        rotationAngle = centers(idx, 5);
 
-        xIndex = find(abs(xVector - cx) <= islandRadius);
-        yIndex = find(abs(yVector - cy) <= islandRadius);
+        xIndex = find(abs(xVector - cx) <= majorAxis);
+        yIndex = find(abs(yVector - cy) <= majorAxis);
         [localX, localY] = meshgrid(xVector(xIndex), yVector(yIndex));
-        localCircle = (localX - cx).^2 + (localY - cy).^2 <= islandRadius^2;
+        dx = localX - cx;
+        dy = localY - cy;
+        localMajorCoord = dx * cos(rotationAngle) + dy * sin(rotationAngle);
+        localMinorCoord = -dx * sin(rotationAngle) + dy * cos(rotationAngle);
+        localShape = (localMajorCoord / majorAxis).^2 + (localMinorCoord / minorAxis).^2 <= 1;
 
         localHeight = hMap(yIndex, xIndex);
-        localHeight(localCircle) = islandHeight;
+        localHeight(localShape) = islandHeight;
         hMap(yIndex, xIndex) = localHeight;
     end
 
     actualFillFactor = nnz(hMap > 0) / numel(hMap);
+end
+
+function [candidateX, candidateY, sizeIndex, nearestDistanceSquared] = chooseBlueNoiseCandidate( ...
+    centers, centerCount, validXmin, validXmax, validYmin, validYmax, majorAxisList, candidateCount)
+    %CHOOSEBLUENOISECANDIDATE Mitchell best-candidate 风格的蓝噪声中心选点。
+    candidateXList = validXmin + rand(candidateCount, 1) * (validXmax - validXmin);
+    candidateYList = validYmin + rand(candidateCount, 1) * (validYmax - validYmin);
+    sizeIndexList = randi(numel(majorAxisList), candidateCount, 1);
+
+    if centerCount == 0
+        scoreList = min([candidateXList - validXmin, validXmax - candidateXList, ...
+            candidateYList - validYmin, validYmax - candidateYList], [], 2).^2;
+    else
+        scoreList = zeros(candidateCount, 1);
+        for idx = 1:candidateCount
+            dx = centers(1:centerCount, 1) - candidateXList(idx);
+            dy = centers(1:centerCount, 2) - candidateYList(idx);
+            centerDistanceSquared = min(dx.^2 + dy.^2);
+            boundaryDistance = min([candidateXList(idx) - validXmin, validXmax - candidateXList(idx), ...
+                candidateYList(idx) - validYmin, validYmax - candidateYList(idx)]);
+            scoreList(idx) = min(centerDistanceSquared, boundaryDistance^2);
+        end
+    end
+
+    [nearestDistanceSquared, bestIndex] = max(scoreList);
+    candidateX = candidateXList(bestIndex);
+    candidateY = candidateYList(bestIndex);
+    sizeIndex = sizeIndexList(bestIndex);
 end
 
 function value = meanTopKLocalPeaks(I, topK, excludeMask)
@@ -465,10 +584,11 @@ function visibility = ringVisibilityByRadius(I, X, Y, innerRadius, outerRadius, 
         return
     end
 
-    edges = linspace(innerRadius, outerRadius, binCount + 1);
-    binIndex = discretize(R(ringMask), edges);
+    radiusSamples = R(ringMask);
+    binIndex = floor((radiusSamples - innerRadius) / (outerRadius - innerRadius) * binCount) + 1;
+    binIndex = min(max(binIndex, 1), binCount);
     intensitySamples = I(ringMask);
-    validMask = ~isnan(binIndex);
+    validMask = isfinite(binIndex);
     binIndex = binIndex(validMask);
     intensitySamples = intensitySamples(validMask);
 
