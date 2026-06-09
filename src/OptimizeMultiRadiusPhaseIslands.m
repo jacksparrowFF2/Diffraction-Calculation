@@ -11,7 +11,7 @@ clear, clc, close all
 
 %% DOE 运行模式
 % quick：用于快速调通流程；full：用于正式粗扫，seed 使用 1:10。
-doePreset = "quick";
+doePreset = "full";
 
 switch doePreset
     case "quick"
@@ -22,7 +22,8 @@ switch doePreset
             [0.8, 1.2, 1.8]
             [0.8, 1.2, 1.6, 2.0]
         };        
-        patternModeList = ["circle", "random_ellipse", "blue_noise_circle", "blue_noise_ellipse"];
+        % patternModeList = ["circle", "random_ellipse", "blue_noise_circle", "blue_noise_ellipse"];
+        patternModeList = ["blue_noise_ellipse"];
         ellipseAspectRatioList = [1.5];
         phaseHeightList_nm = [140, 160, 180];
         fillFactorList = [0.10, 0.15];
