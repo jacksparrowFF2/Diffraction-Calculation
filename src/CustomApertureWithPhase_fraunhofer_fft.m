@@ -93,6 +93,7 @@ Y = linspace(Ymin, Ymax, Tnn);
 
 % 给结果矩阵预分配内存
 RGB = zeros(Tnn, Tnn, 3);
+RGB_Origin = zeros(Tnn, Tnn, 3);
 RGB_NoPhase = zeros(Tnn, Tnn, 3);
 GreenCompare_NoPhase = [];
 GreenCompare_WithPhase = [];
@@ -100,6 +101,9 @@ GreenIntensity_NoPhase = [];
 GreenIntensity_WithPhase = [];
 PeakIntensity_NoPhase = zeros(1, numel(lambdalist));
 PeakIntensity_WithPhase = zeros(1, numel(lambdalist));
+ZeroOrderEnergy_NoPhase = zeros(1, numel(lambdalist));
+ZeroOrderEnergy_WithPhase = zeros(1, numel(lambdalist));
+ZeroOrderRetention = zeros(1, numel(lambdalist));
 
 %% 非周期相位去相关层参数
 % 本脚本模拟 COE OLED 息屏/黑态下的环境反射光，因此只考虑双程相位：
@@ -108,12 +112,30 @@ n_high = 1.75;
 n_low = 1.55;
 delta_n = n_high - n_low;
 phaseHeight = 220e-9;          % 高折圆形微岛高度，推荐从 200~250 nm 起步
-% 以下参数来自 OptimizeMultiRadiusPhaseIslands.m 的 quick DOE 当前最优候选。
+zeroOrderRadiusFactor = 0.45;  % 0 级主斑判读半径，按各波长一阶衍射间距的比例估算
+useBestDoeDesign = true;       % true 时自动读取 DOE 最优候选；读取失败则使用下方手动参数
+
+% 以下参数作为手动兜底值；自动导入成功时会被 DOE 最优候选覆盖。
 phaseIslandRadiusList = [1.0, 1.5] * 1e-6; % 多半径圆形高折微岛半径，单位 m
 phaseFillFactor = 0.40;                    % 目标填充率，实际填充率由离散采样和拒绝采样共同决定
 phaseMinDistanceFactor = 1.00;             % 最小中心距系数，乘以 2*最大半径
 phaseMinDistance = phaseMinDistanceFactor * 2 * max(phaseIslandRadiusList);
 phaseSeed = 5;                             % DOE 最优候选对应 seed
+
+if useBestDoeDesign
+    try
+        bestDoeDesign = loadBestMultiRadiusPhaseDesign();
+        phaseIslandRadiusList = bestDoeDesign.phaseIslandRadiusList;
+        phaseFillFactor = bestDoeDesign.phaseFillFactor;
+        phaseMinDistanceFactor = bestDoeDesign.phaseMinDistanceFactor;
+        phaseMinDistance = bestDoeDesign.phaseMinDistance;
+        phaseSeed = bestDoeDesign.phaseSeed;
+        fprintf('已导入 DOE 最优设计：%s\n', bestDoeDesign.sourcePath);
+        fprintf('DOE Objective = %.4g\n', bestDoeDesign.objective);
+    catch ME
+        warning('DOEImport:LoadFailed', 'DOE 最优设计导入失败，使用脚本内手动参数。原因：%s', ME.message);
+    end
+end
 
 if Lightflag ==1
     % 导入要被衍射的图片
@@ -258,6 +280,11 @@ for c = 1:3
     I_NoPhase = abs(U2_NoPhase).^2;
     PeakIntensity_NoPhase(c) = max(I_NoPhase(:));
     PeakIntensity_WithPhase(c) = max(I(:));
+    zeroOrderRadius = zeroOrderRadiusFactor * lambda * z / Pitch;
+    zeroOrderMask = X.^2 + Y.^2 <= zeroOrderRadius^2;
+    ZeroOrderEnergy_NoPhase(c) = sum(I_NoPhase(zeroOrderMask), 'all');
+    ZeroOrderEnergy_WithPhase(c) = sum(I(zeroOrderMask), 'all');
+    ZeroOrderRetention(c) = ZeroOrderEnergy_WithPhase(c) / ZeroOrderEnergy_NoPhase(c);
     % % 对数压缩亮部
     % alpha = 100;
     % I_log = log(1 + alpha * I);
@@ -315,9 +342,10 @@ end
 
 fprintf('\n相位增加前后峰值强度对比：\n');
 for c = 1:numel(lambdalist)
-    fprintf('%g nm: 无相位 %.4g, 有相位 %.4g, 峰值比例 %.2f %%\n', ...
+    fprintf('%g nm: 无相位 %.4g, 有相位 %.4g, 峰值比例 %.2f %%，0级主斑保持 %.2f %%\n', ...
         lambdalist(c) * 1e9, PeakIntensity_NoPhase(c), PeakIntensity_WithPhase(c), ...
-        PeakIntensity_WithPhase(c) / PeakIntensity_NoPhase(c) * 100);
+        PeakIntensity_WithPhase(c) / PeakIntensity_NoPhase(c) * 100, ...
+        ZeroOrderRetention(c) * 100);
 end
 
 %% RGB合成显示色分离
@@ -366,9 +394,15 @@ clim([0 1]);
 exportgraphics(gcf, fullfile('..', 'ImageForShow', 'four_aperture_phase_before_after_green.png'), 'Resolution', 200);
 
 % ① Figure 7：绿色通道相位增加前后 dB 对比。
-% 使用同一个参考最大值和同一个色标，用于观察强衍射峰是否被削弱、展宽。
+% 使用同一个参考最大值和同一个色标，用于观察非零级强衍射峰是否被削弱，
+% 同时检查 0 级主斑是否仍集中在中心标记圈内。
 greenReference = max(GreenIntensity_NoPhase(:));
 greenDbFloor = -60;
+greenLambda = lambdalist(2);
+greenZeroOrderRadius = zeroOrderRadiusFactor * greenLambda * z / Pitch;
+greenZeroOrderMask = X.^2 + Y.^2 <= greenZeroOrderRadius^2;
+greenZeroOrderRetention = sum(GreenIntensity_WithPhase(greenZeroOrderMask), 'all') / ...
+    sum(GreenIntensity_NoPhase(greenZeroOrderMask), 'all');
 GreenDb_NoPhase = intensityToDb(GreenIntensity_NoPhase, greenReference, greenDbFloor);
 GreenDb_WithPhase = intensityToDb(GreenIntensity_WithPhase, greenReference, greenDbFloor);
 
@@ -383,21 +417,26 @@ set(gca, 'YDir', 'normal');
 colormap turbo;
 colorbar;
 clim([greenDbFloor 0]);
+hold on;
+plotCenterCircle(greenZeroOrderRadius * 1e3, 'w--');
 
 subplot(1, 2, 2);
 imagesc(X(1,:)*1e3, Y(:,1)*1e3, GreenDb_WithPhase);
 axis image;
 xlabel('x / mm');
 ylabel('y / mm');
-title('Green With Phase / dB');
+title(sprintf('Green With Phase / dB, 0-order %.1f%%', greenZeroOrderRetention * 100));
 set(gca, 'YDir', 'normal');
 colormap turbo;
 colorbar;
 clim([greenDbFloor 0]);
+hold on;
+plotCenterCircle(greenZeroOrderRadius * 1e3, 'w--');
 exportgraphics(gcf, fullfile('..', 'ImageForShow', 'green_before_after_unified_db.png'), 'Resolution', 200);
 
 % ② Figure 8：绿色通道差分图。
-% 正值表示相位层增强该角度能量，负值表示削弱；用于观察能量从峰位向周边角度的重新分布。
+% 正值表示相位层增强该角度能量，负值表示削弱；需区分能量是回到 0 级主斑，
+% 还是被推向非零级峰周围或宽角背景。
 GreenDiff = (GreenIntensity_WithPhase - GreenIntensity_NoPhase) / greenReference;
 diffAbs = sort(abs(GreenDiff(:)));
 diffLimit = diffAbs(max(1, round(0.995 * numel(diffAbs))));
@@ -408,15 +447,18 @@ imagesc(X(1,:)*1e3, Y(:,1)*1e3, GreenDiff);
 axis image;
 xlabel('x / mm');
 ylabel('y / mm');
-title('Green Difference: With Phase - Without Phase');
+title(sprintf('Green Difference, 0-order retention %.1f%%', greenZeroOrderRetention * 100));
 set(gca, 'YDir', 'normal');
 colormap(makeRedBlueCmap(256));
 colorbar;
 clim([-diffLimit diffLimit]);
+hold on;
+plotCenterCircle(greenZeroOrderRadius * 1e3, 'k--');
 exportgraphics(gcf, fullfile('..', 'ImageForShow', 'green_phase_difference.png'), 'Resolution', 200);
 
 % ③ Figure 9：中心水平截面强度曲线。
-% 上图线性归一化，下图 dB；用于定量比较中心水平线上的峰值削弱和旁瓣/背景变化。
+% 上图线性归一化，下图 dB；用于定量比较中心水平线上的非零级峰值削弱、
+% 0 级主斑保持和旁瓣/背景变化。
 centerRow = round(size(GreenIntensity_NoPhase, 1) / 2);
 xLine_mm = X(centerRow, :) * 1e3;
 lineNoPhase = GreenIntensity_NoPhase(centerRow, :) / greenReference;
@@ -433,6 +475,8 @@ xlabel('x / mm');
 ylabel('Normalized intensity');
 title('Green Center Horizontal Section / Linear');
 legend('Without phase', 'With phase', 'Location', 'best');
+xline(-greenZeroOrderRadius * 1e3, 'b--', '0-order edge');
+xline(greenZeroOrderRadius * 1e3, 'b--', '0-order edge');
 
 subplot(2, 1, 2);
 plot(xLine_mm, lineNoPhaseDb, 'k-', 'LineWidth', 1.2); hold on;
@@ -440,9 +484,11 @@ plot(xLine_mm, lineWithPhaseDb, 'r-', 'LineWidth', 1.2);
 grid on;
 xlabel('x / mm');
 ylabel('Intensity / dB');
-title('Green Center Horizontal Section / dB');
+title(sprintf('Green Center Horizontal Section / dB, 0-order %.1f%%', greenZeroOrderRetention * 100));
 ylim([greenDbFloor 0]);
 legend('Without phase', 'With phase', 'Location', 'best');
+xline(-greenZeroOrderRadius * 1e3, 'b--', '0-order edge');
+xline(greenZeroOrderRadius * 1e3, 'b--', '0-order edge');
 exportgraphics(gcf, fullfile('..', 'ImageForShow', 'green_center_horizontal_section_linear_db.png'), 'Resolution', 200);
 
 figure;
@@ -625,6 +671,12 @@ function cmap = makeRedBlueCmap(n)
     bluePart = [linspace(0, 1, halfN)', linspace(0, 1, halfN)', ones(halfN, 1)];
     redPart = [ones(n - halfN, 1), linspace(1, 0, n - halfN)', linspace(1, 0, n - halfN)'];
     cmap = [bluePart; redPart];
+end
+
+function plotCenterCircle(radius_mm, lineSpec)
+    %PLOTCENTERCIRCLE 在当前坐标轴上标记 0 级主斑判读半径。
+    theta = linspace(0, 2*pi, 360);
+    plot(radius_mm * cos(theta), radius_mm * sin(theta), lineSpec, 'LineWidth', 1.0);
 end
 
 function work(x, y, U, name)

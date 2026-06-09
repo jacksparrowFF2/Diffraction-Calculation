@@ -1,5 +1,5 @@
 %% 多半径圆形相位微岛 DOE 优化
-% 本脚本用于搜索“衍射效果最不明显 + haze 风险受限”的多半径圆形高折微岛设计。
+% 本脚本用于搜索“非零级衍射峰最小 + 0 级主斑保持 + haze 风险受限”的多半径圆形高折微岛设计。
 % 优化逻辑和可视化脚本分离：本脚本负责筛选候选设计，
 % CustomApertureWithPhase_fraunhofer_fft.m 负责对某一个设计做详细出图。
 
@@ -58,10 +58,13 @@ n_low = 1.55;
 delta_n = n_high - n_low;
 phaseHeight = 220e-9;
 
-% 目标函数权重。haze 超限时用二次惩罚放大。
+% 目标函数权重。haze 超限和 0 级主斑损失都用二次惩罚放大。
 topK = 12;
 hazeLimitMultiplier = 1.20;
+zeroOrderRadiusFactor = 0.45;
+zeroOrderRetentionTarget = 0.95;
 weightPeakBackground = 0.35;
+weightZeroOrderPenalty = 3.0;
 weightHazePenalty = 5.0;
 
 %% 物面和像面网格
@@ -111,9 +114,12 @@ for c = 1:numel(lambdalist)
     [~, U2_NoPhase] = fraunhofer_fft_SPH(BaseMask, xmin, xmax, ymin, ymax, Tnn, Tnn, ...
         lambda, z, Xmin, Xmax, Ymin, Ymax, Tnn, Tnn, k, 0);
     I0 = abs(U2_NoPhase).^2;
+    zeroOrderRadius = zeroOrderRadiusFactor * lambda * z / Pitch;
+    zeroOrderMask = X.^2 + Y.^2 <= zeroOrderRadius^2;
     baseline(c).I = I0;
-    baseline(c).topKMean = meanTopKLocalPeaks(I0, topK);
-    baseline(c).peakBackground = peakBackgroundRatio(I0, topK);
+    baseline(c).zeroOrderEnergy = sum(I0(zeroOrderMask), 'all');
+    baseline(c).topKMean = meanTopKLocalPeaks(I0, topK, zeroOrderMask);
+    baseline(c).peakBackground = peakBackgroundRatio(I0, topK, zeroOrderMask);
     baseline(c).hazeRisk = hazeRiskByAngle(I0, X, Y, FocusR);
 end
 baselineHazeMean = mean([baseline.hazeRisk]);
@@ -150,16 +156,19 @@ for radiusSetId = 1:numel(radiusSetList_um)
 
                 metric = evaluatePhaseDesign(BaseMask, h_map, baseline, lambdalist, ...
                     delta_n, xmin, xmax, ymin, ymax, Tnn, z, Xmin, Xmax, Ymin, Ymax, ...
-                    X, Y, FocusR, topK, hazeRiskLimit, weightPeakBackground, weightHazePenalty);
+                    X, Y, FocusR, Pitch, topK, zeroOrderRadiusFactor, zeroOrderRetentionTarget, ...
+                    hazeRiskLimit, weightPeakBackground, weightZeroOrderPenalty, weightHazePenalty);
 
                 newRow = table( ...
                     designIndex, radiusSetId, string(mat2str(radiusSetList_um{radiusSetId})), ...
                     fillFactor, minDistanceFactor, seed, size(phaseCenters, 1), actualFillFactor, ...
-                    metric.TopKPeakRatio, metric.PeakBackgroundRatioPenalty, metric.HazeRisk, ...
-                    metric.HazeRiskPenalty, metric.Objective, ...
+                    metric.NonZeroTopKPeakRatio, metric.PeakBackgroundRatioPenalty, ...
+                    metric.ZeroOrderRetention, metric.ZeroOrderLossPenalty, ...
+                    metric.HazeRisk, metric.HazeRiskPenalty, metric.Objective, ...
                     'VariableNames', {'DesignIndex', 'RadiusSetId', 'RadiusSet_um', ...
                     'TargetFillFactor', 'MinDistanceFactor', 'Seed', 'IslandCount', 'ActualFillFactor', ...
-                    'TopKPeakRatio', 'PeakBackgroundRatioPenalty', 'HazeRisk', ...
+                    'NonZeroTopKPeakRatio', 'PeakBackgroundRatioPenalty', ...
+                    'ZeroOrderRetention', 'ZeroOrderLossPenalty', 'HazeRisk', ...
                     'HazeRiskPenalty', 'Objective'});
                 results = [results; newRow]; %#ok<AGROW>
 
@@ -209,8 +218,9 @@ fprintf('radiusSet_um = %s\n', mat2str(bestDesign.radiusSet_um));
 fprintf('fillFactor = %.2f, minDistanceFactor = %.2f, seed = %d\n', ...
     bestDesign.fillFactor, bestDesign.minDistanceFactor, bestDesign.seed);
 fprintf('actualFillFactor = %.4f\n', bestDesign.actualFillFactor);
-fprintf('TopKPeakRatio = %.4f\n', bestDesign.metric.TopKPeakRatio);
+fprintf('NonZeroTopKPeakRatio = %.4f\n', bestDesign.metric.NonZeroTopKPeakRatio);
 fprintf('PeakBackgroundRatioPenalty = %.4f\n', bestDesign.metric.PeakBackgroundRatioPenalty);
+fprintf('ZeroOrderRetention = %.4f\n', bestDesign.metric.ZeroOrderRetention);
 fprintf('HazeRisk = %.4f, HazeLimit = %.4f\n', bestDesign.metric.HazeRisk, hazeRiskLimit);
 fprintf('Objective = %.4f\n', bestDesign.metric.Objective);
 fprintf('结果已保存：%s\n', csvPath);
@@ -218,11 +228,13 @@ fprintf('结果已保存：%s\n', csvPath);
 %% 局部函数
 function metric = evaluatePhaseDesign(BaseMask, h_map, baseline, lambdalist, ...
     delta_n, xmin, xmax, ymin, ymax, Tnn, z, Xmin, Xmax, Ymin, Ymax, ...
-    X, Y, FocusR, topK, hazeRiskLimit, weightPeakBackground, weightHazePenalty)
+    X, Y, FocusR, Pitch, topK, zeroOrderRadiusFactor, zeroOrderRetentionTarget, ...
+    hazeRiskLimit, weightPeakBackground, weightZeroOrderPenalty, weightHazePenalty)
     %EVALUATEPHASEDESIGN 计算单个相位层设计的目标函数。
 
     topKRatioList = zeros(1, numel(lambdalist));
     peakBackgroundRatioList = zeros(1, numel(lambdalist));
+    zeroOrderRetentionList = zeros(1, numel(lambdalist));
     hazeRiskList = zeros(1, numel(lambdalist));
 
     for c = 1:numel(lambdalist)
@@ -234,22 +246,30 @@ function metric = evaluatePhaseDesign(BaseMask, h_map, baseline, lambdalist, ...
         [~, U2_WithPhase] = fraunhofer_fft_SPH(ComplexMask, xmin, xmax, ymin, ymax, Tnn, Tnn, ...
             lambda, z, Xmin, Xmax, Ymin, Ymax, Tnn, Tnn, k, 0);
         I = abs(U2_WithPhase).^2;
+        zeroOrderRadius = zeroOrderRadiusFactor * lambda * z / Pitch;
+        zeroOrderMask = X.^2 + Y.^2 <= zeroOrderRadius^2;
 
-        topKMean = meanTopKLocalPeaks(I, topK);
-        peakBackground = peakBackgroundRatio(I, topK);
+        topKMean = meanTopKLocalPeaks(I, topK, zeroOrderMask);
+        peakBackground = peakBackgroundRatio(I, topK, zeroOrderMask);
+        zeroOrderEnergy = sum(I(zeroOrderMask), 'all');
         hazeRisk = hazeRiskByAngle(I, X, Y, FocusR);
 
         topKRatioList(c) = topKMean / baseline(c).topKMean;
         peakBackgroundRatioList(c) = peakBackground / baseline(c).peakBackground;
+        zeroOrderRetentionList(c) = zeroOrderEnergy / baseline(c).zeroOrderEnergy;
         hazeRiskList(c) = hazeRisk;
     end
 
-    metric.TopKPeakRatio = mean(topKRatioList);
+    metric.NonZeroTopKPeakRatio = mean(topKRatioList);
+    metric.TopKPeakRatio = metric.NonZeroTopKPeakRatio;
     metric.PeakBackgroundRatioPenalty = mean(peakBackgroundRatioList);
+    metric.ZeroOrderRetention = mean(zeroOrderRetentionList);
+    metric.ZeroOrderLossPenalty = max(0, zeroOrderRetentionTarget - metric.ZeroOrderRetention)^2;
     metric.HazeRisk = mean(hazeRiskList);
     metric.HazeRiskPenalty = max(0, metric.HazeRisk - hazeRiskLimit)^2;
-    metric.Objective = metric.TopKPeakRatio + ...
+    metric.Objective = metric.NonZeroTopKPeakRatio + ...
         weightPeakBackground * metric.PeakBackgroundRatioPenalty + ...
+        weightZeroOrderPenalty * metric.ZeroOrderLossPenalty + ...
         weightHazePenalty * metric.HazeRiskPenalty;
 end
 
@@ -328,8 +348,11 @@ function [hMap, centers, actualFillFactor] = generateMultiRadiusPoissonDiskHeigh
     actualFillFactor = nnz(hMap > 0) / numel(hMap);
 end
 
-function value = meanTopKLocalPeaks(I, topK)
+function value = meanTopKLocalPeaks(I, topK, excludeMask)
     %MEANTOPKLOCALPEAKS 提取局部峰并计算前 K 个峰的平均强度。
+    if nargin < 3
+        excludeMask = false(size(I));
+    end
     localMaxMask = true(size(I));
     for rowShift = -1:1
         for colShift = -1:1
@@ -341,7 +364,7 @@ function value = meanTopKLocalPeaks(I, topK)
     end
     localMaxMask([1 end], :) = false;
     localMaxMask(:, [1 end]) = false;
-    localMaxMask = localMaxMask & I > 0;
+    localMaxMask = localMaxMask & I > 0 & ~excludeMask;
     peakValues = sort(I(localMaxMask), 'descend');
     if isempty(peakValues)
         value = max(I(:));
@@ -365,11 +388,15 @@ function shifted = shiftWithNegInf(I, rowShift, colShift)
     shifted(targetRows, targetCols) = I(sourceRows, sourceCols);
 end
 
-function ratio = peakBackgroundRatio(I, topK)
+function ratio = peakBackgroundRatio(I, topK, excludeMask)
     %PEAKBACKGROUNDRATIO 用前 K 个局部峰均值除以背景中位数，估计彩色峰可见风险。
-    peakValue = meanTopKLocalPeaks(I, topK);
-    threshold = prctile(I(:), 90);
-    background = median(I(I <= threshold));
+    if nargin < 3
+        excludeMask = false(size(I));
+    end
+    peakValue = meanTopKLocalPeaks(I, topK, excludeMask);
+    backgroundSamples = I(~excludeMask);
+    threshold = prctile(backgroundSamples(:), 90);
+    background = median(backgroundSamples(backgroundSamples <= threshold));
     ratio = peakValue / max(background, eps);
 end
 
