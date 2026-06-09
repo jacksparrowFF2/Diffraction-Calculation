@@ -125,12 +125,16 @@ phaseSeed = 5;                             % DOE 最优候选对应 seed
 if useBestDoeDesign
     try
         bestDoeDesign = loadBestMultiRadiusPhaseDesign();
+        if isfield(bestDoeDesign, 'phaseHeight')
+            phaseHeight = bestDoeDesign.phaseHeight;
+        end
         phaseIslandRadiusList = bestDoeDesign.phaseIslandRadiusList;
         phaseFillFactor = bestDoeDesign.phaseFillFactor;
         phaseMinDistanceFactor = bestDoeDesign.phaseMinDistanceFactor;
         phaseMinDistance = bestDoeDesign.phaseMinDistance;
         phaseSeed = bestDoeDesign.phaseSeed;
         fprintf('已导入 DOE 最优设计：%s\n', bestDoeDesign.sourcePath);
+        fprintf('DOE phaseHeight = %.0f nm\n', phaseHeight * 1e9);
         fprintf('DOE Objective = %.4g\n', bestDoeDesign.objective);
     catch ME
         warning('DOEImport:LoadFailed', 'DOE 最优设计导入失败，使用脚本内手动参数。原因：%s', ME.message);

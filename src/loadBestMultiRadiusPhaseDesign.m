@@ -71,15 +71,18 @@ function design = rowToDesign(row)
     design = struct();
     design.radiusSet_um = radiusSet_um;
     design.phaseIslandRadiusList = radiusSet_um * 1e-6;
+    if any(strcmp(row.Properties.VariableNames, 'PhaseHeight_nm'))
+        design.phaseHeight = row.PhaseHeight_nm * 1e-9;
+    end
     design.phaseFillFactor = row.TargetFillFactor;
     design.phaseMinDistanceFactor = row.MinDistanceFactor;
     design.phaseMinDistance = design.phaseMinDistanceFactor * 2 * max(design.phaseIslandRadiusList);
     design.phaseSeed = row.Seed;
     design.objective = row.Objective;
 
-    optionalFields = {'DesignIndex', 'ActualFillFactor', 'NonZeroTopKPeakRatio', ...
+    optionalFields = {'DesignIndex', 'PhaseHeight_nm', 'ActualFillFactor', 'NonZeroTopKPeakRatio', ...
         'TopKPeakRatio', 'PeakBackgroundRatioPenalty', 'ZeroOrderRetention', ...
-        'HazeRisk'};
+        'NearRingEnergyRatio', 'RingVisibility', 'RingVisibilityRatio', 'HazeRisk'};
     for idx = 1:numel(optionalFields)
         fieldName = optionalFields{idx};
         if any(strcmp(row.Properties.VariableNames, fieldName))
@@ -92,6 +95,9 @@ function design = bestDesignToDesign(bestDesign)
     design = struct();
     design.radiusSet_um = bestDesign.radiusSet_um;
     design.phaseIslandRadiusList = bestDesign.radiusSet_um * 1e-6;
+    if isfield(bestDesign, 'phaseHeight')
+        design.phaseHeight = bestDesign.phaseHeight;
+    end
     design.phaseFillFactor = bestDesign.fillFactor;
     design.phaseMinDistanceFactor = bestDesign.minDistanceFactor;
     design.phaseMinDistance = design.phaseMinDistanceFactor * 2 * max(design.phaseIslandRadiusList);

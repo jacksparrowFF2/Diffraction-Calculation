@@ -1,5 +1,5 @@
 %% 多半径圆形相位微岛 DOE 优化
-% 本脚本用于搜索“非零级衍射峰最小 + 0 级主斑保持 + haze 风险受限”的多半径圆形高折微岛设计。
+% 本脚本用于搜索“非零级衍射峰最小 + 0 级主斑保持 + 少衍射环 + haze 风险受限”的多半径圆形高折微岛设计。
 % 优化逻辑和可视化脚本分离：本脚本负责筛选候选设计，
 % CustomApertureWithPhase_fraunhofer_fft.m 负责对某一个设计做详细出图。
 
@@ -7,19 +7,20 @@ clear, clc, close all
 
 %% DOE 运行模式
 % quick：用于快速调通流程；full：用于正式粗扫，seed 使用 1:10。
-doePreset = "full";
+doePreset = "quick";
 
 switch doePreset
     case "quick"
         nn = 180;
-        seedList = 1:3;
+        seedList = 1:2;
         radiusSetList_um = {
             [1.0, 1.5]
             [0.8, 1.2, 1.8]
             [0.8, 1.2, 1.6, 2.0]
         };
-        fillFactorList = [0.35, 0.40];
-        minDistanceFactorList = [1.0, 1.2];
+        phaseHeightList_nm = [60, 100, 140, 180, 220];
+        fillFactorList = [0.05, 0.10, 0.15, 0.20];
+        minDistanceFactorList = [1.5, 2.0, 2.5];
     case "full"
         nn = 320;
         seedList = 1:10;
@@ -30,8 +31,9 @@ switch doePreset
             [0.6, 1.0, 1.4, 1.8]
             [0.8, 1.0, 1.4, 1.8, 2.2]
         };
-        fillFactorList = [0.30, 0.35, 0.40, 0.45];
-        minDistanceFactorList = [1.0, 1.2, 1.5];
+        phaseHeightList_nm = [60, 100, 140, 180, 220];
+        fillFactorList = [0.05, 0.10, 0.15, 0.20, 0.25, 0.30];
+        minDistanceFactorList = [1.2, 1.5, 2.0, 2.5];
     otherwise
         error('未知 DOE 预设：%s', doePreset);
 end
@@ -56,16 +58,21 @@ FocusR = tand(Angle) * z;
 n_high = 1.75;
 n_low = 1.55;
 delta_n = n_high - n_low;
-phaseHeight = 220e-9;
+phaseHeightList = phaseHeightList_nm * 1e-9;
 
-% 目标函数权重。haze 超限和 0 级主斑损失都用二次惩罚放大。
+% 目标函数权重。0 级主斑、近角衍射环和 haze 风险都作为强约束处理。
 topK = 12;
-hazeLimitMultiplier = 1.20;
+hazeLimitMultiplier = 1.10;
+nearRingLimitMultiplier = 1.03;
+ringVisibilityLimitMultiplier = 1.03;
 zeroOrderRadiusFactor = 0.45;
-zeroOrderRetentionTarget = 0.95;
-weightPeakBackground = 0.35;
-weightZeroOrderPenalty = 3.0;
-weightHazePenalty = 5.0;
+zeroOrderRetentionTarget = 0.98;
+radialBinCount = 90;
+weightPeakBackground = 0.15;
+weightZeroOrderPenalty = 10.0;
+weightNearRingPenalty = 8.0;
+weightRingVisibilityPenalty = 8.0;
+weightHazePenalty = 10.0;
 
 %% 物面和像面网格
 x_cell = linspace(-Pitch/2, Pitch/2, nn);
@@ -120,15 +127,25 @@ for c = 1:numel(lambdalist)
     baseline(c).zeroOrderEnergy = sum(I0(zeroOrderMask), 'all');
     baseline(c).topKMean = meanTopKLocalPeaks(I0, topK, zeroOrderMask);
     baseline(c).peakBackground = peakBackgroundRatio(I0, topK, zeroOrderMask);
+    baseline(c).nearRingEnergy = nearRingEnergyRatio(I0, X, Y, zeroOrderRadius, FocusR);
+    baseline(c).ringVisibility = ringVisibilityByRadius(I0, X, Y, zeroOrderRadius, FocusR, radialBinCount);
     baseline(c).hazeRisk = hazeRiskByAngle(I0, X, Y, FocusR);
 end
 baselineHazeMean = mean([baseline.hazeRisk]);
 hazeRiskLimit = baselineHazeMean * hazeLimitMultiplier;
+baselineNearRingMean = mean([baseline.nearRingEnergy]);
+nearRingEnergyLimit = baselineNearRingMean * nearRingLimitMultiplier;
+baselineRingVisibilityMean = mean([baseline.ringVisibility]);
+ringVisibilityLimit = baselineRingVisibilityMean * ringVisibilityLimitMultiplier;
 fprintf('无相位层平均 2.5° 外能量比例：%.4f，haze 风险上限：%.4f\n', ...
     baselineHazeMean, hazeRiskLimit);
+fprintf('无相位层近角环能量比例：%.4f，上限：%.4f\n', ...
+    baselineNearRingMean, nearRingEnergyLimit);
+fprintf('无相位层径向环可见度：%.4f，上限：%.4f\n', ...
+    baselineRingVisibilityMean, ringVisibilityLimit);
 
 %% DOE 粗扫
-totalDesigns = numel(radiusSetList_um) * numel(fillFactorList) * ...
+totalDesigns = numel(radiusSetList_um) * numel(phaseHeightList) * numel(fillFactorList) * ...
     numel(minDistanceFactorList) * numel(seedList);
 fprintf('开始 DOE：%d 个设计，模式：%s\n', totalDesigns, doePreset);
 
@@ -141,47 +158,56 @@ for radiusSetId = 1:numel(radiusSetList_um)
     radiusList = radiusSetList_um{radiusSetId} * 1e-6;
     maxRadius = max(radiusList);
 
-    for fillFactor = fillFactorList
-        for minDistanceFactor = minDistanceFactorList
-            minCenterDistance = minDistanceFactor * 2 * maxRadius;
+    for phaseHeight = phaseHeightList
+        for fillFactor = fillFactorList
+            for minDistanceFactor = minDistanceFactorList
+                minCenterDistance = minDistanceFactor * 2 * maxRadius;
 
-            for seed = seedList
-                designIndex = designIndex + 1;
-                fprintf('[%d/%d] radiusSet=%d, fill=%.2f, minDistFactor=%.2f, seed=%d\n', ...
-                    designIndex, totalDesigns, radiusSetId, fillFactor, minDistanceFactor, seed);
+                for seed = seedList
+                    designIndex = designIndex + 1;
+                    fprintf('[%d/%d] radiusSet=%d, height=%.0f nm, fill=%.2f, minDistFactor=%.2f, seed=%d\n', ...
+                        designIndex, totalDesigns, radiusSetId, phaseHeight * 1e9, fillFactor, minDistanceFactor, seed);
 
-                [h_map, phaseCenters, actualFillFactor] = generateMultiRadiusPoissonDiskHeightMap( ...
-                    x, y, xmin, xmax, ymin, ymax, phaseHeight, radiusList, ...
-                    minCenterDistance, fillFactor, seed);
+                    [h_map, phaseCenters, actualFillFactor] = generateMultiRadiusPoissonDiskHeightMap( ...
+                        x, y, xmin, xmax, ymin, ymax, phaseHeight, radiusList, ...
+                        minCenterDistance, fillFactor, seed);
 
-                metric = evaluatePhaseDesign(BaseMask, h_map, baseline, lambdalist, ...
-                    delta_n, xmin, xmax, ymin, ymax, Tnn, z, Xmin, Xmax, Ymin, Ymax, ...
-                    X, Y, FocusR, Pitch, topK, zeroOrderRadiusFactor, zeroOrderRetentionTarget, ...
-                    hazeRiskLimit, weightPeakBackground, weightZeroOrderPenalty, weightHazePenalty);
+                    metric = evaluatePhaseDesign(BaseMask, h_map, baseline, lambdalist, ...
+                        delta_n, xmin, xmax, ymin, ymax, Tnn, z, Xmin, Xmax, Ymin, Ymax, ...
+                        X, Y, FocusR, Pitch, topK, zeroOrderRadiusFactor, zeroOrderRetentionTarget, ...
+                        radialBinCount, nearRingEnergyLimit, ringVisibilityLimit, hazeRiskLimit, ...
+                        weightPeakBackground, weightZeroOrderPenalty, weightNearRingPenalty, ...
+                        weightRingVisibilityPenalty, weightHazePenalty);
 
-                newRow = table( ...
-                    designIndex, radiusSetId, string(mat2str(radiusSetList_um{radiusSetId})), ...
-                    fillFactor, minDistanceFactor, seed, size(phaseCenters, 1), actualFillFactor, ...
-                    metric.NonZeroTopKPeakRatio, metric.PeakBackgroundRatioPenalty, ...
-                    metric.ZeroOrderRetention, metric.ZeroOrderLossPenalty, ...
-                    metric.HazeRisk, metric.HazeRiskPenalty, metric.Objective, ...
-                    'VariableNames', {'DesignIndex', 'RadiusSetId', 'RadiusSet_um', ...
-                    'TargetFillFactor', 'MinDistanceFactor', 'Seed', 'IslandCount', 'ActualFillFactor', ...
-                    'NonZeroTopKPeakRatio', 'PeakBackgroundRatioPenalty', ...
-                    'ZeroOrderRetention', 'ZeroOrderLossPenalty', 'HazeRisk', ...
-                    'HazeRiskPenalty', 'Objective'});
-                results = [results; newRow]; %#ok<AGROW>
+                    newRow = table( ...
+                        designIndex, radiusSetId, string(mat2str(radiusSetList_um{radiusSetId})), ...
+                        phaseHeight * 1e9, fillFactor, minDistanceFactor, seed, size(phaseCenters, 1), actualFillFactor, ...
+                        metric.NonZeroTopKPeakRatio, metric.PeakBackgroundRatioPenalty, ...
+                        metric.ZeroOrderRetention, metric.ZeroOrderLossPenalty, ...
+                        metric.NearRingEnergyRatio, metric.NearRingEnergyPenalty, ...
+                        metric.RingVisibility, metric.RingVisibilityRatio, metric.RingVisibilityPenalty, ...
+                        metric.HazeRisk, metric.HazeRiskPenalty, metric.Objective, ...
+                        'VariableNames', {'DesignIndex', 'RadiusSetId', 'RadiusSet_um', ...
+                        'PhaseHeight_nm', 'TargetFillFactor', 'MinDistanceFactor', 'Seed', ...
+                        'IslandCount', 'ActualFillFactor', 'NonZeroTopKPeakRatio', ...
+                        'PeakBackgroundRatioPenalty', 'ZeroOrderRetention', 'ZeroOrderLossPenalty', ...
+                        'NearRingEnergyRatio', 'NearRingEnergyPenalty', ...
+                        'RingVisibility', 'RingVisibilityRatio', 'RingVisibilityPenalty', ...
+                        'HazeRisk', 'HazeRiskPenalty', 'Objective'});
+                    results = [results; newRow]; %#ok<AGROW>
 
-                if metric.Objective < bestObjective
-                    bestObjective = metric.Objective;
-                    bestDesign.h_map = h_map;
-                    bestDesign.centers = phaseCenters;
-                    bestDesign.radiusSet_um = radiusSetList_um{radiusSetId};
-                    bestDesign.fillFactor = fillFactor;
-                    bestDesign.minDistanceFactor = minDistanceFactor;
-                    bestDesign.seed = seed;
-                    bestDesign.metric = metric;
-                    bestDesign.actualFillFactor = actualFillFactor;
+                    if metric.Objective < bestObjective
+                        bestObjective = metric.Objective;
+                        bestDesign.h_map = h_map;
+                        bestDesign.centers = phaseCenters;
+                        bestDesign.radiusSet_um = radiusSetList_um{radiusSetId};
+                        bestDesign.phaseHeight = phaseHeight;
+                        bestDesign.fillFactor = fillFactor;
+                        bestDesign.minDistanceFactor = minDistanceFactor;
+                        bestDesign.seed = seed;
+                        bestDesign.metric = metric;
+                        bestDesign.actualFillFactor = actualFillFactor;
+                    end
                 end
             end
         end
@@ -200,7 +226,9 @@ end
 csvPath = fullfile(outputDir, 'multi_radius_phase_doe_results.csv');
 matPath = fullfile(outputDir, 'multi_radius_phase_doe_results.mat');
 writetable(results, csvPath);
-save(matPath, 'results', 'bestDesign', 'baselineHazeMean', 'hazeRiskLimit', 'doePreset');
+save(matPath, 'results', 'bestDesign', 'baselineHazeMean', 'hazeRiskLimit', ...
+    'baselineNearRingMean', 'nearRingEnergyLimit', ...
+    'baselineRingVisibilityMean', 'ringVisibilityLimit', 'doePreset');
 
 figure;
 imagesc(x(1,:) * 1e6, y(:,1) * 1e6, bestDesign.h_map * 1e9);
@@ -215,12 +243,15 @@ exportgraphics(gcf, fullfile(outputDir, 'best_multi_radius_phase_height_map.png'
 
 fprintf('\n最佳设计：\n');
 fprintf('radiusSet_um = %s\n', mat2str(bestDesign.radiusSet_um));
+fprintf('phaseHeight = %.0f nm\n', bestDesign.phaseHeight * 1e9);
 fprintf('fillFactor = %.2f, minDistanceFactor = %.2f, seed = %d\n', ...
     bestDesign.fillFactor, bestDesign.minDistanceFactor, bestDesign.seed);
 fprintf('actualFillFactor = %.4f\n', bestDesign.actualFillFactor);
 fprintf('NonZeroTopKPeakRatio = %.4f\n', bestDesign.metric.NonZeroTopKPeakRatio);
 fprintf('PeakBackgroundRatioPenalty = %.4f\n', bestDesign.metric.PeakBackgroundRatioPenalty);
 fprintf('ZeroOrderRetention = %.4f\n', bestDesign.metric.ZeroOrderRetention);
+fprintf('NearRingEnergyRatio = %.4f\n', bestDesign.metric.NearRingEnergyRatio);
+fprintf('RingVisibilityRatio = %.4f\n', bestDesign.metric.RingVisibilityRatio);
 fprintf('HazeRisk = %.4f, HazeLimit = %.4f\n', bestDesign.metric.HazeRisk, hazeRiskLimit);
 fprintf('Objective = %.4f\n', bestDesign.metric.Objective);
 fprintf('结果已保存：%s\n', csvPath);
@@ -229,12 +260,17 @@ fprintf('结果已保存：%s\n', csvPath);
 function metric = evaluatePhaseDesign(BaseMask, h_map, baseline, lambdalist, ...
     delta_n, xmin, xmax, ymin, ymax, Tnn, z, Xmin, Xmax, Ymin, Ymax, ...
     X, Y, FocusR, Pitch, topK, zeroOrderRadiusFactor, zeroOrderRetentionTarget, ...
-    hazeRiskLimit, weightPeakBackground, weightZeroOrderPenalty, weightHazePenalty)
+    radialBinCount, nearRingEnergyLimit, ringVisibilityLimit, hazeRiskLimit, ...
+    weightPeakBackground, weightZeroOrderPenalty, weightNearRingPenalty, ...
+    weightRingVisibilityPenalty, weightHazePenalty)
     %EVALUATEPHASEDESIGN 计算单个相位层设计的目标函数。
 
     topKRatioList = zeros(1, numel(lambdalist));
     peakBackgroundRatioList = zeros(1, numel(lambdalist));
     zeroOrderRetentionList = zeros(1, numel(lambdalist));
+    nearRingEnergyList = zeros(1, numel(lambdalist));
+    ringVisibilityList = zeros(1, numel(lambdalist));
+    ringVisibilityRatioList = zeros(1, numel(lambdalist));
     hazeRiskList = zeros(1, numel(lambdalist));
 
     for c = 1:numel(lambdalist)
@@ -252,11 +288,16 @@ function metric = evaluatePhaseDesign(BaseMask, h_map, baseline, lambdalist, ...
         topKMean = meanTopKLocalPeaks(I, topK, zeroOrderMask);
         peakBackground = peakBackgroundRatio(I, topK, zeroOrderMask);
         zeroOrderEnergy = sum(I(zeroOrderMask), 'all');
+        nearRingEnergy = nearRingEnergyRatio(I, X, Y, zeroOrderRadius, FocusR);
+        ringVisibility = ringVisibilityByRadius(I, X, Y, zeroOrderRadius, FocusR, radialBinCount);
         hazeRisk = hazeRiskByAngle(I, X, Y, FocusR);
 
         topKRatioList(c) = topKMean / baseline(c).topKMean;
         peakBackgroundRatioList(c) = peakBackground / baseline(c).peakBackground;
         zeroOrderRetentionList(c) = zeroOrderEnergy / baseline(c).zeroOrderEnergy;
+        nearRingEnergyList(c) = nearRingEnergy;
+        ringVisibilityList(c) = ringVisibility;
+        ringVisibilityRatioList(c) = ringVisibility / max(baseline(c).ringVisibility, eps);
         hazeRiskList(c) = hazeRisk;
     end
 
@@ -265,11 +306,18 @@ function metric = evaluatePhaseDesign(BaseMask, h_map, baseline, lambdalist, ...
     metric.PeakBackgroundRatioPenalty = mean(peakBackgroundRatioList);
     metric.ZeroOrderRetention = mean(zeroOrderRetentionList);
     metric.ZeroOrderLossPenalty = max(0, zeroOrderRetentionTarget - metric.ZeroOrderRetention)^2;
+    metric.NearRingEnergyRatio = mean(nearRingEnergyList);
+    metric.NearRingEnergyPenalty = max(0, metric.NearRingEnergyRatio - nearRingEnergyLimit)^2;
+    metric.RingVisibility = mean(ringVisibilityList);
+    metric.RingVisibilityRatio = mean(ringVisibilityRatioList);
+    metric.RingVisibilityPenalty = max(0, metric.RingVisibility - ringVisibilityLimit)^2;
     metric.HazeRisk = mean(hazeRiskList);
     metric.HazeRiskPenalty = max(0, metric.HazeRisk - hazeRiskLimit)^2;
     metric.Objective = metric.NonZeroTopKPeakRatio + ...
         weightPeakBackground * metric.PeakBackgroundRatioPenalty + ...
         weightZeroOrderPenalty * metric.ZeroOrderLossPenalty + ...
+        weightNearRingPenalty * metric.NearRingEnergyPenalty + ...
+        weightRingVisibilityPenalty * metric.RingVisibilityPenalty + ...
         weightHazePenalty * metric.HazeRiskPenalty;
 end
 
@@ -398,6 +446,56 @@ function ratio = peakBackgroundRatio(I, topK, excludeMask)
     threshold = prctile(backgroundSamples(:), 90);
     background = median(backgroundSamples(backgroundSamples <= threshold));
     ratio = peakValue / max(background, eps);
+end
+
+function ratio = nearRingEnergyRatio(I, X, Y, innerRadius, outerRadius)
+    %NEARRINGENERGYRATIO 统计 0 级主斑外、haze 角度内的能量比例。
+    R2 = X.^2 + Y.^2;
+    ringMask = R2 > innerRadius^2 & R2 <= outerRadius^2;
+    ratio = sum(I(ringMask), 'all') / max(sum(I, 'all'), eps);
+end
+
+function visibility = ringVisibilityByRadius(I, X, Y, innerRadius, outerRadius, binCount)
+    %RINGVISIBILITYBYRADIUS 用径向平均曲线估计同心衍射环可见度。
+    % 指标由局部径向峰的相对 prominence 和峰数量组成；数值越大，环状结构越明显。
+    R = sqrt(X.^2 + Y.^2);
+    ringMask = R > innerRadius & R <= outerRadius;
+    if ~any(ringMask, 'all')
+        visibility = 0;
+        return
+    end
+
+    edges = linspace(innerRadius, outerRadius, binCount + 1);
+    binIndex = discretize(R(ringMask), edges);
+    intensitySamples = I(ringMask);
+    validMask = ~isnan(binIndex);
+    binIndex = binIndex(validMask);
+    intensitySamples = intensitySamples(validMask);
+
+    radialSum = accumarray(binIndex(:), intensitySamples(:), [binCount, 1], @sum, 0);
+    radialCount = accumarray(binIndex(:), 1, [binCount, 1], @sum, 0);
+    radialMean = radialSum ./ max(radialCount, 1);
+    radialMean = fillmissing(radialMean, 'linear', 'EndValues', 'nearest');
+    smoothMean = movingAverageSame(radialMean, 7);
+    residual = radialMean - smoothMean;
+
+    peakMask = false(size(radialMean));
+    peakMask(2:end-1) = residual(2:end-1) > 0 & ...
+        radialMean(2:end-1) > radialMean(1:end-2) & ...
+        radialMean(2:end-1) >= radialMean(3:end);
+
+    positiveProminence = max(residual(peakMask), 0);
+    meanLevel = mean(radialMean);
+    peakProminenceScore = sum(positiveProminence) / max(meanLevel, eps);
+    peakCountScore = 0.03 * nnz(peakMask);
+    visibility = peakProminenceScore + peakCountScore;
+end
+
+function y = movingAverageSame(x, windowSize)
+    %MOVINGAVERAGESAME 不依赖工具箱的同长度移动平均。
+    windowSize = max(1, round(windowSize));
+    kernel = ones(windowSize, 1) / windowSize;
+    y = conv(x(:), kernel, 'same');
 end
 
 function hazeRisk = hazeRiskByAngle(I, X, Y, focusRadius)
