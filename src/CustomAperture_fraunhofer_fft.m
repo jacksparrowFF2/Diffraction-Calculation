@@ -3,8 +3,8 @@ clear, clc, close all
 %% 模型参量
 % 定义波长，e-9代表纳米
 lambdalist = [620e-9,550e-9,450e-9];
-% 传播距离,模拟人眼视距2~40cm
-z = 0.2;
+% 传播距离,模拟人眼视距2~40cm,m
+z = 0.03;
 % 设定物面单元尺寸
 objectunit = 1e-6;
 % 设定像面单元尺寸
@@ -14,12 +14,12 @@ Pitch = 50*objectunit;
 % 圆孔半径,e-6代表μm
 r = 10*objectunit;
 % 定义物面的光栅类型
-% flag=0代表使用相同离散矩阵（自定义的形状或者图片）
-% flag=1代表使用不相同的离散矩阵
-% flag=2代表使用连续函数
+% Gratingflag=0代表使用相同离散矩阵（自定义的形状或者图片）
+% Gratingflag=1代表使用不相同的离散矩阵
+% Gratingflag=2代表使用连续函数
 Gratingflag = 1;
 % 定义是否仿真像面的衍射效果，平面波为0，图片为1
-Lightflag = 0;
+Lightflag = 1;
 % 分辨率，设定单个周期的分辨率
 nn = 1000;
 % 设定物面X、Y方向周期
