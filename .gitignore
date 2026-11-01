@@ -1,3 +1,6 @@
 /ImageForShow
+src/**/output/
+src/coe_reference/Physical_Intensity_Data*.mat
 *.png
+!src/*/input/*.png
 /ImageForShow
