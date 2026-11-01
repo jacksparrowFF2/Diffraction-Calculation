@@ -5,10 +5,13 @@ function outputFolder = demoCOEUDC(outputFolder)
         outputFolder (1,1) string = string(fullfile(fileparts(fileparts(mfilename('fullpath'))), ...
             'ImageForShow', 'COE_UDC'))
     end
+    previousPath = path;
+    restorePath = onCleanup(@() path(previousPath));
+    setupDiffraction();
     if ~isfolder(outputFolder)
         mkdir(outputFolder);
     end
-    reflectionCfg = displayDiffractionDefaults("reflection");
+    reflectionCfg = coeReflectionDefaults();
     % Reproducible synthetic height map. Replace with h_map from the phase-layer
     % script or a measured map of exactly the same grid and physical extent.
     n = reflectionCfg.periods*reflectionCfg.samplesPerPeriod;
@@ -16,7 +19,7 @@ function outputFolder = demoCOEUDC(outputFolder)
         (0:n(2)-1)*reflectionCfg.pitch/reflectionCfg.samplesPerPeriod);
     reflectionCfg.heightMap = 110e-9*(1 + sin(2*pi*x/17.3e-6).*sin(2*pi*y/23.7e-6));
     reflection = runCOEReflection(reflectionCfg);
-    udcCfg = displayDiffractionDefaults("udc");
+    udcCfg = udcImagingDefaults();
     udcCfg.heightMap = reflectionCfg.heightMap;
     [udc, images] = runUDCImaging(udcCfg);
     writetable(reflection.metrics, fullfile(outputFolder, 'reflection_metrics.csv'));

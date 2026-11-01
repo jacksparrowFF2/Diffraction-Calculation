@@ -6,6 +6,8 @@ classdef DisplayDiffractionTest < matlab.unittest.TestCase
         function addProjectSource(testCase)
             root = fileparts(fileparts(mfilename('fullpath')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture(fullfile(root, 'src')));
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture(fullfile(root, 'src', 'coe_reflection')));
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture(fullfile(root, 'src', 'udc_imaging')));
         end
     end
 
@@ -28,7 +30,7 @@ classdef DisplayDiffractionTest < matlab.unittest.TestCase
             cfg.featureIntensity = 0.25;
             cfg.backgroundIntensity = 0.25;
 
-            result = simulateDisplayDiffraction(cfg);
+            result = computeConfiguredOptics(cfg);
 
             testCase.verifyEqual(result.metrics.Throughput, 0.25, 'AbsTol', 2e-13);
             testCase.verifyEqual(sum(result.kernel(:)), 0.25, 'AbsTol', 2e-13);
@@ -42,7 +44,7 @@ classdef DisplayDiffractionTest < matlab.unittest.TestCase
             cfg.featureIntensity = 0.65;
             cfg.backgroundIntensity = 0.02;
 
-            result = simulateDisplayDiffraction(cfg);
+            result = computeConfiguredOptics(cfg);
             pupilIndices = result.pupil > 0;
             expected = mean(0.02 + 0.63*result.mask(pupilIndices));
 
@@ -56,7 +58,7 @@ classdef DisplayDiffractionTest < matlab.unittest.TestCase
             cfg.complexCoefficient = 1;
             cfg.heightMap = [zeros(64, 32), ones(64, 32)]*cfg.wavelengths/(4*cfg.deltaIndex);
 
-            result = simulateDisplayDiffraction(cfg);
+            result = computeConfiguredOptics(cfg);
 
             % Half the pupil has phase pi/2: |(1+i)/2|^2 = 1/2.
             % Zero padding by two gives a clear-pupil centre bin of 1/4.
@@ -91,7 +93,7 @@ classdef DisplayDiffractionTest < matlab.unittest.TestCase
             cfg = smallConfig("reflection");
             cfg.complexCoefficient = repmat(exp(2i*pi*(0:63)/16), 64, 1);
 
-            result = simulateDisplayDiffraction(cfg);
+            result = computeConfiguredOptics(cfg);
             [peak, location] = max(result.kernel(:));
             [row, col] = ind2sub(size(result.kernel), location);
 
@@ -105,7 +107,7 @@ classdef DisplayDiffractionTest < matlab.unittest.TestCase
             cfg = smallConfig("udc");
             cfg.complexCoefficient = repmat(exp(2i*pi*(0:63)/16), 64, 1);
 
-            result = simulateDisplayDiffraction(cfg);
+            result = computeConfiguredOptics(cfg);
             [~, location] = max(result.kernel(:));
             [row, col] = ind2sub(size(result.kernel), location);
 
@@ -123,7 +125,7 @@ classdef DisplayDiffractionTest < matlab.unittest.TestCase
             cfg.complexCoefficient = cat(3, ones(64), ...
                 repmat(exp(2i*pi*(0:63)/16), 64, 1));
 
-            result = simulateDisplayDiffraction(cfg);
+            result = computeConfiguredOptics(cfg);
 
             testCase.verifyEqual(result.kernel(65, 65), 1/16, 'AbsTol', 2e-13);
             testCase.verifyEqual(result.kernel(65, 73), 3/16, 'AbsTol', 2e-13);
@@ -221,7 +223,7 @@ classdef DisplayDiffractionTest < matlab.unittest.TestCase
             cfg.sensorPitch = 2e-6;
             cfg.paddingFactor = 8;
 
-            testCase.verifyWarning(@() simulateDisplayDiffraction(cfg), ...
+            testCase.verifyWarning(@() computeConfiguredOptics(cfg), ...
                 'DisplayDiffraction:TruncatedEnergy');
         end
 
@@ -234,7 +236,7 @@ classdef DisplayDiffractionTest < matlab.unittest.TestCase
             testCase.applyFixture(matlab.unittest.fixtures.SuppressedWarningsFixture( ...
                 'DisplayDiffraction:TruncatedEnergy'));
 
-            result = simulateDisplayDiffraction(cfg);
+            result = computeConfiguredOptics(cfg);
 
             testCase.verifyEqual(result.metrics.Throughput, 1, 'AbsTol', 2e-13);
             testCase.verifyLessThan(result.metrics.CapturedThroughput, 0.98);
@@ -246,13 +248,13 @@ classdef DisplayDiffractionTest < matlab.unittest.TestCase
         function matchedSensorGridDoesNotWarnFromRoundoff(testCase)
             cfg = smallConfig("udc");
 
-            testCase.verifyWarningFree(@() simulateDisplayDiffraction(cfg));
+            testCase.verifyWarningFree(@() computeConfiguredOptics(cfg));
         end
 
         function normalizedMtfHasUnitDcAndBoundedMagnitude(testCase)
             cfg = smallConfig("udc");
 
-            result = simulateDisplayDiffraction(cfg);
+            result = computeConfiguredOptics(cfg);
 
             testCase.verifyEqual(result.mtf(65, 65), 1, 'AbsTol', 2e-13);
             testCase.verifyLessThanOrEqual(max(result.mtf(:)), 1 + 2e-13);
@@ -263,14 +265,14 @@ classdef DisplayDiffractionTest < matlab.unittest.TestCase
             cfg = smallConfig("udc");
             cfg.pupilRadius = 200e-6;
 
-            testCase.verifyError(@() simulateDisplayDiffraction(cfg), 'DisplayDiffraction:PupilExtent');
+            testCase.verifyError(@() computeConfiguredOptics(cfg), 'DisplayDiffraction:PupilExtent');
         end
 
         function activeAmplitudeCoefficientIsRejected(testCase)
             cfg = smallConfig("udc");
             cfg.complexCoefficient = 1.01;
 
-            testCase.verifyError(@() simulateDisplayDiffraction(cfg), 'DisplayDiffraction:PassiveCoefficient');
+            testCase.verifyError(@() computeConfiguredOptics(cfg), 'DisplayDiffraction:PassiveCoefficient');
         end
     end
 end
@@ -302,4 +304,13 @@ function expected = directReplicate(image, kernel)
     % Independent direct spatial convolution, not the production FFT helper.
     padded = image([1, 1:end, end], [1, 1:end, end]);
     expected = conv2(padded, kernel, 'valid');
+end
+
+function result = computeConfiguredOptics(cfg)
+    % Exercise public module APIs; private solvers stay isolated.
+    if cfg.mode == "reflection"
+        result = runCOEReflection(cfg);
+    else
+        result = computeUDCOptics(cfg);
+    end
 end

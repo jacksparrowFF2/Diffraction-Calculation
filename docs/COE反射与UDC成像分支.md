@@ -1,6 +1,6 @@
 # COE 反射细化与 UDC 成像分支
 
-开发分支：`feature/coe-reflection-udc`。原有脚本及参考代码均保留。
+由 `feature/coe-reflection-udc` 引入。代码按功能维护于 `src/coe_reflection/` 和 `src/udc_imaging/`，各自自带完整私有依赖；原有功能分别保留在 `aperture_diffraction/`、`phase_layer/`，参考代码在 `coe_reference/`。
 
 ## 直接运行
 
@@ -8,6 +8,7 @@
 
 ```matlab
 addpath('src');
+setupDiffraction;
 reflection = runCOEReflection();
 [udc, images] = runUDCImaging();
 demoCOEUDC();
@@ -21,7 +22,7 @@ demoCOEUDC();
 - 沿用 `CustomApertureWithPhase_fraunhofer_fft.m` 中反射双程高度相位的定义。现在几何、高度图与材料系数分离，同一高度图也可以传给透射分支。
 - 图像卷积复用已有 `fftconv2_same.m`，使用奇数 PSF 核；增加边缘延拓，避免黑色填充造成的边缘变暗。
 - 新核心使用明确物理采样的 FFT，再把**能量**按面积重叠积分到统一像面。原 `fraunhofer_fft_SPH` / `myFFT2_SPH` 仍保留，便于复查原结果。
-- 原参考代码 `WangAnPing_code/衍射/*spectrum-*.m` 将 D65 强度乘反射强度后赋给 `U`，再取 `abs(FFT(U))^2`，会再次平方这些强度权重；原主脚本图像模式只用了末个波长的 `I`，并按峰值归一化。新增入口通过复振幅建场、逐波长强度相加和能量归一化处理这两点。
+- 原参考代码 `src/coe_reference/CoE_Diffraction_v8_spectrum_*.m` 将 D65 强度乘反射强度后赋给 `U`，再取 `abs(FFT(U))^2`，会再次平方这些强度权重；原主脚本图像模式只用了末个波长的 `I`，并按峰值归一化。新增入口通过复振幅建场、逐波长强度相加和能量归一化处理这两点。
 
 ## 物理模型与适用范围
 
@@ -42,6 +43,12 @@ E_t(x,y,λ) = P(x,y) · t(x,y,λ) · exp[i · 2π · Δn · h(x,y)/λ]
 ```
 
 强度系数 R/T 使用平方根转换为振幅；复数 `r/t` 可以直接输入。各波长分别计算 `|FFT(E)|²` 后非相干相加。高度相位是法向、简化光程差模型；如复数材料系数已包含该高度相位，应把 `heightMap=0`，避免重复计入。
+
+## 功能目录独立使用
+
+只运行反射时：`addpath('src/coe_reflection'); cfg=coeReflectionDefaults();`；只运行 UDC 时：`addpath('src/udc_imaging'); cfg=udcImagingDefaults();`。这两个目录各有自己的 `private/`，不依赖根目录或彼此。UDC 默认图像也位于其自己的 `input/`。下文保留的 `displayDiffractionDefaults(mode)` 是根目录兼容入口，需要先按“直接运行”执行初始化。
+
+根目录 `demoCOEUDC` 会自行临时初始化模块路径，执行结束后恢复原路径。单独计算 PSF/MTF 可调用 `computeUDCOptics(cfg)`，无须读取场景图。
 
 ## 参数与自定义几何
 
@@ -113,7 +120,7 @@ cfg.focalLength = 3e-3;
 cfg.pupilRadius = 0.35e-3;
 cfg.sensorPitch = 1e-6;
 cfg.outputSize = 401;
-[u, im] = runUDCImaging(cfg); % 默认读取项目 USAF500.png 并解码 sRGB
+[u, im] = runUDCImaging(cfg); % 默认读取本功能目录 input/USAF500.png 并解码 sRGB
 
 rgb = imread('my_scene.png');
 [u, im] = runUDCImaging(cfg, rgb, "srgb");
@@ -153,13 +160,15 @@ cfg.channelResponse = measuredResponse; % L×3 非负相机响应，行与波长
 在项目根目录运行：
 
 ```matlab
-results = runtests('tests/DisplayDiffractionTest.m');
+results = runtests('tests');
 assertSuccess(results);
 ```
 
-测试类自动加入并恢复 `src` 路径，使用基础 MATLAB 的 `matlab.unittest`。21 项测试覆盖已知反射/透射强度、Parseval 能量守恒、圆形入瞳面积加权、同一高度图单程 π/2 与双程 π 的解析零级结果、均匀高度整体相位不变性、正一阶角度/传感器位置、光谱非相干强度叠加、RGB 独立卷积与空间域 `conv2` 对照、HDR 脉冲幅度与方向、sRGB 解码、零反射/透射边界、有限窗口损失与警告、MTF 归一化、入瞳截断及有源系数输入拒绝。
+测试类自动加入并恢复 `src` 及所需公共功能目录的路径，使用基础 MATLAB 的 `matlab.unittest`。21 项测试覆盖已知反射/透射强度、Parseval 能量守恒、圆形入瞳面积加权、同一高度图单程 π/2 与双程 π 的解析零级结果、均匀高度整体相位不变性、正一阶角度/传感器位置、光谱非相干强度叠加、RGB 独立卷积与空间域 `conv2` 对照、HDR 脉冲幅度与方向、sRGB 解码、零反射/透射边界、有限窗口损失与警告、MTF 归一化、入瞳截断及有源系数输入拒绝。
 
 解析测试使用小型矩形入瞳，输出格与 FFT 格对齐，分别验证 `R=0.36`、`T=0.25`，以及相位光栅的一阶位置 `λ/Pitch` / `f·λ/Pitch`。这些测试验证计算一致性，不代替真实器件或完整连续模型的收敛和实测验证。默认完整示例另行在 R2024a 运行并检查预览；测试结果汇总保存在 `ImageForShow/COE_UDC/test_results.csv`。
+
+目录重组后另增加 6 项隔离测试：将反射、UDC、基础孔径、相位层目录复制到临时位置后分别运行，验证默认图像自带、连续孔径采样及 DOE 本地结果加载。两组测试共 27 项。旧脚本仅缩小临时副本的采样，生产默认参数保持不变。
 
 测试也修正了相等采样间距受浮点舍入触发“采样不足”误报的问题：比较时使用 `1e-12` 相对容差，并设专门的无警告回归用例。
 

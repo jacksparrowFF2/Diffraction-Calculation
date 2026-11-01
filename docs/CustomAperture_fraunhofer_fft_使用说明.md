@@ -17,40 +17,40 @@
 主程序：
 
 ```text
-src/CustomAperture_fraunhofer_fft.m
+src/aperture_diffraction/CustomAperture_fraunhofer_fft.m
 ```
 
 直接依赖的项目文件：
 
 | 文件 | 用途 |
 | --- | --- |
-| `src/CustomPattern.m` | 生成旋转、平移后的圆形或椭圆形离散孔径 |
-| `src/fraunhofer_fft_SPH.m` | 计算夫琅禾费衍射场 |
-| `src/myFFT2_SPH.m` | 完成二维傅里叶变换及采样映射 |
-| `src/interpolate.m` | 将计算结果投影/插值到目标像面 |
-| `src/placeImageOnCanvas.m` | 按物理尺寸重采样输入图像并居中放置到仿真画布 |
-| `src/fftconv2_same.m` | 使用 FFT 完成二维同尺寸卷积 |
-| `input/USAF500.png` | `Lightflag = 1` 时的默认输入图像 |
+| `src/aperture_diffraction/private/CustomPattern.m` | 生成旋转、平移后的圆形或椭圆形离散孔径 |
+| `src/aperture_diffraction/private/fraunhofer_fft_SPH.m` | 计算夫琅禾费衍射场 |
+| `src/aperture_diffraction/private/myFFT2_SPH.m` | 完成二维傅里叶变换及采样映射 |
+| `src/aperture_diffraction/private/interpolate.m` | 将计算结果投影/插值到目标像面 |
+| `src/aperture_diffraction/private/placeImageOnCanvas.m` | 按物理尺寸重采样输入图像并居中放置到仿真画布 |
+| `src/aperture_diffraction/private/fftconv2_same.m` | 使用 FFT 完成二维同尺寸卷积 |
+| `src/aperture_diffraction/input/USAF500.png` | `Lightflag = 1` 时的默认输入图像 |
 
 程序会把预览图写入：
 
 ```text
-ImageForShow/four_aperture_rgb_preview.png
-ImageForShow/four_aperture_gray_preview.png
+src/aperture_diffraction/output/four_aperture_rgb_preview.png
+src/aperture_diffraction/output/four_aperture_gray_preview.png
 ```
 
 建议使用 MATLAB R2020a 或更新版本。图像读取、灰度转换、显示和缩放使用了 `rgb2gray`、`imshow`、`imresize` 等图像处理函数，通常需要 Image Processing Toolbox。
 
 ## 3. 快速运行
 
-在 MATLAB 中将当前目录切换到项目的 `src` 文件夹，再运行脚本：
+在 MATLAB 中将当前目录切换到仓库根目录，添加本功能目录后运行：
 
 ```matlab
-cd('D:\03 Optical Simulation\Diffraction-Calculation\src');
+addpath('src/aperture_diffraction');
 CustomAperture_fraunhofer_fft
 ```
 
-从 `src` 目录运行很重要，因为默认输入、输出路径均使用相对路径 `..\input` 和 `..\ImageForShow`。运行前请确认 `ImageForShow` 文件夹已经存在。
+输入与输出路径均以脚本位置为基准，工作目录可保持在仓库根目录；本功能 `output/` 会自动创建。辅助函数位于本功能 `private/`，无需手动加入私有路径。
 
 默认参数计算网格为 `2000 × 2000`，且会进行三次衍射计算、排序、绘图和卷积，可能占用较多内存并需要一定运行时间。首次试运行可先把 `nn` 从 `1000` 降为 `200` 或 `300`。
 
@@ -93,7 +93,7 @@ FocusR = tand(Angle) * z;
 如需更换输入图像，请修改：
 
 ```matlab
-Input = imread('..\input\USAF500.png');
+Input = imread(fullfile(moduleDir, 'input', 'USAF500.png'));
 ```
 
 当前代码会调用 `rgb2gray`，因此输入文件应为 RGB 图像。若输入本身已经是灰度图，需要去掉或调整该调用。
@@ -104,7 +104,7 @@ Input = imread('..\input\USAF500.png');
 | ---: | --- | --- |
 | `0` | 同一离散单元周期复制 | 默认创建长短半轴不同的椭圆，并在 x、y 方向重复 |
 | `1` | 多个离散单元拼接 | 默认构建 `2 × 2` 四孔晶胞；四个孔的旋转角依次为 `30°、0°、0°、-30°` |
-| `2` | 连续匿名函数 | 定义圆孔连续函数后交给衍射函数离散化；当前实现存在兼容性限制，见“已知限制” |
+| `2` | 连续匿名函数 | 定义圆孔连续函数后由本功能 Selfdiscretize 离散化 |
 
 当 `Gratingflag = 1` 时，`cellunit = 2`，所以 `Nx_period` 和 `Ny_period` 必须是 `2` 的整数倍，否则 `repmat` 的重复次数不是整数。默认四个孔均为圆孔，旋转圆孔不会改变结果；只有将 `a1`～`a4` 与 `b1`～`b4` 设为不同值形成椭圆时，旋转角度才会改变孔径形状。
 
@@ -248,7 +248,7 @@ $$
 建议从权威 CIE 数据表取得 D65 光谱功率分布和 CIE 1931 2° 标准色度观察者颜色匹配函数，并整理为：
 
 ```text
-input/D65_CIE1931_2deg.csv
+src/aperture_diffraction/input/D65_CIE1931_2deg.csv
 ```
 
 CSV 至少包含：
@@ -266,7 +266,7 @@ CSV 至少包含：
 将原来的 `lambdalist` 定义替换为：
 
 ```matlab
-spectralTable = readtable('..\input\D65_CIE1931_2deg.csv');
+spectralTable = readtable(fullfile(moduleDir, 'input', 'D65_CIE1931_2deg.csv'));
 
 lambdaNm = (380:10:780).';
 lambdalist = lambdaNm * 1e-9;
@@ -286,7 +286,7 @@ dLambda = gradient(lambdaNm);
 Tlambda = ones(size(lambdaNm));
 
 % 如有透射光谱，可使用：
-% transmissionTable = readtable('..\input\transmission.csv');
+% transmissionTable = readtable(fullfile(moduleDir, 'input', 'transmission.csv'));
 % Tlambda = interp1(transmissionTable.wavelength_nm, ...
 %                   transmissionTable.transmittance, ...
 %                   lambdaNm, 'pchip', 0);
@@ -388,7 +388,7 @@ ylabel('y / mm');
 title('D65 多波长透射衍射彩色结果');
 
 exportgraphics(gcf, ...
-    fullfile('..', 'ImageForShow', 'D65_multispectral_diffraction.png'), ...
+    fullfile(outputDir, 'D65_multispectral_diffraction.png'), ...
     'Resolution', 200);
 ```
 
@@ -433,29 +433,29 @@ end
 
 ## 11. 已知限制与注意事项
 
-1. **当前目录要求**：默认相对路径按 `src` 为当前目录设计；从其他目录直接执行可能找不到输入图像或把输出写到错误位置。
+1. **目录与资源**：将 `src/aperture_diffraction` 加入路径；随目录保留 `private/` 与 `input/`。输入输出以脚本位置定位，输出目录自动创建。
 2. **网格默认按方阵处理**：`Tnn` 只由 `Nx_period` 计算。为避免孔径矩阵、像面网格和卷积尺寸不一致，应保持 `Nx_period == Ny_period`。
 3. **四孔模式的周期约束**：`Gratingflag = 1` 时，x、y 周期数都应是 `cellunit = 2` 的整数倍。
-4. **连续函数模式尚不可靠**：`fraunhofer_fft_SPH.m` 在 `flag == 2` 时调用 `discretize(Uc, xmin, ...)`，但项目实际提供的自定义函数名为 `Selfdiscretize`。若路径中没有另一个兼容的 `discretize` 实现，`Gratingflag = 2` 会报参数或类型错误。使用前应将该调用核对并改为项目提供的离散化函数。
+4. **连续函数采样**：本功能的 `fraunhofer_fft_SPH.m` 已改为调用自带 `Selfdiscretize`。仍需确保匿名函数支持网格矩阵的逐元素运算；不要调用 MATLAB 内置的分箱函数 `discretize`。
 5. **图像卷积只使用最后一个波长**：循环结束后变量 `I` 保存的是 `lambdalist(end)`，默认即 450 nm 的强度。因此 `PSF`、衍射后图像、角内能量及雾度都基于蓝光通道，不是 RGB 综合结果。
 6. **显示增强不代表绝对能量**：`RGB` 各通道分别归一化、截断和增强，适合观察颜色分离，但不能直接用于比较不同波长的绝对衍射效率。
 7. **像面尺寸打印符号**：代码用负值 `Xmin*2`、`Ymin*2` 输出“像面尺寸”，可能显示为负数；实际像面范围是 `[-Fx,Fx] × [-Fy,Fy]`，总宽高为 `2*Fx × 2*Fy`。
 8. **局部函数 `work` 当前未启用**：其调用已被注释，且函数内部引用了未作为参数传入的 `lambda`。若取消注释调用，需要先把 `lambda` 加入函数参数或在函数内定义。
 9. **内存与速度**：默认 `Tnn = 2000`，程序同时保存多个 `2000 × 2000` 双精度矩阵和 RGB 数组。增大 `nn` 或周期数会快速增加内存和计算时间。
-10. **本次验证范围**：已人工核对主脚本及其直接辅助函数；本机 MATLAB R2024a 的批处理启动因 settings 插件加载失败，未完成整脚本实跑验证。
+10. **本次验证范围**：本机 MATLAB R2024a 已执行缩小采样后的目录独立运行测试；默认 `nn=1000` 的大网格未在目录重组验证中运行。数值光学另有解析回归测试。
 
 ## 12. 故障排查
 
 ### 找不到 `USAF500.png`
 
-确认 MATLAB 当前目录为项目的 `src` 文件夹，且文件存在于 `input/USAF500.png`。
+确认文件存在于 `src/aperture_diffraction/input/USAF500.png`；独立复制时应保留整个功能目录。
 
 ### 找不到辅助函数
 
-确保当前目录为 `src`，或将其加入 MATLAB 路径：
+将功能目录加入 MATLAB 路径，`private/` 由 MATLAB 自动解析：
 
 ```matlab
-addpath('D:\03 Optical Simulation\Diffraction-Calculation\src');
+addpath('src/aperture_diffraction'); % 在仓库根目录执行
 ```
 
 ### `repmat` 提示重复次数必须为整数
