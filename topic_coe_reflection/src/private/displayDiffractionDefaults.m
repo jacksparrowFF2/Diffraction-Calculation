@@ -27,7 +27,7 @@ function cfg = displayDiffractionDefaults(mode)
     cfg.sensorPitch = 1e-6;
     cfg.outputSize = 401; % Odd: unambiguous centre for convolution and PSF.
     cfg.angleHalfRangeDeg = 6; % Reflection uses paraxial angle coordinate.
-    cfg.metricAngleDeg = 2.5;
+    cfg.metricAngleDeg = 2.5; % Cone HALF-angle; 2.5 deg corresponds to a 5 deg full cone.
     cfg.zeroOrderRadiusFactor = 0.45;
     if mode == "udc"
         cfg.featureIntensity = 0.65;

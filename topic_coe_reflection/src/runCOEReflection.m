@@ -1,6 +1,8 @@
 function result = runCOEReflection(cfg)
 %runCOEReflection COE black-state reflection, double-pass relief phase.
 % cfg = coeReflectionDefaults(); edit cfg, then call here.
+% 交互计算与结果保存请运行 COEReflection_main.m；此函数保留供批量计算调用。
+% baseline 表示同一结构“不叠加额外高度相位”的状态，仍保留复反射系数自身的相位。
     arguments
         cfg (1,1) struct = coeReflectionDefaults()
     end

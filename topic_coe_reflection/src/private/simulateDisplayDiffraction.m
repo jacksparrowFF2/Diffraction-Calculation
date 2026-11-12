@@ -180,10 +180,26 @@ end
 
 function coefficient = opticalCoefficient(cfg, mask, k)
     if isempty(cfg.complexCoefficient)
-        feature = spectralValue(cfg.featureIntensity, k, numel(cfg.wavelengths));
-        background = spectralValue(cfg.backgroundIntensity, k, numel(cfg.wavelengths));
-        % mask interpolates material area only; prefer binary mask or complexCoefficient.
-        coefficient = sqrt(background) + (sqrt(feature) - sqrt(background))*mask;
+        if isfield(cfg, 'coeStack') && cfg.coeStack.enabled
+            assert(isequal(size(cfg.coeStack.regionMap), size(mask)), ...
+                'COEReflection:RegionSize', '膜堆区域图必须与物面采样相同。');
+            values = cfg.coeStack.coefficientLookup(:, k);
+            coefficient = reshape(values(double(cfg.coeStack.regionMap(:)) + 1), size(mask));
+        elseif isfield(cfg, 'materials') && cfg.materials.enabled
+            % 两种材料的常数 n/k：法向单界面 Fresnel 复系数，包含材料反射相位。
+            feature = normalIncidenceReflection(cfg.materials.incidentN, ...
+                cfg.materials.featureN, cfg.materials.featureK);
+            background = normalIncidenceReflection(cfg.materials.incidentN, ...
+                cfg.materials.backgroundN, cfg.materials.backgroundK);
+            assert(isscalar(feature) && isscalar(background), 'COEReflection:ConstantNK', ...
+                '当前材料模型要求每种材料的 n、k 为常数标量。');
+            coefficient = background + (feature - background)*mask;
+        else
+            feature = spectralValue(cfg.featureIntensity, k, numel(cfg.wavelengths));
+            background = spectralValue(cfg.backgroundIntensity, k, numel(cfg.wavelengths));
+            % mask interpolates material area only; prefer binary mask or complexCoefficient.
+            coefficient = sqrt(background) + (sqrt(feature) - sqrt(background))*mask;
+        end
     else
         value = cfg.complexCoefficient;
         assert(ndims(value) <= 3 && (size(value, 3) == 1 || ...
