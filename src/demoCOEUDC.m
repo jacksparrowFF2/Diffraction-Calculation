@@ -3,7 +3,7 @@ function outputFolder = demoCOEUDC(outputFolder)
 % All optical coefficients are example values. Plots use a shared display scale.
     arguments
         outputFolder (1,1) string = string(fullfile(fileparts(fileparts(mfilename('fullpath'))), ...
-            'ImageForShow', 'COE_UDC'))
+            'topic_coe_reflection', 'Output', 'COE_UDC'))
     end
     previousPath = path;
     restorePath = onCleanup(@() path(previousPath));

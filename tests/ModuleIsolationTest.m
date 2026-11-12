@@ -2,64 +2,93 @@ classdef ModuleIsolationTest < matlab.unittest.TestCase
     %ModuleIsolationTest Run copied feature folders without sibling dependencies.
     methods (Test)
         function coeFolderRunsFromTemporaryLocation(testCase)
-            folder = portableModule(testCase, 'coe_reflection');
+            folder = portableModule(testCase, 'topic_coe_reflection');
             cfg = portableConfig(coeReflectionDefaults());
             cfg.complexCoefficient = 0.5;
 
+            initialPath = path;
             result = runCOEReflection(cfg);
+            testCase.verifyEqual(path, initialPath);
 
             testCase.verifyEqual(result.metrics.Throughput, 0.25*ones(3, 1), 'AbsTol', 2e-13);
-            testCase.verifyEqual(which('runCOEReflection'), fullfile(folder, 'runCOEReflection.m'));
+            testCase.verifyEqual(which('runCOEReflection'), fullfile(folder, 'src', 'runCOEReflection.m'));
         end
 
         function udcFolderCarriesItsDefaultImage(testCase)
-            folder = portableModule(testCase, 'udc_imaging');
+            folder = portableModule(testCase, 'topic_udc_imaging');
             cfg = portableConfig(udcImagingDefaults());
             cfg.complexCoefficient = 0.5;
-            imageInfo = imfinfo(fullfile(folder, 'input', 'USAF500.png'));
+            imageInfo = imfinfo(fullfile(folder, 'Input', 'USAF500.png'));
 
+            initialPath = path;
             [result, images] = runUDCImaging(cfg);
+            testCase.verifyEqual(path, initialPath);
 
             testCase.verifyEqual(result.channelThroughput, [0.25, 0.25, 0.25], 'AbsTol', 2e-13);
             testCase.verifySize(images.inputLinear, [imageInfo.Height, imageInfo.Width, 3]);
-            testCase.verifyEqual(which('runUDCImaging'), fullfile(folder, 'runUDCImaging.m'));
+            testCase.verifyEqual(which('runUDCImaging'), fullfile(folder, 'src', 'runUDCImaging.m'));
         end
 
         function apertureScriptRunsWithOnlyItsFolder(testCase)
-            folder = portableModule(testCase, 'aperture_diffraction');
-            scriptPath = fullfile(folder, 'CustomAperture_fraunhofer_fft.m');
+            folder = portableModule(testCase, 'topic_aperture_fraunhofer');
+            scriptPath = fullfile(folder, 'src', 'CustomAperture_fraunhofer_fft.m');
             prepareSmallScript(testCase, scriptPath);
 
             runScriptIsolated(scriptPath);
 
-            testCase.verifyTrue(isfile(fullfile(folder, 'output', 'four_aperture_rgb_preview.png')));
-            testCase.verifyTrue(isfile(fullfile(folder, 'output', 'four_aperture_gray_preview.png')));
+            testCase.verifyTrue(isfile(fullfile(folder, 'Output', 'four_aperture_rgb_preview.png')));
+            testCase.verifyTrue(isfile(fullfile(folder, 'Output', 'four_aperture_gray_preview.png')));
+        end
+
+        function aperturePreviewRunsWithOnlyItsSourceFolder(testCase)
+            folder = portableModule(testCase, 'topic_aperture_fraunhofer');
+            scriptPath = fullfile(folder, 'src', 'CustomAperture_four_aperture_preview.m');
+            prepareSmallScript(testCase, scriptPath);
+
+            runScriptIsolated(scriptPath);
+
+            testCase.verifyTrue(isfile(fullfile(folder, 'Output', 'four_aperture_preview_data.mat')));
         end
 
         function phaseScriptRunsWithOnlyItsFolder(testCase)
-            folder = portableModule(testCase, 'phase_layer');
-            scriptPath = fullfile(folder, 'CustomApertureWithPhase_fraunhofer_fft.m');
+            folder = portableModule(testCase, 'topic_phase_layer');
+            scriptPath = fullfile(folder, 'src', 'CustomApertureWithPhase_fraunhofer_fft.m');
             prepareSmallScript(testCase, scriptPath);
 
             runScriptIsolated(scriptPath);
 
-            testCase.verifyTrue(isfile(fullfile(folder, 'output', 'four_aperture_with_phase_rgb_preview.png')));
-            testCase.verifyTrue(isfile(fullfile(folder, 'output', 'aperiodic_phase_map_2d_3d.png')));
+            testCase.verifyTrue(isfile(fullfile(folder, 'Output', 'four_aperture_with_phase_rgb_preview.png')));
+            testCase.verifyTrue(isfile(fullfile(folder, 'Output', 'aperiodic_phase_map_2d_3d.png')));
         end
 
         function continuousApertureUsesBundledSampler(testCase)
-            folder = portableModule(testCase, 'aperture_diffraction');
-            scriptPath = fullfile(folder, 'CustomAperture_fraunhofer_fft.m');
+            folder = portableModule(testCase, 'topic_aperture_fraunhofer');
+            scriptPath = fullfile(folder, 'src', 'CustomAperture_fraunhofer_fft.m');
             prepareSmallScript(testCase, scriptPath);
             selectContinuousAperture(scriptPath);
 
             runScriptIsolated(scriptPath);
 
-            testCase.verifyTrue(isfile(fullfile(folder, 'output', 'four_aperture_rgb_preview.png')));
+            testCase.verifyTrue(isfile(fullfile(folder, 'Output', 'four_aperture_rgb_preview.png')));
+        end
+
+        function pixelGuiStartsFromTemporaryLocation(testCase)
+            folder = portableModule(testCase, 'topic_pixel_unfolding');
+            visibility = get(groot, 'DefaultFigureVisible');
+            testCase.addTeardown(@() set(groot, 'DefaultFigureVisible', visibility));
+            initialFigures = findall(groot, 'Type', 'figure');
+            testCase.addTeardown(@() closeNewFigures(initialFigures));
+            set(groot, 'DefaultFigureVisible', 'off');
+
+            OLED_PixelUnfolding_Tian_Batch_GUI();
+
+            testCase.verifyEqual(which('OLED_PixelUnfolding_Tian_Batch_GUI'), ...
+                fullfile(folder, 'src', 'OLED_PixelUnfolding_Tian_Batch_GUI.m'));
+            testCase.verifyNotEmpty(setdiff(findall(groot, 'Type', 'figure'), initialFigures));
         end
 
         function phaseLoaderReadsLocalOutput(testCase)
-            folder = portableModule(testCase, 'phase_layer');
+            folder = portableModule(testCase, 'topic_phase_layer');
             resultPath = writeMinimalDoeResult(folder);
 
             design = loadBestMultiRadiusPhaseDesign();
@@ -75,8 +104,13 @@ function folder = portableModule(testCase, moduleName)
     root = fileparts(fileparts(mfilename('fullpath')));
     temporary = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture());
     folder = fullfile(temporary.Folder, moduleName);
-    copyfile(fullfile(root, 'src', moduleName), folder);
-    testCase.applyFixture(matlab.unittest.fixtures.PathFixture(folder));
+    mkdir(folder);
+    % Never copy historical outputs: output checks must observe newly generated files.
+    for part = ["Input", "src", "docs", "dist"]
+        copyfile(fullfile(root, moduleName, part), fullfile(folder, part));
+    end
+    mkdir(fullfile(folder, 'Output'));
+    testCase.applyFixture(matlab.unittest.fixtures.PathFixture(fullfile(folder, 'src')));
 end
 
 function cfg = portableConfig(cfg)
@@ -94,6 +128,7 @@ function prepareSmallScript(testCase, scriptPath)
     text = fileread(scriptPath);
     text = strrep(text, 'clear, clc, close all', 'clear');
     text = strrep(text, 'nn = 1000;', 'nn = 24;');
+    text = strrep(text, 'nn = 700;', 'nn = 24;');
     text = strrep(text, 'useBestDoeDesign = true;', 'useBestDoeDesign = false;');
     text = strrep(text, 'phaseFillFactor = 0.40;', 'phaseFillFactor = 0.01;');
     file = fopen(scriptPath, 'w', 'n', 'UTF-8');
@@ -122,7 +157,7 @@ function closeNewFigures(initialFigures)
 end
 
 function resultPath = writeMinimalDoeResult(folder)
-    outputDir = fullfile(folder, 'output');
+    outputDir = fullfile(folder, 'Output');
     if ~isfolder(outputDir)
         mkdir(outputDir);
     end

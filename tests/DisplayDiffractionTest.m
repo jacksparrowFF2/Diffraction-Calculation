@@ -6,8 +6,8 @@ classdef DisplayDiffractionTest < matlab.unittest.TestCase
         function addProjectSource(testCase)
             root = fileparts(fileparts(mfilename('fullpath')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture(fullfile(root, 'src')));
-            testCase.applyFixture(matlab.unittest.fixtures.PathFixture(fullfile(root, 'src', 'coe_reflection')));
-            testCase.applyFixture(matlab.unittest.fixtures.PathFixture(fullfile(root, 'src', 'udc_imaging')));
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture(fullfile(root, 'topic_coe_reflection', 'src')));
+            testCase.applyFixture(matlab.unittest.fixtures.PathFixture(fullfile(root, 'topic_udc_imaging', 'src')));
         end
     end
 
