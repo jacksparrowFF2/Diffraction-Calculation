@@ -1,5 +1,9 @@
 # COE 反射衍射
 
+当前默认从 `Input/项目名称/config.txt` 读取参数，配置值优先于主脚本默认值。正式使用只需选择项目并编辑其配置；不调整像素形状。语法见 [项目配置说明](项目配置说明.md)。
+
+实际版图和 nk 数据的准备、主脚本修改示例见 [实际图样与材料输入指南](实际图样与材料输入指南.md)。
+
 本模块是后续主要开发方向之一，用于评估产品 COE 反射设计方案的可行性，并在一致的计算条件与评价指标下对比不同方案的效果。
 
 本目录可独立复制，`src/private/` 随目录一起保留。
@@ -25,7 +29,7 @@
 
 主脚本的 `stack` 参数集中定义图样来源、阳极反射边界、BM 外扩、Diamond 尺寸，以及 BM/R/G/B 的 n、k、厚度。详细定义见 [简化 COE 多层模型约定](简化COE多层模型约定.md)。
 
-- `stack.geometry.source="diamond"`：2×2 R/G/G/B 示例晶胞，Pitch 为相邻单元间距，默认 50 μm；R/G/B 菱形半对角线 12/10/12 μm，可调，不代表厂家真实 Diamond 版图。
+- 正式仿真只导入项目图片或 MAT 图样，不提供像素尺寸、圆角、倾角等形状调整。预生成示例按参考 PDL 轮廓构建阳极，R/B 交错、G 位于四邻中心且交替倾斜，R:G:B 数量比 1:2:1。
 - BM 开口默认由阳极边界按 5 μm 的离散 Euclidean 距离外扩，CF 按 7 μm 外扩并校验不交叠。阳极外环带是吸收底，绝不当作扩大的阳极。
 - `source="mat"`：读取 `Input/coe_layers.mat`，字段 `anodeMask`、`cfRMask`、`cfGMask`、`cfBMask`，可选 `bmOpenMask`（1=开口）或 `bmMask`（1=材料）。不提供 BM 时自动外扩。
 - `source="images"`：分别指定阳极、BM、R/G/B CF 的图片文件。白色表示对应区域，BM 的白色含义由 `bmImageIsOpening` 指定；BM 文件名为空时自动外扩。图像不自动缩放，所有图样须与计算网格同尺寸且对齐。
@@ -98,7 +102,7 @@ MAT 文件支持以下任意字段，文件中的字段覆盖脚本中同名参�
 例如，先在 MATLAB 中生成一份与默认采样匹配的非均匀高度输入：
 
 ```matlab
-heightMap = zeros(512, 512); % 默认 16 个周期 × 每周期 32 点
+heightMap = zeros(1024, 1024); % 默认 16 个周期 × 每周期 64 点
 heightMap(:, 257:end) = 200e-9; % 右半面增加 200 nm 高度
 save('topic_coe_reflection/Input/design.mat', 'heightMap'); % 在仓库根目录执行
 ```
@@ -188,3 +192,7 @@ axis image; colorbar;
 | `src/` | 主程序源码 |
 
 独立复制整个方向文件夹，在 MATLAB 中仅添加其 `src/` 路径后运行上述入口。输入和输出路径根据入口文件位置定位，与当前工作目录无关。辅助函数目录是命名例外：MATLAB 只有对名为 `private`、位于调用程序同一父目录下的文件夹才会自动应用私有函数解析规则。因此辅助函数放在 `src/private/`，保留小写名称，不改为 `PrivateFunction`，也不单独 `addpath`。
+
+## 按项目切换图片集（2026-11-13）
+
+当前默认使用 `Input/Case1/` 的 PNG 图片集；`Case2` 为 BMP，`Case3` 为 JPG，三者为同几何的演示数据。主脚本第 1 节设置 `projectName`，第 2.2.1 节使用 `stack.geometry.source="images"`。各图层默认不写扩展名，自动匹配该项目文件；同名多格式时必须明确扩展名。BM 白色表示实心材料，`bmImageIsOpening=false`。结果保存至 `Output/项目名称/`。材料 nk 路径也相对于当前项目目录；几何采样和材料厚度仍需用户按项目设置。`projectName=""` 使用旧根目录。详见 `Input/README.md` 和实际输入指南。

@@ -1,5 +1,5 @@
-function coefficient = reflectCOEFilmStack(wavelengths, incidentN, filmNK, thickness, bareReflection, referenceHeight)
-%reflectCOEFilmStack 法向相干膜层递推；输入膜层从入射侧到下方排列，N=n+i*k。
+function coefficient = reflectCoeFilmStack(wavelengths, incidentN, filmNK, thickness, bareReflection, referenceHeight)
+%reflectCoeFilmStack 法向相干膜层递推；输入膜层从入射侧到下方排列，N=n+i*k。
 % bareReflection 指同一底层直接接触入射介质时的复反射系数。
 % r=-1 为理想电反射底；r=0 为与入射介质阻抗匹配的吸收终端（进入的能量不返回）。
 % CF/BM 与该终端的界面仍按阻抗变换计算；不是把覆盖膜后的局部反射强制置零。

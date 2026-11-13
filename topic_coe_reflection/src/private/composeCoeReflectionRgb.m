@@ -1,5 +1,5 @@
-function [withoutHeightRGB, withHeightRGB, mapping] = composeCOEReflectionRGB(withoutHeight, withHeight, options)
-%composeCOEReflectionRGB 用共同曝光及对数/伽马映射合成两种高度相位状态的 RGB 预览。
+function [withoutHeightRGB, withHeightRGB, mapping] = composeCoeReflectionRgb(withoutHeight, withHeight, options)
+%composeCoeReflectionRgb 用共同曝光及对数/伽马映射合成两种高度相位状态的 RGB 预览。
 % 三个输入通道必须依次为 R/G/B 代理响应；不进行色度学颜色重建。
 % 两种状态、三个通道共用参考值，不分别归一化，保留通道与状态间的相对强弱。
     arguments

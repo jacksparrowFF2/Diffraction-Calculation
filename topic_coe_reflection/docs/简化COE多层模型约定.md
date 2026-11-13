@@ -1,6 +1,6 @@
 # 简化 COE 多层模型约定
 
-更新日期：2026-11-12。本文约定已通过 `prepareCOEStack` 和 `reflectCOEFilmStack` 接入主脚本，默认启用可调 Diamond 示例。旧单界面模型保留为 `opticalModel="simple"`。
+更新日期：2026-11-12。本文约定已通过 `prepareCoeStack` 和 `reflectCoeFilmStack` 接入主脚本，默认启用可调 Diamond 示例。旧单界面模型保留为 `opticalModel="simple"`。
 
 ## 已确认结构
 

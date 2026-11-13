@@ -1,5 +1,5 @@
-function spots = computeCOEDiffractionSpots(withoutResult, withResult, spectrum, options)
-%computeCOEDiffractionSpots 在原始能量图上检测非零级亮斑，以固定圆域积分绝对反射率。
+function spots = computeCoeDiffractionSpots(withoutResult, withResult, spectrum, options)
+%computeCoeDiffractionSpots 在原始能量图上检测非零级亮斑，以固定圆域积分绝对反射率。
 % 两状态的逐点最大能量图仅用于共同定位和排序，实际能量始终分别从各自原始数组积分。
 % 相同组内的积分圆不重叠、不进入零级排除圆，也不越过输出窗口，不能把不同组的数值相加。
     arguments

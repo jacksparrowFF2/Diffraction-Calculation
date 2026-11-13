@@ -1,6 +1,6 @@
 function result = simulateDisplayDiffraction(cfg)
 %simulateDisplayDiffraction Scalar, normal-incidence reflection or pupil-plane UDC.
-% Uses the existing CustomPattern geometry. Sampled FFT replaces the legacy
+% Uses the existing customPattern geometry. Sampled FFT replaces the legacy
 % arbitrary-grid transform to make quadrature and energy accounting explicit.
 % Wavelengths add INCOHERENTLY after squaring; r/t remain complex amplitudes.
 % Output kernels are integrated energy per output bin, relative to an ideal
@@ -165,7 +165,7 @@ function [mask, x, y] = buildGeometry(cfg)
         unit = zeros(2*n);
         for row = 1:2
             for col = 1:2
-                unit((row-1)*n+(1:n), (col-1)*n+(1:n)) = CustomPattern( ...
+                unit((row-1)*n+(1:n), (col-1)*n+(1:n)) = customPattern( ...
                     cfg.cellAnglesDeg(row, col), cx, cy, cfg.radius*cfg.aspectRatio, cfg.radius, 0, 0);
             end
         end

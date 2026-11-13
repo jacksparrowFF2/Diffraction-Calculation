@@ -1,9 +1,9 @@
-function spectrum = loadCOESpectrum(wavelengthNm, dataDir)
-%loadCOESpectrum 读取 CIE 官方 D65 / 1931 2° 数据，生成光谱与色度积分权重。
+function spectrum = loadCoeSpectrum(wavelengthNm, dataDir)
+%loadCoeSpectrum 读取 CIE 官方 D65 / 1931 2° 数据，生成光谱与色度积分权重。
 % 仅对输入的波段积分；梯形积分包含端点半权重，避免遗漏或重复乘波长步长。
     arguments
         wavelengthNm (1,:) double {mustBeReal, mustBeFinite, mustBeInRange(wavelengthNm, 380, 780)}
-        dataDir (1,1) string = fullfile(fileparts(fileparts(mfilename('fullpath'))), 'Input', 'Colorimetry')
+        dataDir (1,1) string = fullfile(fileparts(fileparts(fileparts(mfilename('fullpath')))), 'Input', 'Colorimetry')
     end
     assert(numel(wavelengthNm) >= 2 && all(diff(wavelengthNm) > 0), ...
         'COEReflection:SpectrumGrid', '光谱计算至少需要两个严格递增的波长。');

@@ -1,0 +1,75 @@
+# COE 项目配置：UTF-8 文本，key=value；# 或 % 开头为注释
+# 数值长度统一为 m，角度为 deg；波长步长/预览波长为 nm。
+# 只填常用参数，未列出的参数采用主脚本默认值。此文件不包含像素形状调整。
+# 字符串用双引号，数组用英文逗号；不支持行尾注释或 MATLAB 表达式。
+
+# 输入图片（自动匹配本项目的扩展名）
+opticalModel = "multilayer"
+stack.geometry.source = "images"
+stack.geometry.anodeFile = "anode"
+stack.geometry.bmFile = "BM"
+stack.geometry.bmImageIsOpening = false
+stack.geometry.cfFiles = ["CF_R", "CF_G", "CF_B"]
+stack.geometry.threshold = 0.5
+stack.geometry.requireCFCoverage = true
+
+# 物理尺度与采样：1024×1024 像素对应 800×800 μm 完整物面
+cfg.pitch = 50e-6
+cfg.periods = [16, 16]
+cfg.samplesPerPeriod = 64
+cfg.paddingFactor = 2
+cfg.outputSize = 401
+cfg.angleHalfRangeDeg = 6
+
+# 光谱与额外高度（默认不添加）
+spectrumMode = "D65"
+wavelengthStepNm = 5
+previewWavelengthNm = [620, 550, 450]
+spotOptions.wavelengthNm = [620, 550, 450]
+cfg.heightMap = 0
+useHeightExample = false
+
+# 材料：示例占位；nkFile 非空时覆盖 n/k 常数，路径相对于本项目
+stack.incidentN = 1
+stack.anodeReflectance = 1
+stack.anodePhaseDeg = 180
+stack.materials.BM.n = 1.8
+stack.materials.BM.k = 0.35
+stack.materials.BM.thickness = 1e-6
+stack.materials.BM.nkFile = ""
+stack.materials.R.n = 1.65
+stack.materials.R.k = 0.03
+stack.materials.R.thickness = 1.1e-6
+stack.materials.R.nkFile = ""
+stack.materials.G.n = 1.60
+stack.materials.G.k = 0.04
+stack.materials.G.thickness = 1e-6
+stack.materials.G.nkFile = ""
+stack.materials.B.n = 1.55
+stack.materials.B.k = 0.05
+stack.materials.B.thickness = 0.9e-6
+stack.materials.B.nkFile = ""
+
+# 指标、观察角域、非零级积分
+cfg.metricAngleDeg = 2.5
+observation.centerDeg = [0, 0]
+observation.innerHalfAngleDeg = 0
+observation.halfAngleDeg = 2.5
+observation.curveSamples = 301
+spotOptions.zeroOrderExclusionDeg = 0.30
+spotOptions.integrationHalfAngleDeg = 0.15
+spotOptions.minSeparationDeg = 0.35
+spotOptions.maxSpots = 8
+spotOptions.minRelativePeak = 0.08
+
+# 显示与保存（不改变原始 XYZ/物理能量）
+displayFloorDb = -60
+displayStyle.showAnnotations = true
+colorOptions.fixedGain = 0
+colorOptions.exposureEV = 0
+colorOptions.toneMapping = "log"
+colorOptions.toneStrength = 3000
+colorOptions.luminanceGamma = 0.75
+colorView.halfAngleDeg = 1.5
+saveResults = true
+caseName = "coe_reflection"

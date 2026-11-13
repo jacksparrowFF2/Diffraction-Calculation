@@ -4,11 +4,12 @@ classdef COESpectralTest < matlab.unittest.TestCase
         function addModule(testCase)
             root = fileparts(fileparts(mfilename('fullpath')));
             testCase.applyFixture(matlab.unittest.fixtures.PathFixture(fullfile(root, 'topic_coe_reflection', 'src')));
+            addCoeAlgorithmFixture(testCase, root);
         end
     end
     methods (Test)
         function luminanceEnhancementPreservesXYZAndChromaticity(testCase)
-            spectrum = loadCOESpectrum(380:5:780);
+            spectrum = loadCoeSpectrum(380:5:780);
             result.config.wavelengths = spectrum.wavelengthNm.'/1e9;
             result.coordinate = [-1, 0, 1]*1e-3;
             spatial = [0, 1e-7, 1e-5; 1e-4, 1e-3, 0.01; 0.1, 0.5, 1];
@@ -16,9 +17,9 @@ classdef COESpectralTest < matlab.unittest.TestCase
             result.spectralEnergy = spatial.*reshape(spectralShape, 1, 1, []);
             options = struct('fixedGain', 0, 'exposureEV', 0, 'toneMapping', "log", ...
                 'toneStrength', 3000, 'luminanceGamma', 0.75);
-            [bright, identical] = synthesizeCOEColor(result, result, spectrum, options);
+            [bright, identical] = synthesizeCoeColor(result, result, spectrum, options);
             options.toneMapping = "none";
-            [original, ~] = synthesizeCOEColor(result, result, spectrum, options);
+            [original, ~] = synthesizeCoeColor(result, result, spectrum, options);
             testCase.verifyEqual(bright.XYZ, original.XYZ);
             testCase.verifyEqual(bright.xy, original.xy);
             testCase.verifyEqual(bright.linearSRGBDensity, original.linearSRGBDensity);
@@ -40,7 +41,7 @@ classdef COESpectralTest < matlab.unittest.TestCase
         end
 
         function officialD65HasExpectedWhitePointAndQuadrature(testCase)
-            spectrum = loadCOESpectrum(380:5:780);
+            spectrum = loadCoeSpectrum(380:5:780);
             testCase.verifySize(spectrum.xyzWeights, [81, 3]);
             testCase.verifyEqual(sum(spectrum.quadratureNm), 400);
             testCase.verifyEqual(sum(spectrum.energyWeights), 1, 'AbsTol', 1e-14);
@@ -71,7 +72,7 @@ classdef COESpectralTest < matlab.unittest.TestCase
             spectrum = struct('energyWeights', [0.25; 0.75], 'photopicWeights', [0.6; 0.4]);
             observation = struct('centerDeg', [0, 0], 'halfAngleDeg', 1, ...
                 'innerHalfAngleDeg', 0, 'curveSamples', 11);
-            angular = computeCOEAngularMetrics(result, observation, spectrum);
+            angular = computeCoeAngularMetrics(result, observation, spectrum);
             testCase.verifyEqual(angular.spectralViewReflectance, [0.5; 0.5], 'AbsTol', 1e-14);
             testCase.verifyEqual(angular.radiantViewReflectance, 0.5, 'AbsTol', 1e-14);
             testCase.verifyEqual(angular.radiantTotalReflectance, 0.675, 'AbsTol', 1e-14);
@@ -79,26 +80,26 @@ classdef COESpectralTest < matlab.unittest.TestCase
             testCase.verifyEqual(angular.radiantCumulativeReflectance(end), 0.5, 'AbsTol', 1e-14);
             testCase.verifyGreaterThanOrEqual(diff(angular.radiantCumulativeReflectance), 0);
             observation.innerHalfAngleDeg = 0.1;
-            ring = computeCOEAngularMetrics(result, observation, spectrum);
+            ring = computeCoeAngularMetrics(result, observation, spectrum);
             testCase.verifyEqual(ring.radiantViewReflectance, 0.15, 'AbsTol', 1e-14);
             testCase.verifyEqual(ring.photopicViewReflectance, 0.22, 'AbsTol', 1e-14);
             observation.centerDeg = [0.5, 0]; observation.halfAngleDeg = 0.5;
-            shifted = computeCOEAngularMetrics(result, observation, spectrum);
+            shifted = computeCoeAngularMetrics(result, observation, spectrum);
             testCase.verifyEqual(shifted.radiantViewReflectance, 0.5, 'AbsTol', 1e-14);
             observation.halfAngleDeg = 1;
-            testCase.verifyError(@() computeCOEAngularMetrics(result, observation, spectrum), ...
+            testCase.verifyError(@() computeCoeAngularMetrics(result, observation, spectrum), ...
                 'COEReflection:ObservationExtent');
         end
 
         function neutralReflectorRetainsXYZAndCommonExposure(testCase)
-            spectrum = loadCOESpectrum(380:5:780);
+            spectrum = loadCoeSpectrum(380:5:780);
             result.config.wavelengths = spectrum.wavelengthNm.'/1e9;
             result.coordinate = [-1, 0, 1]*1e-3;
             result.spectralEnergy = ones(3, 3, 81)*(0.25/9);
             darker = result;
             darker.spectralEnergy = result.spectralEnergy/2;
             options = struct('fixedGain', 1e-6, 'exposureEV', 0);
-            [bright, dim] = synthesizeCOEColor(result, darker, spectrum, options);
+            [bright, dim] = synthesizeCoeColor(result, darker, spectrum, options);
             testCase.verifyEqual(sum(bright.XYZ(:, :, 2), 'all'), 0.25, 'AbsTol', 1e-13);
             testCase.verifyEqual(dim.XYZ, bright.XYZ/2, 'AbsTol', 1e-13);
             testCase.verifyEqual(bright.xy(2, 2, :), reshape(spectrum.whiteXY, 1, 1, 2), 'AbsTol', 1e-13);
@@ -106,7 +107,7 @@ classdef COESpectralTest < matlab.unittest.TestCase
             testCase.verifyEqual(decodeSRGB(dim.sRGB), decoded/2, 'AbsTol', 1e-13);
             testCase.verifyEqual(bright.gamutClippedFraction, 0);
             darker.spectralEnergy(:) = 0;
-            [~, black] = synthesizeCOEColor(result, darker, spectrum, options);
+            [~, black] = synthesizeCoeColor(result, darker, spectrum, options);
             testCase.verifyEqual(black.sRGB, zeros(3, 3, 3));
             testCase.verifyTrue(all(isnan(black.xy(:))));
         end

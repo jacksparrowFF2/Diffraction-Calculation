@@ -1,5 +1,5 @@
-function angular = computeCOEAngularMetrics(result, observation, spectrum)
-%computeCOEAngularMetrics 对观察圆锥/环带积分，计算以入射能量为分母的累计反射率。
+function angular = computeCoeAngularMetrics(result, observation, spectrum)
+%computeCoeAngularMetrics 对观察圆锥/环带积分，计算以入射能量为分母的累计反射率。
 % 角域按输出 bin 中心判定；角边界附近应检查 outputSize 和 FFT 采样收敛。
 % energyWeights 为辐射度权重，photopicWeights 为明视觉权重，二者均归一化为单位入射量。
     arguments

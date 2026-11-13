@@ -11,9 +11,14 @@ close all;
 
 %% 1. 文件输入与输出设置
 moduleDir = fileparts(fileparts(mfilename('fullpath')));
-inputDir = fullfile(moduleDir, 'Input');
-outputDir = fullfile(moduleDir, 'Output');
-inputFile = "";                  % Input/ 下的 MAT 文件名，如 "design.mat"；空字符串表示生成默认结构
+inputRoot = fullfile(moduleDir, 'Input');
+projectName = "Case1";          % 项目文件夹名称：Case1=PNG，Case2=BMP，Case3=JPG；空字符串使用 Input 根目录
+assert(~any(projectName == [".", ".."]) && ~contains(projectName, ["/", "\", ":"]), ...
+    'COEReflection:ProjectName', '项目名称必须是单个文件夹名称，不能包含路径分隔符。');
+useProjectConfig = true;       % 读取 Input/项目名称/config.txt；false 使用下方脚本参数
+inputDir = fullfile(inputRoot, projectName);
+outputDir = fullfile(moduleDir, 'Output', projectName); % 各项目结果分开保存
+inputFile = "";                  % 旧单层/额外高度/外部复系数 MAT；实际多层图样请用 stack.geometry
 caseName = "coe_reflection";     % 输出文件名前缀；同名结果会覆盖
 saveResults = true;             % 是否保存 MAT、CSV 和 PNG
 
@@ -30,12 +35,9 @@ mustBeMember(opticalModel, ["multilayer", "simple"]);
 
 % 2.1 几何与采样
 cfg.pitch = 50e-6;              % 像素周期，50 μm
-cfg.radius = 10e-6;             % 椭圆短半轴；aspectRatio=1 时为圆半径
-cfg.aspectRatio = 1;            % 长半轴 / 短半轴
-cfg.cellAnglesDeg = [30, 0; 0, -30]; % 2×2 晶胞内各单元的旋转角；圆形时旋转不改变形状
 cfg.periods = [16, 16];         % [x 方向周期数, y 方向周期数]，均为偶数
-cfg.samplesPerPeriod = 32;      % 每周期采样点数；采样间距 = pitch / samplesPerPeriod
-cfg.paddingFactor = 4;          % FFT 补零倍数，影响远场采样密度
+cfg.samplesPerPeriod = 64;      % 每周期采样点数；采样间距 = pitch / samplesPerPeriod
+cfg.paddingFactor = 2;          % FFT 补零倍数，影响远场采样密度
 cfg.pupilRadius = Inf;          % Inf 表示整个矩形计算面参与反射
 cfg.mask = [];                 % 留空时自动生成几何；自定义矩阵尺寸见下方 gridSize
 
@@ -46,22 +48,6 @@ previewWavelengthNm = [620, 550, 450]; % 远场图仅预览这些波长，全部
 cfg.wavelengths = [620, 550, 450]*1e-9; % RGB 模式下的三个代理波长
 cfg.spectralWeights = [1, 1, 1]; % RGB 模式使用的入射权重
 cfg.channelResponse = eye(3);   % RGB 模式的 R/G/B 通道
-mustBeMember(spectrumMode, ["D65", "RGB"]);
-if spectrumMode == "D65"
-    validateattributes(wavelengthStepNm, {'numeric'}, {'scalar', 'integer', 'positive', '<=', 20});
-    assert(mod(400, wavelengthStepNm) == 0, 'COEReflection:SpectrumStep', '波长步长必须整除 400 nm。');
-    spectrum = loadCOESpectrum(380:wavelengthStepNm:780);
-    cfg.wavelengths = spectrum.wavelengthNm.'/1e9;
-    cfg.spectralWeights = spectrum.energyWeights.'; % D65 SPD × 梯形积分步长，归一化入射能量
-    cfg.channelResponse = ones(numel(cfg.wavelengths), 1); % 这里只形成宽带能量；色度在第 6 节单独积分
-    spectrumLabel = "D65 380–780 nm";
-    photopicLabel = "D65 明视觉";
-else
-    spectrum.energyWeights = cfg.spectralWeights(:)/sum(cfg.spectralWeights);
-    spectrum.photopicWeights = spectrum.energyWeights; % 旧模式不作标准光度计算
-    spectrumLabel = "三波长等权代理";
-    photopicLabel = "三波长代理（非标准光度）";
-end
 % 以下为旧单界面模型参数，仅 opticalModel="simple" 时使用。
 cfg.materials.enabled = true;  % true：由 n/k 算复反射系数；false：用下面旧的强度反射率
 cfg.materials.incidentN = 1.0;  % 入射介质为空气
@@ -83,22 +69,29 @@ cfg.complexCoefficient = [];   % 留空时由 mask 和反射率构造；非空�
 
 % 2.2.1 图案化多层 COE：图样输入 + BM/CF 材料与厚度
 stack = coeStackDefaults();
-stack.geometry.source = "diamond"; % diamond：可调示例；mat：同一 MAT；images：独立图片
+stack.geometry.source = "images"; % images：项目图片集（默认）；mat：同一 MAT
 stack.geometry.matFile = "coe_layers.mat"; % 字段 anodeMask、cfR/G/BMask，可选 bmOpenMask 或 bmMask
-stack.geometry.anodeFile = "anode.png";
-stack.geometry.bmFile = "";     % 空时自动从阳极外扩生成；白色默认代表开口
-stack.geometry.bmImageIsOpening = true; % false 表示 BM 图片白色是实心材料
-stack.geometry.cfFiles = ["CF_R.png", "CF_G.png", "CF_B.png"];
+stack.geometry.anodeFile = "anode"; % 不写扩展名时自动匹配 PNG/BMP/JPG/JPEG/TIF/TIFF
+stack.geometry.bmFile = "BM";  % 空字符串时自动从阳极外扩生成 BM 开口
+stack.geometry.bmImageIsOpening = false; % 示例 BM 图片白色=实心材料；白色=开口时改 true
+stack.geometry.cfFiles = ["CF_R", "CF_G", "CF_B"];
+stack.geometry.threshold = 0.5; % 图片二值化阈值；推荐同尺寸、同原点的灰度黑白 PNG，无透明通道
+stack.geometry.requireCFCoverage = true; % CF 必须覆盖 BM 开口，各色之间不可交叠
+% 实测输入：改 source="mat" 或 "images"，文件名均相对于 Input/projectName/，可含子目录。
+% 输入必须覆盖完整计算面：[periods(2),periods(1)]*samplesPerPeriod，行 y、列 x。
+% 不自动缩放/平铺；输入 BM 后直接采用该图样，bmExpansion 只在缺省 BM 时生成开口。
+% 详细字段、物理尺寸、nk CSV 示例见 docs/实际图样与材料输入指南.md。
 stack.bmExpansion = 5e-6;       % BM 开口相对阳极边界向外扩张 5 μm，可调
-stack.demo.anodeHalfDiagonal = [12, 10, 12]*1e-6; % R/G/B 菱形半对角线，可调
-stack.demo.cfExpansion = 7e-6;  % CF 比 BM 开口更大；各色不得交叠
-stack.demo.colorTile = [1, 2; 2, 3]; % R/G/G/B 演示排布；Pitch 由 cfg.pitch 定义为相邻单元间距
 stack.anodeReflectance = 1.0;   % 仅阳极图样内的裸底为 100% 反射
 stack.anodePhaseDeg = 180;      % 理想电反射边界相位；阳极外为匹配吸收底（裸底 r=0）
 stack.materials.BM.n = 1.8; stack.materials.BM.k = 0.35; stack.materials.BM.thickness = 1.0e-6;
 stack.materials.R.n = 1.65; stack.materials.R.k = 0.03; stack.materials.R.thickness = 1.1e-6;
 stack.materials.G.n = 1.60; stack.materials.G.k = 0.04; stack.materials.G.thickness = 1.0e-6;
 stack.materials.B.n = 1.55; stack.materials.B.k = 0.05; stack.materials.B.thickness = 0.9e-6;
+stack.materials.BM.nkFile = ""; % 实测时填写如 "Materials/BM_nk.csv"，空字符串使用上面的 n/k
+stack.materials.R.nkFile = "";  % 如 "Materials/CF_R_nk.csv"
+stack.materials.G.nkFile = "";  % 如 "Materials/CF_G_nk.csv"
+stack.materials.B.nkFile = "";  % 如 "Materials/CF_B_nk.csv"
 % 每种材料还可设 nkFile="BM_nk.csv" 等：三列 [波长 nm, n, k]，文件优先于上面的常数。
 % 也可将 n/k 设为与 cfg.wavelengths 一一对应的向量。常数占位值不保证 CF 真正具有 RGB 通带。
 % CF 在 BM 上方的部分为 CF/BM/吸收底；BM 外扩开口环带为 CF/吸收底，绝不扩大阳极反射范围。
@@ -155,6 +148,68 @@ colorView.centerDeg = [0, 0];  % D65 专用图下排局部放大的中心 [theta
 colorView.halfAngleDeg = 1.5;  % 下排显示 ±1.5°，仅裁切显示，不修改积分角域或重新计算
 phaseStateLabels = ["不叠加高度相位", "叠加高度相位"];
 
+%% 2.4 项目配置（覆盖上面的默认参数；在光谱/几何计算之前生效）
+projectConfig = struct();
+if useProjectConfig
+    settings = struct();
+    settings.cfg = cfg;
+    settings.stack = stack;
+    settings.opticalModel = opticalModel;
+    settings.spectrumMode = spectrumMode;
+    settings.wavelengthStepNm = wavelengthStepNm;
+    settings.previewWavelengthNm = previewWavelengthNm;
+    settings.inputFile = inputFile;
+    settings.caseName = caseName;
+    settings.saveResults = saveResults;
+    settings.useHeightExample = useHeightExample;
+    settings.heightExample = heightExample;
+    settings.observation = observation;
+    settings.spotOptions = spotOptions;
+    settings.displayFloorDb = displayFloorDb;
+    settings.displayStyle = displayStyle;
+    settings.rgbOptions = rgbOptions;
+    settings.colorOptions = colorOptions;
+    settings.colorView = colorView;
+    [settings, projectConfig] = loadCoeProjectConfig(fullfile(inputDir, 'config.txt'), settings);
+    cfg = settings.cfg;
+    stack = settings.stack;
+    opticalModel = settings.opticalModel;
+    spectrumMode = settings.spectrumMode;
+    wavelengthStepNm = settings.wavelengthStepNm;
+    previewWavelengthNm = settings.previewWavelengthNm;
+    inputFile = settings.inputFile;
+    caseName = settings.caseName;
+    saveResults = settings.saveResults;
+    useHeightExample = settings.useHeightExample;
+    heightExample = settings.heightExample;
+    observation = settings.observation;
+    spotOptions = settings.spotOptions;
+    displayFloorDb = settings.displayFloorDb;
+    displayStyle = settings.displayStyle;
+    rgbOptions = settings.rgbOptions;
+    colorOptions = settings.colorOptions;
+    colorView = settings.colorView;
+    fprintf('读取项目配置：%s（%d 项覆盖）。\n', projectConfig.file, numel(projectConfig.keys));
+end
+cfg.observation = observation;
+mustBeMember(opticalModel, ["multilayer", "simple"]);
+mustBeMember(spectrumMode, ["D65", "RGB"]);
+if spectrumMode == "D65"
+    validateattributes(wavelengthStepNm, {'numeric'}, {'scalar', 'integer', 'positive', '<=', 20});
+    assert(mod(400, wavelengthStepNm) == 0, 'COEReflection:SpectrumStep', '波长步长必须整除 400 nm。');
+    spectrum = loadCoeSpectrum(380:wavelengthStepNm:780);
+    cfg.wavelengths = spectrum.wavelengthNm.'/1e9;
+    cfg.spectralWeights = spectrum.energyWeights.'; % D65 SPD × 梯形积分步长，归一化入射能量
+    cfg.channelResponse = ones(numel(cfg.wavelengths), 1); % 这里只形成宽带能量；色度在第 6 节单独积分
+    spectrumLabel = "D65 380–780 nm";
+    photopicLabel = "D65 明视觉";
+else
+    spectrum.energyWeights = cfg.spectralWeights(:)/sum(cfg.spectralWeights);
+    spectrum.photopicWeights = spectrum.energyWeights; % 旧模式不作标准光度计算
+    spectrumLabel = "三波长等权代理";
+    photopicLabel = "三波长代理（非标准光度）";
+end
+
 %% 3. 读取设计文件并检查输入尺寸
 gridSize = [cfg.periods(2), cfg.periods(1)]*cfg.samplesPerPeriod;
 if strlength(inputFile) > 0
@@ -174,9 +229,9 @@ if strlength(inputFile) > 0
     end
     fprintf('读取设计文件：%s\n', inputPath);
 else
-    fprintf('使用脚本参数生成默认反射面。\n');
+    fprintf('未使用额外 MAT 覆盖，按主脚本的图样与材料设置计算。\n');
     if useHeightExample
-        cfg.heightMap = createCOEHeightExample(cfg, heightExample); %#ok<UNRCH> 可选示例默认关闭
+        cfg.heightMap = createCoeHeightExample(cfg, heightExample); %#ok<UNRCH> 可选示例默认关闭
         fprintf('二值高度条纹：高区 %.1f nm，周期 %.2f μm，占空比 %.2f，变化方向 %s。\n', ...
             heightExample.height*1e9, heightExample.period*1e6, ...
             heightExample.dutyCycle, heightExample.direction);
@@ -198,7 +253,8 @@ stackGeometry = struct();
 if opticalModel == "multilayer"
     assert(isempty(cfg.mask), 'COEReflection:LegacyMask', ...
         '多层模式请通过 stack.geometry 导入各层图样，不使用旧单一 mask。');
-    [cfg.coeStack, stackGeometry] = prepareCOEStack(cfg, stack, inputDir);
+    [cfg.coeStack, stackGeometry] = prepareCoeStack(cfg, stack, inputDir);
+    fprintf('多层图样来源：%s；项目目录：%s。\n', stack.geometry.source, inputDir);
     cfg.mask = double(stackGeometry.anodeMask); % FFT 坐标沿用现有接口；各层系数由区域表独立决定
     fprintf('多层 COE：%d 种局部膜堆，共同参考面高度 %.3f μm。\n', ...
         height(cfg.coeStack.regionTable), cfg.coeStack.referenceHeight*1e6);
@@ -258,8 +314,8 @@ disp(comparisonMetrics(1:max(1, floor(rowCount/8)):end, :));
 
 %% 5.1 观察角域绝对反射率与累计角能量
 % 每个波长的 spectralEnergy 已除以入射能量；先积分能量，再作光谱加权，不能平均各波长占比。
-withoutAngular = computeCOEAngularMetrics(baseline, observation, spectrum);
-withAngular = computeCOEAngularMetrics(result, observation, spectrum);
+withoutAngular = computeCoeAngularMetrics(baseline, observation, spectrum);
+withAngular = computeCoeAngularMetrics(result, observation, spectrum);
 comparisonMetrics.ViewAbsoluteReflectancePercent = 100*[withoutAngular.spectralViewReflectance; ...
     withAngular.spectralViewReflectance];
 observationMetrics = table(phaseStateLabels.', ...
@@ -291,7 +347,7 @@ disp(observationMetrics);
 %% 5.2 非零级光斑位置与绝对反射率
 % S1、S2 等仅是检测到的局部亮斑编号，不自动代表理论 (m,n) 衍射阶数。
 % 全部统计基于未增强的物理数组，分母为入射能量（photopic 组为入射明视觉光通量）。
-diffractionSpots = computeCOEDiffractionSpots(baseline, result, spectrum, spotOptions);
+diffractionSpots = computeCoeDiffractionSpots(baseline, result, spectrum, spotOptions);
 spotMetrics = diffractionSpots.metrics;
 disp('非零级主要衍射斑（宽带明视觉组；RGB 模式为代理权重）：');
 disp(spotMetrics(spotMetrics.Group == "photopic", :));
@@ -339,7 +395,7 @@ displayData = struct('referenceEnergy', referenceEnergy, 'floorDb', displayFloor
 colorData = struct();
 if spectrumMode == "D65"
     [colorData.withoutHeight, colorData.withHeight, colorData.mapping] = ...
-        synthesizeCOEColor(baseline, result, spectrum, colorOptions);
+        synthesizeCoeColor(baseline, result, spectrum, colorOptions);
     displayData.withoutHeightRGB = colorData.withoutHeight.displaySRGB;
     displayData.withHeightRGB = colorData.withHeight.displaySRGB;
     rgbTitle = "D65 / sRGB（显示增强）";
@@ -352,7 +408,7 @@ if spectrumMode == "D65"
 elseif hasRGB
     % channelSignal 已计入光谱权重及响应；channelResponse 的列应依次表示 R/G/B。
     [displayData.withoutHeightRGB, displayData.withHeightRGB, displayData.rgbMapping] = ...
-        composeCOEReflectionRGB(baseline.channelSignal, result.channelSignal, rgbOptions);
+        composeCoeReflectionRgb(baseline.channelSignal, result.channelSignal, rgbOptions);
     rgbTitle = "三波长 RGB 代理（增强显示）";
 else
     warning('COEReflection:RGBChannels', '通道数不是 3，跳过 RGB 预览；单波长图正常输出。');
@@ -468,7 +524,7 @@ plot(withAngular.radiusDeg, 100*withAngular.photopicCumulativeReflectance, '--',
 formatCumulativeAxes(observation, phaseStateLabels, photopicLabel, displayStyle);
 % 统一本次输出图的字体、线宽与刻度风格，不修改 MATLAB 全局图形默认值。
 for outputFigure = [geometryFigure, diffractionFigure, metricsFigure, angularFigure, colorFigure]
-    styleCOEFigure(outputFigure, displayStyle);
+    styleCoeFigure(outputFigure, displayStyle);
 end
 
 %% 7. 保存物理数据、参数、指标表和图片
@@ -476,9 +532,12 @@ if saveResults
     if ~isfolder(outputDir)
         mkdir(outputDir);
     end
+    if useProjectConfig
+        writelines(projectConfig.text, fullfile(outputDir, caseName + "_config.txt"), 'Encoding', 'UTF-8');
+    end
     % MAT 保留未经显示归一化的数组；cfg 记录本次实际计算参数。
     save(fullfile(outputDir, caseName + "_results.mat"), 'cfg', 'result', 'baseline', ...
-        'inputFile', 'displayFloorDb', 'displayData', 'comparisonMetrics', 'phaseStateLabels', ...
+        'projectName', 'projectConfig', 'inputDir', 'inputFile', 'displayFloorDb', 'displayData', 'comparisonMetrics', 'phaseStateLabels', ...
         'displayStyle', 'useHeightExample', 'heightExample', 'spectrumMode', 'spectrum', ...
         'observation', 'withoutAngular', 'withAngular', 'observationMetrics', 'cumulativeMetrics', ...
         'colorData', 'colorOptions', 'colorView', 'spotOptions', 'diffractionSpots', 'spotMetrics', ...
@@ -517,107 +576,3 @@ if saveResults
     fprintf('计算完成，结果已保存到：%s\n', outputDir);
 end
 % 运行结束后 cfg、result、baseline 保留在工作区，方便继续查看与分析。
-
-function formatFarFieldAxes(ax, cfg, style)
-%formatFarFieldAxes 统一角度坐标，并标出雾度评价圆锥边界。
-    axis(ax, 'image');
-    ax.YDir = 'normal';
-    limit = cfg.angleHalfRangeDeg;
-    xlim(ax, [-limit, limit]); ylim(ax, [-limit, limit]);
-    ax.XTick = linspace(-limit, limit, 5);
-    ax.YTick = ax.XTick;
-    xlabel(ax, 'θ_x / °'); ylabel(ax, 'θ_y / °');
-    if ~style.showAnnotations
-        return;
-    end
-    hold(ax, 'on');
-    phi = linspace(0, 2*pi, 361);
-    if style.showMetricCone
-        plot(ax, cfg.metricAngleDeg*cos(phi), cfg.metricAngleDeg*sin(phi), ...
-            '--', 'Color', [0.6, 0.85, 0.9], 'LineWidth', 0.8, 'HandleVisibility', 'off');
-    end
-    obs = cfg.observation;
-    if style.showObservationRegion
-        plot(ax, obs.centerDeg(1) + obs.halfAngleDeg*cos(phi), obs.centerDeg(2) + obs.halfAngleDeg*sin(phi), ...
-            ':', 'Color', [1, 0.7, 0.2], 'LineWidth', 0.8, 'HandleVisibility', 'off');
-    end
-    if style.showObservationRegion && obs.innerHalfAngleDeg > 0
-        plot(ax, obs.centerDeg(1) + obs.innerHalfAngleDeg*cos(phi), ...
-            obs.centerDeg(2) + obs.innerHalfAngleDeg*sin(phi), ...
-            ':', 'Color', [1, 0.7, 0.2], 'LineWidth', 0.8, 'HandleVisibility', 'off');
-    end
-end
-
-function formatCumulativeAxes(observation, labels, panelTitle, style)
-%formatCumulativeAxes 半径内累计值始终以入射量为分母，不强制将曲线末端归一化到 100%。
-    if style.showAnnotations && style.showObservationRegion
-        xline(observation.halfAngleDeg, ':', '观察外半角', 'HandleVisibility', 'off');
-    end
-    if style.showAnnotations && style.showObservationRegion && observation.innerHalfAngleDeg > 0
-        xline(observation.innerHalfAngleDeg, ':', '观察内半角', 'HandleVisibility', 'off');
-    end
-    xlabel('相对观察中心的累计半角 / °'); ylabel('累计绝对反射率 / %');
-    title(panelTitle); legend(labels, 'Location', 'best'); grid on;
-    xlim([0, max(xlim)]);
-end
-
-function markDiffractionSpots(ax, spots, groupName, wavelength, style)
-%markDiffractionSpots 标出共同积分圆、编号与零级排除圆；不使用显示增强结果找峰。
-    if ~style.showAnnotations
-        return;
-    end
-    groupIndex = find(string({spots.groups.name}) == groupName);
-    if groupName == "wavelength"
-        groupIndex = groupIndex(abs([spots.groups(groupIndex).wavelengthNm] - wavelength) < 1e-6);
-    end
-    if isempty(groupIndex)
-        return;
-    end
-    centers = spots.groups(groupIndex(1)).centersDeg;
-    phi = linspace(0, 2*pi, 181);
-    hold(ax, 'on');
-    if style.showZeroOrderExclusion
-        plot(ax, spots.options.zeroOrderExclusionDeg*cos(phi), ...
-            spots.options.zeroOrderExclusionDeg*sin(phi), ':', 'Color', [1, 0.35, 0.35], ...
-            'LineWidth', 0.8, 'HandleVisibility', 'off');
-    end
-    for j = 1:size(centers, 1)
-        if style.showSpotRegions
-            plot(ax, centers(j, 1) + spots.options.integrationHalfAngleDeg*cos(phi), ...
-                centers(j, 2) + spots.options.integrationHalfAngleDeg*sin(phi), ...
-                '-', 'Color', [1, 0.35, 0.8], 'LineWidth', 0.8, 'HandleVisibility', 'off');
-        end
-        if ~style.showSpotLabels
-            continue;
-        end
-        limitsX = xlim(ax); limitsY = ylim(ax);
-        if centers(j, 1) >= limitsX(1) && centers(j, 1) <= limitsX(2) ...
-                && centers(j, 2) >= limitsY(1) && centers(j, 2) <= limitsY(2)
-            direction = centers(j, :)/max(norm(centers(j, :)), eps);
-            span = max(diff(limitsX), diff(limitsY));
-            offset = max(1.3*spots.options.integrationHalfAngleDeg, 0.065*span);
-            labelPosition = centers(j, :) + offset*direction;
-            labelPosition(1) = min(max(labelPosition(1), limitsX(1) + 0.04*span), limitsX(2) - 0.04*span);
-            labelPosition(2) = min(max(labelPosition(2), limitsY(1) + 0.04*span), limitsY(2) - 0.04*span);
-            if offset > 1.5*spots.options.integrationHalfAngleDeg
-                start = centers(j, :) + spots.options.integrationHalfAngleDeg*direction;
-                plot(ax, [start(1), labelPosition(1)], [start(2), labelPosition(2)], ...
-                    '-', 'Color', [0.8, 0.3, 0.65], 'LineWidth', 0.5, 'HandleVisibility', 'off');
-            end
-            text(ax, labelPosition(1), labelPosition(2), "S" + j, ...
-                'Color', [1, 0.75, 0.9], 'HorizontalAlignment', 'center', ...
-                'FontSize', 8.5, 'Tag', 'COESpotLabel', 'Clipping', 'on');
-        end
-    end
-end
-
-function styleCOEFigure(fig, style)
-%styleCOEFigure 统一中文字体、坐标轴和色标样式，仅作用于本次生成的图。
-    set(findall(fig, '-property', 'FontName'), 'FontName', style.fontName);
-    set(findall(fig, '-property', 'FontSize'), 'FontSize', style.fontSize);
-    set(findall(fig, 'Type', 'axes'), 'LineWidth', style.lineWidth, ...
-        'TickDir', 'out', 'Box', 'on', 'TickLabelInterpreter', 'none');
-    set(findall(fig, 'Type', 'colorbar'), 'LineWidth', style.lineWidth, 'TickDirection', 'out');
-    set(findall(fig, 'Type', 'legend'), 'Box', 'off');
-    set(findall(fig, 'Tag', 'COESpotLabel'), 'FontSize', 8.5);
-end

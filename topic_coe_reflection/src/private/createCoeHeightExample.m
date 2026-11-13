@@ -1,5 +1,5 @@
-function heightMap = createCOEHeightExample(cfg, example)
-%createCOEHeightExample 生成可复现的二值高度条纹，单位 m，不改变材料反射率分布。
+function heightMap = createCoeHeightExample(cfg, example)
+%createCoeHeightExample 生成可复现的二值高度条纹，单位 m，不改变材料反射率分布。
 % 条纹从计算矩阵首行/列开始排列；周期和高区宽度必须能被当前采样精确表示。
     arguments
         cfg (1,1) struct

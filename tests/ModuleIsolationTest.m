@@ -287,6 +287,9 @@ end
 function prepareSmallScript(testCase, scriptPath)
     % Only the temporary copy is changed; production simulation defaults stay intact.
     text = fileread(scriptPath);
+    text = strrep(text, 'useProjectConfig = true;', 'useProjectConfig = false;');
+    text = strrep(text, 'projectName = "Case1";', 'projectName = "";');
+    text = strrep(text, 'stack.geometry.source = "images";', 'stack.geometry.source = "diamond";');
     text = strrep(text, 'clear, clc, close all', 'clear');
     text = strrep(text, 'nn = 1000;', 'nn = 24;');
     text = strrep(text, 'nn = 700;', 'nn = 24;');
@@ -294,6 +297,7 @@ function prepareSmallScript(testCase, scriptPath)
     text = strrep(text, 'phaseFillFactor = 0.40;', 'phaseFillFactor = 0.01;');
     text = strrep(text, 'cfg.periods = [16, 16];', 'cfg.periods = [4, 4];');
     text = strrep(text, 'cfg.samplesPerPeriod = 32;', 'cfg.samplesPerPeriod = 16;');
+    text = strrep(text, 'cfg.samplesPerPeriod = 64;', 'cfg.samplesPerPeriod = 16;');
     text = strrep(text, 'cfg.paddingFactor = 4;', 'cfg.paddingFactor = 2;');
     text = strrep(text, 'cfg.outputSize = 401;', 'cfg.outputSize = 129;');
     text = strrep(text, 'spectrumMode = "D65";', 'spectrumMode = "RGB";');

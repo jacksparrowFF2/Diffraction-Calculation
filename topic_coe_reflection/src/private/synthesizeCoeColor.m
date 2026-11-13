@@ -1,5 +1,5 @@
-function [withoutColor, withColor, mapping] = synthesizeCOEColor(withoutResult, withResult, spectrum, options)
-%synthesizeCOEColor 按 D65 与 CIE XYZ 积分，将两种状态转换到共同曝光的 sRGB。
+function [withoutColor, withColor, mapping] = synthesizeCoeColor(withoutResult, withResult, spectrum, options)
+%synthesizeCoeColor 按 D65 与 CIE XYZ 积分，将两种状态转换到共同曝光的 sRGB。
 % 原始 XYZ/xy 不变；可选亮度映射只按 Y 计算统一比例缩放 XYZ，不逐通道增强。
     arguments
         withoutResult (1,1) struct

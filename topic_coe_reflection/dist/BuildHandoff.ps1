@@ -9,7 +9,7 @@ $stageDir = Join-Path ([IO.Path]::GetTempPath()) ('coe_handoff_' + [guid]::NewGu
 $bundleDir = Join-Path $stageDir $PackageName
 $copiedModuleDir = Join-Path $bundleDir 'topic_coe_reflection'
 New-Item -ItemType Directory -Path $copiedModuleDir -Force | Out-Null
-foreach ($part in @('src', 'Input', 'docs')) {
+foreach ($part in @('src', 'Input', 'docs', 'AGENTS.md')) {
     Copy-Item -LiteralPath (Join-Path $moduleDir $part) -Destination (Join-Path $copiedModuleDir $part) -Recurse
 }
 New-Item -ItemType Directory -Path (Join-Path $copiedModuleDir 'Output') -Force | Out-Null
@@ -24,6 +24,7 @@ New-Item -ItemType Directory -Path $testsDir -Force | Out-Null
 foreach ($testFile in @('COESpectralTest.m', 'COESpotsTest.m')) {
     Copy-Item -LiteralPath (Join-Path $repositoryDir ('tests\' + $testFile)) -Destination (Join-Path $testsDir $testFile)
 }
+Copy-Item -LiteralPath (Join-Path $repositoryDir 'tests\private') -Destination (Join-Path $testsDir 'private') -Recurse
 $referenceDir = Join-Path $bundleDir 'reference_outputs'
 New-Item -ItemType Directory -Path $referenceDir -Force | Out-Null
 Get-ChildItem -LiteralPath (Join-Path $moduleDir 'Output') -File |

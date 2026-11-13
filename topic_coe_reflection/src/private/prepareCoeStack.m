@@ -1,5 +1,5 @@
-function [model, geometry] = prepareCOEStack(cfg, stack, inputDir)
-%prepareCOEStack 读取/生成独立层图样，校验覆盖关系，计算各局部膜堆的光谱复系数。
+function [model, geometry] = prepareCoeStack(cfg, stack, inputDir)
+%prepareCoeStack 读取/生成独立层图样，校验覆盖关系，计算各局部膜堆的光谱复系数。
 % 不生成 Ny×Nx×波长数的大数组；regionMap + coefficientLookup 保留紧凑表示。
     arguments
         cfg (1,1) struct
@@ -57,7 +57,7 @@ function [model, geometry] = prepareCOEStack(cfg, stack, inputDir)
         if hasAnode(j)
             bare = sqrt(stack.anodeReflectance)*exp(1i*deg2rad(stack.anodePhaseDeg));
         end
-        lookup(code + 1, :) = reflectCOEFilmStack(cfg.wavelengths, stack.incidentN, ...
+        lookup(code + 1, :) = reflectCoeFilmStack(cfg.wavelengths, stack.incidentN, ...
             nk(layerIDs, :), depths(layerIDs), bare, referenceHeight);
         area(j) = nnz(regionMap == code)/numel(regionMap);
     end
@@ -80,28 +80,7 @@ function geometry = readGeometry(cfg, stack, inputDir, shape, dx)
     mustBeMember(source, ["diamond", "mat", "images"]);
     switch source
         case "diamond"
-            demo = stack.demo;
-            validateattributes(demo.anodeHalfDiagonal, {'numeric'}, {'row', 'numel', 3, 'positive', 'finite'});
-            validateattributes(demo.cfExpansion, {'numeric'}, {'scalar', 'real', 'finite', '>', stack.bmExpansion});
-            validateattributes(demo.colorTile, {'numeric'}, {'size', [2, 2], 'integer', '>=', 1, '<=', 3});
-            assert(all(mod(cfg.periods, 2) == 0), 'COEReflection:DiamondPeriods', 'Diamond 晶胞周期数必须为偶数。');
-            n = cfg.samplesPerPeriod;
-            local = ((0:n-1) - floor(n/2))*dx;
-            [xx, yy] = meshgrid(local);
-            cells = false(2*n, 2*n, 3);
-            for row = 1:2
-                for col = 1:2
-                    color = demo.colorTile(row, col);
-                    cells((row-1)*n+(1:n), (col-1)*n+(1:n), color) = ...
-                        abs(xx) + abs(yy) <= demo.anodeHalfDiagonal(color);
-                end
-            end
-            masks = repmat(cells, cfg.periods(2)/2, cfg.periods(1)/2, 1);
-            geometry.anodeMask = any(masks, 3);
-            geometry.bmOpenMask = expandMask(geometry.anodeMask, stack.bmExpansion, dx);
-            geometry.cfRMask = expandMask(masks(:, :, 1), demo.cfExpansion, dx);
-            geometry.cfGMask = expandMask(masks(:, :, 2), demo.cfExpansion, dx);
-            geometry.cfBMask = expandMask(masks(:, :, 3), demo.cfExpansion, dx);
+            geometry = createCoeDiamondGeometry(cfg, stack);
         case "mat"
             file = fullfile(inputDir, stack.geometry.matFile);
             assert(isfile(file), 'COEReflection:StackInput', '多层图样 MAT 文件不存在：%s', file);
@@ -151,7 +130,7 @@ function mask = binaryMask(value, shape, name)
 end
 
 function mask = imageMask(file, shape, threshold)
-    assert(isfile(file), 'COEReflection:StackImage', '图样文件不存在：%s', file);
+    file = resolveCoeImageFile(file);
     validateattributes(threshold, {'numeric'}, {'scalar', 'real', '>=', 0, '<=', 1});
     value = imread(file);
     if isinteger(value)
