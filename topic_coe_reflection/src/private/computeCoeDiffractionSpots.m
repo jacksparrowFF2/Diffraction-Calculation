@@ -1,4 +1,4 @@
-function spots = computeCoeDiffractionSpots(withoutResult, withResult, spectrum, options)
+function spots = computeCoeDiffractionSpots(withoutResult, withResult, spectrum, options, compareStates)
 %computeCoeDiffractionSpots 在原始能量图上检测非零级亮斑，以固定圆域积分绝对反射率。
 % 两状态的逐点最大能量图仅用于共同定位和排序，实际能量始终分别从各自原始数组积分。
 % 相同组内的积分圆不重叠、不进入零级排除圆，也不越过输出窗口，不能把不同组的数值相加。
@@ -7,6 +7,7 @@ function spots = computeCoeDiffractionSpots(withoutResult, withResult, spectrum,
         withResult (1,1) struct
         spectrum (1,1) struct
         options (1,1) struct
+        compareStates (1,1) logical = true
     end
     validateattributes(options.zeroOrderExclusionDeg, {'numeric'}, {'scalar', 'real', 'finite', 'nonnegative'});
     validateattributes(options.integrationHalfAngleDeg, {'numeric'}, {'scalar', 'real', 'finite', 'positive'});
@@ -46,12 +47,15 @@ function spots = computeCoeDiffractionSpots(withoutResult, withResult, spectrum,
     for j = 1:numel(selected)
         k = selected(j);
         groups{j} = analyseGroup(reshape(a(:, k), size(xx)), reshape(b(:, k), size(xx)), ...
-            xx, yy, options, "wavelength", withResult.config.wavelengths(k)*1e9);
+            xx, yy, options, "wavelength", withResult.config.wavelengths(k)*1e9, compareStates);
     end
+    if ~compareStates, b = a; end
     names = ["radiant", "photopic"];
     for j = 1:2
-        groups{numel(selected) + j} = analyseGroup(reshape(a*weights(:, j), size(xx)), ...
-            reshape(b*weights(:, j), size(xx)), xx, yy, options, names(j), NaN);
+        firstMap = reshape(a*weights(:, j), size(xx));
+        secondMap = firstMap;
+        if compareStates, secondMap = reshape(b*weights(:,j),size(xx)); end
+        groups{numel(selected)+j} = analyseGroup(firstMap,secondMap,xx,yy,options,names(j),NaN,compareStates);
     end
     spots.options = options;
     spots.effectiveMinSeparationDeg = max(options.minSeparationDeg, 2*options.integrationHalfAngleDeg);
@@ -60,7 +64,7 @@ function spots = computeCoeDiffractionSpots(withoutResult, withResult, spectrum,
     spots.metrics = vertcat(tables{:});
 end
 
-function group = analyseGroup(a, b, xx, yy, options, name, wavelength)
+function group = analyseGroup(a, b, xx, yy, options, name, wavelength, compareStates)
     reference = max(a, b);
     n = size(reference, 1);
     padded = -Inf(n + 2);
@@ -108,16 +112,17 @@ function group = analyseGroup(a, b, xx, yy, options, name, wavelength)
     end
     chosen = chosen(1:count);
     centers = [xx(chosen), yy(chosen)];
-    energyPercent = zeros(2*count, 1);
-    peakPosition = NaN(2*count, 2);
+    stateCount = 1+double(compareStates);
+    energyPercent = zeros(stateCount*count, 1);
+    peakPosition = NaN(stateCount*count, 2);
     maps = {a, b};
     occupied = false(size(a));
     for j = 1:count
         % 按距离去重；精确落在圆周上的共享 bin 只归前一个 ROI，避免重复计数。
         circle = hypot(xx - centers(j, 1), yy - centers(j, 2)) <= halfAngle & ~occupied;
         occupied = occupied | circle;
-        for state = 1:2
-            row = 2*(j-1) + state;
+        for state = 1:stateCount
+            row = stateCount*(j-1) + state;
             values = maps{state};
             energyPercent(row) = 100*sum(values(circle));
             masked = values;
@@ -128,14 +133,15 @@ function group = analyseGroup(a, b, xx, yy, options, name, wavelength)
             end
         end
     end
-    id = repelem((1:count).', 2);
-    stateIndex = repmat([1; 2], count, 1);
+    id = repelem((1:count).', stateCount);
+    stateIndex = repmat((1:stateCount).', count, 1);
     stateLabels = ["不叠加高度相位"; "叠加高度相位"];
-    centerRows = repelem(centers, 2, 1);
-    metrics = table(repmat(name, 2*count, 1), repmat(wavelength, 2*count, 1), id, stateIndex, ...
+    if ~compareStates, stateLabels = "反射结果（额外高度 0 nm）"; end
+    centerRows = repelem(centers, stateCount, 1);
+    metrics = table(repmat(name, stateCount*count, 1), repmat(wavelength, stateCount*count, 1), id, stateIndex, ...
         stateLabels(stateIndex), centerRows(:, 1), centerRows(:, 2), hypot(centerRows(:, 1), centerRows(:, 2)), ...
-        peakPosition(:, 1), peakPosition(:, 2), repmat(halfAngle, 2*count, 1), ...
-        repmat(options.zeroOrderExclusionDeg, 2*count, 1), energyPercent, ...
+        peakPosition(:, 1), peakPosition(:, 2), repmat(halfAngle, stateCount*count, 1), ...
+        repmat(options.zeroOrderExclusionDeg, stateCount*count, 1), energyPercent, ...
         'VariableNames', {'Group', 'WavelengthNm', 'SpotID', 'StateIndex', 'HeightPhaseState', ...
         'CenterThetaXDeg', 'CenterThetaYDeg', 'CenterRadiusDeg', 'PeakThetaXDeg', 'PeakThetaYDeg', ...
         'IntegrationHalfAngleDeg', 'ZeroOrderExclusionDeg', 'AbsoluteReflectancePercent'});

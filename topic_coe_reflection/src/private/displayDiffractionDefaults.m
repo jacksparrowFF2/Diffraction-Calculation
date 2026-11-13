@@ -16,6 +16,7 @@ function cfg = displayDiffractionDefaults(mode)
     cfg.propagationDistance = 10; % Reflection receiver distance z / m (Fraunhofer).
     cfg.incidentIrradiance = 1; % Per-wavelength reference incident irradiance / W m^-2.
     cfg.receiverBinSamples = 3; % Minimum odd midpoint samples per receiver pixel axis.
+    cfg.source = coeSourceDefaults();
     cfg.mask = []; % Optional Ny-by-Nx sampled aperture, replaces customPattern.
     cfg.heightMap = 0; % Scalar or same size as mask; physical height in metres.
     cfg.deltaIndex = 0.20;

@@ -1,17 +1,31 @@
+# 图样列表按从下到上排列；相同层级=同层互斥材料区域
+stack.layerNames = ["Anode", "IJP", "BM", "CF_R", "CF_G", "CF_B"]
+stack.layerLevels = [1, 2, 3, 4, 4, 4]
+stack.backgroundMode = "absorber"
+stack.exitN = 1
+stack.layers.Anode.file = "anode"
+stack.layers.Anode.method = "reflectance"
+stack.layers.Anode.reflectance = 1
+stack.layers.Anode.phaseDeg = 180
+stack.layers.IJP.file = "IJP"
+stack.layers.IJP.coverage = "image"
+stack.layers.IJP.method = "nk"
+stack.layers.IJP.n = 1.5
+stack.layers.IJP.k = 0
+stack.layers.IJP.thickness = 10e-6
+stack.layers.BM.method = "nk"
+stack.layers.CF_R.method = "nk"
+stack.layers.CF_G.method = "nk"
+stack.layers.CF_B.method = "nk"
+
 # COE 项目配置：UTF-8 文本，key=value；# 或 % 开头为注释
 # 数值长度统一为 m，角度为 deg；波长步长/预览波长为 nm。
 # 只填常用参数，未列出的参数采用主脚本默认值。此文件不包含像素形状调整。
 # 字符串用双引号，数组用英文逗号；不支持行尾注释或 MATLAB 表达式。
 
 # 输入图片（自动匹配本项目的扩展名）
-opticalModel = "multilayer"
 stack.geometry.source = "images"
-stack.geometry.anodeFile = "anode"
-stack.geometry.bmFile = "BM"
-stack.geometry.bmImageIsOpening = false
-stack.geometry.cfFiles = ["CF_R", "CF_G", "CF_B"]
 stack.geometry.threshold = 0.5
-stack.geometry.requireCFCoverage = true
 
 # 物理尺度与采样：1024×1024 像素对应 800×800 μm 完整物面
 cfg.pitch = 50e-6
@@ -21,7 +35,7 @@ cfg.paddingFactor = 2
 cfg.propagationDistance = 10
 cfg.incidentIrradiance = 1
 cfg.receiverBinSamples = 3
-cfg.outputSize = 401
+cfg.outputSize = 801
 cfg.angleHalfRangeDeg = 6
 
 # 光谱与额外高度（默认不添加）
@@ -34,24 +48,22 @@ useHeightExample = false
 
 # 材料：示例占位；nkFile 非空时覆盖 n/k 常数，路径相对于本项目
 stack.incidentN = 1
-stack.anodeReflectance = 1
-stack.anodePhaseDeg = 180
-stack.materials.BM.n = 1.8
-stack.materials.BM.k = 0.35
-stack.materials.BM.thickness = 1e-6
-stack.materials.BM.nkFile = ""
-stack.materials.R.n = 1.65
-stack.materials.R.k = 0.03
-stack.materials.R.thickness = 1.1e-6
-stack.materials.R.nkFile = ""
-stack.materials.G.n = 1.60
-stack.materials.G.k = 0.04
-stack.materials.G.thickness = 1e-6
-stack.materials.G.nkFile = ""
-stack.materials.B.n = 1.55
-stack.materials.B.k = 0.05
-stack.materials.B.thickness = 0.9e-6
-stack.materials.B.nkFile = ""
+stack.layers.BM.n = 1.8
+stack.layers.BM.k = 0.35
+stack.layers.BM.thickness = 1e-6
+stack.layers.BM.nkFile = ""
+stack.layers.CF_R.n = 1.65
+stack.layers.CF_R.k = 0.03
+stack.layers.CF_R.thickness = 1.1e-6
+stack.layers.CF_R.nkFile = ""
+stack.layers.CF_G.n = 1.60
+stack.layers.CF_G.k = 0.04
+stack.layers.CF_G.thickness = 1e-6
+stack.layers.CF_G.nkFile = ""
+stack.layers.CF_B.n = 1.55
+stack.layers.CF_B.k = 0.05
+stack.layers.CF_B.thickness = 0.9e-6
+stack.layers.CF_B.nkFile = ""
 
 # 指标、观察角域、非零级积分
 cfg.metricAngleDeg = 2.5
@@ -76,3 +88,18 @@ colorOptions.luminanceGamma = 0.75
 colorView.halfAngleDeg = 1.5
 saveResults = true
 caseName = "coe_reflection"
+
+# 光源空间形式与光谱独立设置；laser通常配monochromatic
+cfg.source.type = "plane"
+cfg.source.centerXY = [0, 0]
+cfg.source.distance = 0.1
+cfg.source.diameter = 0
+cfg.source.samplesPerAxis = 3
+cfg.source.beamHalfAngleDeg = 30
+cfg.source.laserSpecification = "waist"
+cfg.source.waistRadius = 100e-6
+cfg.source.waistDistance = 0
+cfg.source.divergenceHalfAngleDeg = 0.1
+sourceSpectrumFile = ""
+wavelengthRangeNm = [380, 780]
+monochromaticWavelengthNm = 532

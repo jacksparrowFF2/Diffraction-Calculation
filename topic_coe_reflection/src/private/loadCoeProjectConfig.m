@@ -5,6 +5,25 @@ function [settings, record] = loadCoeProjectConfig(file, settings)
     record.file = string(file);
     record.text = string(fileread(file));
     lines = splitlines(record.text);
+    % 先收集声明列表，让自定义层名的字段不受文本先后顺序影响；仍严格校验字段名。
+    if isfield(settings,'stack') && isfield(settings.stack,'layerNames')
+        for index = 1:numel(lines)
+            declaration = regexp(char(strtrim(lines(index))), '^stack\.layerNames\s*=\s*(.+)$','tokens','once');
+            if ~isempty(declaration)
+                names = reshape(string(jsondecode(declaration{1})),1,[]);
+                assert(~isempty(names) && numel(unique(names))==numel(names) && ...
+                    all(arrayfun(@(x) isvarname(char(x)),names)), ...
+                    'COEReflection:LayerNames','layerNames 应为非空、唯一的有效名称列表。');
+                for name = names
+                    if ~isfield(settings.stack.layers,name)
+                        settings.stack.layers.(name)=coeLayerDefaults(name);
+                    end
+                end
+                settings.stack.layerNames=names;
+                settings.stack.layerLevels=1:numel(names);
+            end
+        end
+    end
     record.keys = strings(0, 1);
     for index = 1:numel(lines)
         line = strtrim(lines(index));

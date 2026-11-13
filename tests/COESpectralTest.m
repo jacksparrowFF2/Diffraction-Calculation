@@ -8,6 +8,26 @@ classdef COESpectralTest < matlab.unittest.TestCase
         end
     end
     methods (Test)
+        function customFlatSpectrumUsesOneCommonXYZNormalization(testCase)
+            temporary=testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture());
+            file=fullfile(temporary.Folder,'source.csv');
+            writematrix([380,1;780,1],file);
+            root=fileparts(fileparts(mfilename('fullpath')));
+            spectrum=loadCoeSpectrum(380:5:780,fullfile(root,'topic_coe_reflection','Input','Colorimetry'),string(file));
+            testCase.verifyEqual(sum(spectrum.energyWeights),1,'AbsTol',1e-12);
+            testCase.verifyEqual(spectrum.whiteXY,[1/3,1/3],'AbsTol',5e-4);
+            testCase.verifyEqual(spectrum.incidentSPD,ones(81,1));
+        end
+
+        function monochromaticSpectrumIsAnIntegratedLine(testCase)
+            root=fileparts(fileparts(mfilename('fullpath')));
+            spectrum=loadCoeSpectrum(532,fullfile(root,'topic_coe_reflection','Input','Colorimetry'),"",true);
+            testCase.verifyEqual(spectrum.energyWeights,1);
+            testCase.verifyEqual(spectrum.photopicWeights,1);
+            testCase.verifyTrue(spectrum.discreteLine);
+            testCase.verifySize(spectrum.xyzWeights,[1,3]);
+        end
+
         function luminanceEnhancementPreservesXYZAndChromaticity(testCase)
             spectrum = loadCoeSpectrum(380:5:780);
             result.config.wavelengths = spectrum.wavelengthNm.'/1e9;

@@ -1,4 +1,4 @@
-function [withoutColor, withColor, mapping] = synthesizeCoeColor(withoutResult, withResult, spectrum, options)
+function [withoutColor, withColor, mapping] = synthesizeCoeColor(withoutResult, withResult, spectrum, options, compareStates)
 %synthesizeCoeColor 按 D65 与 CIE XYZ 积分，将两种状态转换到共同曝光的 sRGB。
 % 原始 XYZ/xy 不变；可选亮度映射只按 Y 计算统一比例缩放 XYZ，不逐通道增强。
     arguments
@@ -6,6 +6,7 @@ function [withoutColor, withColor, mapping] = synthesizeCoeColor(withoutResult, 
         withResult (1,1) struct
         spectrum (1,1) struct
         options (1,1) struct
+        compareStates (1,1) logical = true
     end
     validateattributes(options.exposureEV, {'numeric'}, {'scalar', 'real', 'finite'});
     validateattributes(options.fixedGain, {'numeric'}, {'scalar', 'real', 'finite', 'nonnegative'});
@@ -28,9 +29,16 @@ function [withoutColor, withColor, mapping] = synthesizeCoeColor(withoutResult, 
         && all(abs(withResult.config.wavelengths(:) - expected) < 1e-15), ...
         'COEReflection:ColorWavelengths', '色度数据与两种状态的波长网格必须一致。');
     withoutColor = integrateXYZ(withoutResult, spectrum);
-    withColor = integrateXYZ(withResult, spectrum);
+    if compareStates
+        withColor = integrateXYZ(withResult, spectrum);
+    else
+        withColor = withoutColor;
+    end
     % 转到每单位近轴立体角的 XYZ 密度，避免输出网格变密时图像自动变暗。
-    reference = max([withoutColor.linearSRGBDensity(:); withColor.linearSRGBDensity(:); realmin]);
+    reference = max([withoutColor.linearSRGBDensity(:); realmin]);
+    if compareStates
+        reference = max(reference,max(withColor.linearSRGBDensity(:)));
+    end
     gain = options.fixedGain;
     if gain == 0
         gain = 0.9/reference; % 两状态共同自动曝光；可用 fixedGain 固定跨方案曝光
@@ -41,7 +49,11 @@ function [withoutColor, withColor, mapping] = synthesizeCoeColor(withoutResult, 
     mapping.referencePeak = reference;
     mapping.method = "Shared exposure and luminance-only XYZ scaling; peak compression for enhanced display";
     withoutColor = renderSRGB(withoutColor, gain, options);
-    withColor = renderSRGB(withColor, gain, options);
+    if compareStates
+        withColor = renderSRGB(withColor, gain, options);
+    else
+        withColor = withoutColor;
+    end
 end
 
 function color = integrateXYZ(result, spectrum)

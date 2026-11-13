@@ -11,11 +11,11 @@ classdef ModuleIsolationTest < matlab.unittest.TestCase
             fprintf(file, '%s', text); fclose(file);
             runScriptIsolated(scriptPath);
             saved = load(fullfile(folder, 'Output', 'coe_reflection_results.mat'));
-            testCase.verifyEqual(saved.opticalModel, "multilayer");
+            testCase.verifyEqual(saved.stack.layerLevels, [1,2,3,4,4,4]);
             testCase.verifyEqual(saved.cfg.heightMap, 0);
             testCase.verifyFalse(saved.useHeightExample);
             testCase.verifyEqual(saved.result.kernel, saved.baseline.kernel, 'AbsTol', 2e-13);
-            testCase.verifyGreaterThan(nnz(saved.stackGeometry.expansionAbsorberMask), 0);
+            testCase.verifyGreaterThan(nnz(saved.stackGeometry.layerMasks.CF_R & ~saved.stackGeometry.layerMasks.Anode & ~saved.stackGeometry.layerMasks.BM), 0);
             testCase.verifyTrue(isfile(fullfile(folder, 'Output', 'coe_reflection_layer_patterns.mat')));
             testCase.verifyTrue(isfile(fullfile(folder, 'Output', 'coe_reflection_stack_materials.csv')));
             expected = saved.cfg.coeStack.regionTable.AreaFraction.' ...
@@ -44,19 +44,20 @@ classdef ModuleIsolationTest < matlab.unittest.TestCase
             testCase.verifySize(saved.colorData.withHeight.XYZ, [129, 129, 3]);
             testCase.verifyTrue(isfile(fullfile(outputDir, 'coe_reflection_diffraction_spots.csv')));
             testCase.verifyNotEmpty(saved.spotMetrics);
-            testCase.verifyEqual(saved.spotMetrics.AbsoluteReflectancePercent(saved.spotMetrics.StateIndex == 1), ...
-                saved.spotMetrics.AbsoluteReflectancePercent(saved.spotMetrics.StateIndex == 2), 'AbsTol', 2e-13);
+            testCase.verifyEqual(unique(saved.spotMetrics.StateIndex),1);
+            testCase.verifyFalse(saved.heightPhaseEnabled);
+            testCase.verifyEqual(saved.result.propagationRuns,1);
             testCase.verifyTrue(isfile(fullfile(outputDir, 'coe_reflection_cumulative_energy.png')));
             testCase.verifyTrue(isfile(fullfile(outputDir, 'coe_reflection_spectrum.csv')));
             obs = readtable(fullfile(outputDir, 'coe_reflection_observation_metrics.csv'));
-            testCase.verifyEqual(obs.ViewRadiantReflectancePercent(2), ...
+            testCase.verifyEqual(obs.ViewRadiantReflectancePercent(1), ...
                 100*saved.withAngular.radiantViewReflectance, 'AbsTol', 1e-10);
-            testCase.verifyEqual(obs.TotalRadiantReflectancePercent(1), ...
-                obs.TotalRadiantReflectancePercent(2), 'AbsTol', 1e-10);
+            testCase.verifyEqual(height(obs),1);
+            testCase.verifyEqual(obs.TotalRadiantReflectancePercent,100*saved.withAngular.radiantTotalReflectance,'AbsTol',1e-10);
             cumulative = readtable(fullfile(outputDir, 'coe_reflection_cumulative_energy.csv'));
-            testCase.verifyGreaterThanOrEqual(diff(cumulative.WithHeightRadiantPercent), -1e-12);
-            testCase.verifyEqual(cumulative.WithHeightRadiantPercent(cumulative.RadiusDeg == 2.5), ...
-                obs.ViewRadiantReflectancePercent(2), 'AbsTol', 1e-10);
+            testCase.verifyGreaterThanOrEqual(diff(cumulative.RadiantPercent), -1e-12);
+            testCase.verifyEqual(cumulative.RadiantPercent(cumulative.RadiusDeg == 2.5), ...
+                obs.ViewRadiantReflectancePercent(1), 'AbsTol', 1e-10);
         end
 
         function coeMainScriptProducesResults(testCase)
@@ -117,10 +118,9 @@ classdef ModuleIsolationTest < matlab.unittest.TestCase
             folder = portableModule(testCase, 'topic_coe_reflection');
             scriptPath = fullfile(folder, 'src', 'COEReflection_main.m');
             prepareSmallScript(testCase, scriptPath);
-            mask = ones(64);
             heightMap = [zeros(64, 32), ones(64, 32)]*550e-9/(4*0.20);
             complexCoefficient = 0.5;
-            save(fullfile(folder, 'Input', 'design.mat'), 'mask', 'heightMap', 'complexCoefficient');
+            save(fullfile(folder, 'Input', 'design.mat'), 'heightMap', 'complexCoefficient');
             text = strrep(fileread(scriptPath), 'inputFile = "";', 'inputFile = "design.mat";');
             file = fopen(scriptPath, 'w', 'n', 'UTF-8');
             assert(file >= 0, 'Cannot write temporary script.');
@@ -130,7 +130,7 @@ classdef ModuleIsolationTest < matlab.unittest.TestCase
             runScriptIsolated(scriptPath);
 
             saved = load(fullfile(folder, 'Output', 'coe_reflection_results.mat'));
-            testCase.verifyEqual(saved.cfg.mask, mask);
+            testCase.verifyEqual(saved.cfg.mask, double(saved.stackGeometry.unionMask));
             testCase.verifyEqual(saved.cfg.heightMap, heightMap);
             testCase.verifyEqual(saved.cfg.complexCoefficient, complexCoefficient);
             testCase.verifyEqual(saved.baseline.config.heightMap, 0);
@@ -157,6 +157,14 @@ classdef ModuleIsolationTest < matlab.unittest.TestCase
 
             saved = load(fullfile(folder, 'Output', 'coe_reflection_results.mat'));
             testCase.verifyFalse(saved.useHeightExample);
+            testCase.verifyFalse(saved.heightPhaseEnabled);
+            testCase.verifyEqual(saved.result.propagationRuns,1);
+            testCase.verifyEqual(height(saved.observationMetrics),1);
+            testCase.verifyEqual(height(saved.comparisonMetrics),3);
+            testCase.verifyFalse(isfile(fullfile(folder,'Output','coe_reflection_baseline_metrics.csv')));
+            testCase.verifyTrue(isfile(fullfile(folder,'Output','coe_reflection_rgb.png')));
+            farField=findall(groot,'Type','figure','Name','COE 远场反射');
+            testCase.verifyEqual(numel(findall(farField,'Type','axes')),4);
             testCase.verifyEqual(saved.cfg.heightMap, 0);
             testCase.verifyEqual(saved.result.kernel, saved.baseline.kernel, 'AbsTol', 2e-13);
             testCase.verifyEqual(saved.result.metrics.ZeroOrderRetention, ones(3, 1), 'AbsTol', 2e-13);
@@ -288,8 +296,7 @@ function prepareSmallScript(testCase, scriptPath)
     % Only the temporary copy is changed; production simulation defaults stay intact.
     text = fileread(scriptPath);
     text = strrep(text, 'useProjectConfig = true;', 'useProjectConfig = false;');
-    text = strrep(text, 'projectName = "Case1";', 'projectName = "";');
-    text = strrep(text, 'stack.geometry.source = "images";', 'stack.geometry.source = "diamond";');
+    text = regexprep(text, 'projectName = "[^"]*";', 'projectName = "";');
     text = strrep(text, 'clear, clc, close all', 'clear');
     text = strrep(text, 'nn = 1000;', 'nn = 24;');
     text = strrep(text, 'nn = 700;', 'nn = 24;');
@@ -300,6 +307,7 @@ function prepareSmallScript(testCase, scriptPath)
     text = strrep(text, 'cfg.samplesPerPeriod = 64;', 'cfg.samplesPerPeriod = 16;');
     text = strrep(text, 'cfg.paddingFactor = 4;', 'cfg.paddingFactor = 2;');
     text = strrep(text, 'cfg.outputSize = 401;', 'cfg.outputSize = 129;');
+    text = strrep(text, 'cfg.outputSize = 801;', 'cfg.outputSize = 129;');
     text = strrep(text, 'cfg.angleHalfRangeDeg = 6;', 'cfg.angleHalfRangeDeg = 3;');
     text = strrep(text, 'spectrumMode = "D65";', 'spectrumMode = "RGB";');
     text = strrep(text, 'cfg.materials.enabled = true;', 'cfg.materials.enabled = false;');
@@ -308,6 +316,13 @@ function prepareSmallScript(testCase, scriptPath)
     assert(file >= 0, 'Cannot write temporary script.');
     closeFile = onCleanup(@() fclose(file));
     fprintf(file, '%s', text);
+    if endsWith(scriptPath, 'COEReflection_main.m')
+        inputFolder = fullfile(fileparts(fileparts(scriptPath)), 'Input');
+        for stem = ["anode","IJP","BM","CF_R","CF_G","CF_B"]
+            source = imread(fullfile(inputFolder,'Case1',stem+".png"));
+            imwrite(source(1:4:256,1:4:256),fullfile(inputFolder,stem+".png"));
+        end
+    end
     originalVisibility = get(groot, 'DefaultFigureVisible');
     testCase.addTeardown(@() set(groot, 'DefaultFigureVisible', originalVisibility));
     set(groot, 'DefaultFigureVisible', 'off');

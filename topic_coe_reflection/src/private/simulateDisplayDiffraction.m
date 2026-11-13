@@ -22,6 +22,7 @@ function result = simulateDisplayDiffraction(cfg)
         'DisplayDiffraction:PupilExtent', ...
         'The geometry must cover the complete pupil diameter. Increase periods or reduce pupilRadius.');
     height = expandMap(cfg.heightMap, gridSize, 'heightMap');
+    hasExtraHeight = any(height(:) ~= 0);
     validateattributes(height, {'numeric'}, {'real', 'finite'});
     fftSize = 2^nextpow2(max(gridSize)*cfg.paddingFactor);
     if cfg.mode == "reflection"
@@ -42,6 +43,8 @@ function result = simulateDisplayDiffraction(cfg)
     nativeStep = throughput;
     receiverSamples = zeros(1, nLambda);
     receiverIrradiance = energy;
+    illuminationInfo=cell(1,nLambda);
+    incidentIrradianceMap=[];
     phasePasses = 1 + double(cfg.mode == "reflection");
     [outX, outY] = meshgrid(outputCoordinate);
     metricMask = hypot(outX, outY) <= deg2rad(cfg.metricAngleDeg);
@@ -49,34 +52,53 @@ function result = simulateDisplayDiffraction(cfg)
     for k = 1:nLambda
         lambda = cfg.wavelengths(k);
         coefficient = opticalCoefficient(cfg, mask, k);
-        phase = phasePasses*2*pi*cfg.deltaIndex*height/lambda;
-        field = pupil.*coefficient.*exp(1i*phase);
         if cfg.mode == "reflection"
-            % Unpadded FFT is only an independent discrete Parseval diagnostic.
-            nativeEnergy = transformEnergy(field, max(gridSize), incidentEnergy);
+            [incidentFields,sourceWeights,illuminationInfo{k}] = buildCoeIllumination(cfg,xx,yy,pupil,lambda);
+            sourceAngle=illuminationInfo{k}.maxIncidenceAngleDeg;
+            assert(deg2rad(cfg.angleHalfRangeDeg)*(1+1/(cfg.outputSize-1))+sind(sourceAngle) ...
+                <= lambda/(2*dx)*(1+1e-12),'COEReflection:IlluminationAliasing', ...
+                '光源入射方向与输出角域超过物面采样带宽，请提高图样采样或缩小角域/光源尺寸。');
+            for mode=1:numel(sourceWeights)
+                incoming=pupil.*incidentFields{mode};
+                field=incoming.*coefficient;
+                if hasExtraHeight
+                    phase=phasePasses*2*pi*cfg.deltaIndex*height/lambda;
+                    field=field.*exp(1i*phase);
+                end
+                weight=sourceWeights(mode);
+                modeThroughput=sum(abs(field(:)).^2)/incidentEnergy;
+                nativeEnergy=transformEnergy(field,max(gridSize),incidentEnergy);
+                throughput(k)=throughput(k)+weight*modeThroughput;
+                parsevalError(k)=parsevalError(k)+weight*abs(sum(nativeEnergy(:))-modeThroughput);
+                incidentArea=incidentEnergy*dx^2;
+                [modeEnergy,intensityRatio,samples]=propagateCoeReceiver(field,x,y,outputCoordinate,lambda,cfg,incidentArea);
+                energy(:,:,k)=energy(:,:,k)+weight*modeEnergy;
+                receiverIrradiance(:,:,k)=receiverIrradiance(:,:,k)+weight*cfg.incidentIrradiance*intensityRatio;
+                clearEnergy(:,:,k)=clearEnergy(:,:,k)+weight*propagateCoeReceiver(incoming,x,y,outputCoordinate,lambda,cfg,incidentArea);
+                receiverSamples(k)=max(receiverSamples(k),samples);
+                if k==ceil(nLambda/2)
+                    if mode==1, incidentIrradianceMap=zeros(gridSize); end
+                    incidentIrradianceMap=incidentIrradianceMap+weight*cfg.incidentIrradiance*abs(incoming).^2;
+                end
+            end
         else
-            nativeEnergy = transformEnergy(field, fftSize, incidentEnergy);
+            field=pupil.*coefficient;
+            if hasExtraHeight
+                phase=phasePasses*2*pi*cfg.deltaIndex*height/lambda;
+                field=field.*exp(1i*phase);
+            end
+            nativeEnergy=transformEnergy(field,fftSize,incidentEnergy);
+            throughput(k)=sum(abs(field(:)).^2)/incidentEnergy;
+            parsevalError(k)=abs(sum(nativeEnergy(:))-throughput(k));
+            nativeCoordinate=cfg.focalLength*lambda*frequency;
+            weights=binOverlap(nativeCoordinate,outputCoordinate,binStep);
+            energy(:,:,k)=weights*nativeEnergy*weights.';
+            clearNative=transformEnergy(pupil,fftSize,incidentEnergy);
+            clearEnergy(:,:,k)=weights*clearNative*weights.';
         end
-        throughput(k) = sum(abs(field(:)).^2)/incidentEnergy;
-        parsevalError(k) = abs(sum(nativeEnergy(:)) - throughput(k));
-        nativeCoordinate = lambda*frequency;
-        if cfg.mode == "udc"
-            nativeCoordinate = cfg.focalLength*nativeCoordinate;
-        end
-        nativeStep(k) = nativeCoordinate(2) - nativeCoordinate(1);
-        if cfg.mode == "reflection"
-            incidentArea = incidentEnergy*dx^2;
-            [energy(:, :, k), intensityRatio, receiverSamples(k)] = ...
-                propagateCoeReceiver(field, x, y, outputCoordinate, lambda, cfg, incidentArea);
-            receiverIrradiance(:, :, k) = cfg.incidentIrradiance*intensityRatio;
-            clearEnergy(:, :, k) = propagateCoeReceiver(pupil, x, y, ...
-                outputCoordinate, lambda, cfg, incidentArea);
-        else
-            weights = binOverlap(nativeCoordinate, outputCoordinate, binStep);
-            energy(:, :, k) = weights*nativeEnergy*weights.';
-            clearNative = transformEnergy(pupil, fftSize, incidentEnergy);
-            clearEnergy(:, :, k) = weights*clearNative*weights.';
-        end
+        nativeCoordinate=lambda*frequency;
+        if cfg.mode=="udc", nativeCoordinate=cfg.focalLength*nativeCoordinate; end
+        nativeStep(k)=nativeCoordinate(2)-nativeCoordinate(1);
         captured(k) = sum(energy(:, :, k), 'all');
         clearCaptured(k) = sum(clearEnergy(:, :, k), 'all');
         if cfg.mode == "reflection" && throughput(k) > 0
@@ -128,6 +150,13 @@ function result = simulateDisplayDiffraction(cfg)
     result.fftSize = fftSize;
     if cfg.mode == "reflection"
         result.propagationMethod = "Fraunhofer chirp-convolution Fourier integral";
+        result.illumination=[illuminationInfo{:}];
+        result.incidentIrradianceMap=incidentIrradianceMap;
+        result.incidentMapWavelengthNm=cfg.wavelengths(ceil(nLambda/2))*1e9;
+        if max([result.illumination.maxIncidenceAngleDeg])>5
+            warning('COEReflection:SourceNormalApproximation', ...
+                '局部入射角超过5°，当前膜堆仍使用法向复系数；本结果仅作近轴定性评估。');
+        end
         result.receiverCoordinate = cfg.propagationDistance*outputCoordinate; % m, X=z*theta.
         result.receiverPixelArea = (cfg.propagationDistance*binStep)^2;
         result.incidentArea = incidentEnergy*dx^2;
