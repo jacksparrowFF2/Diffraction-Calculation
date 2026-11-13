@@ -37,7 +37,10 @@ mustBeMember(opticalModel, ["multilayer", "simple"]);
 cfg.pitch = 50e-6;              % 像素周期，50 μm
 cfg.periods = [16, 16];         % [x 方向周期数, y 方向周期数]，均为偶数
 cfg.samplesPerPeriod = 64;      % 每周期采样点数；采样间距 = pitch / samplesPerPeriod
-cfg.paddingFactor = 2;          % FFT 补零倍数，影响远场采样密度
+cfg.paddingFactor = 2;          % 兼容旧配置；当前反射传播的输出采样由 outputSize/角域控制
+cfg.propagationDistance = 10;   % 接收面距离 z，单位 m；须满足夫琅禾费远场条件
+cfg.incidentIrradiance = 1;     % 每个波长单独以此入射辐照度标定，单位 W/m^2
+cfg.receiverBinSamples = 3;     % 每像素每轴最少积分点数（奇数），窄峰时自动增加
 cfg.pupilRadius = Inf;          % Inf 表示整个矩形计算面参与反射
 cfg.mask = [];                 % 留空时自动生成几何；自定义矩阵尺寸见下方 gridSize
 
@@ -420,6 +423,15 @@ for j = 1:numel(previewWavelengthNm)
     [~, previewIndices(j)] = min(abs(cfg.wavelengths*1e9 - previewWavelengthNm(j)));
 end
 previewIndices = unique(previewIndices, 'stable');
+% 两种坐标图直接复用同一组 dB 数组：同参考、同下限、同波长、同高度状态。
+% 等面积像素下 E/Eref=I/Iref；原始 W/m^2 数组仍保存在 result 中。
+displayData.referenceIrradiance = referenceEnergy*result.incidentPower/result.receiverPixelArea;
+displayData.previewWavelengthNm = cfg.wavelengths(previewIndices)*1e9;
+displayData.withoutHeightDb = 10*log10(max( ...
+    baseline.spectralEnergy(:, :, previewIndices)/referenceEnergy, 10^(displayFloorDb/10)));
+displayData.withHeightDb = 10*log10(max( ...
+    result.spectralEnergy(:, :, previewIndices)/referenceEnergy, 10^(displayFloorDb/10)));
+stateDbImages = {displayData.withoutHeightDb, displayData.withHeightDb};
 columnCount = numel(previewIndices) + double(hasRGB);
 diffractionLayout = tiledlayout(2, columnCount, ...
     'TileSpacing', 'compact', 'Padding', 'compact');
@@ -429,7 +441,6 @@ if displayStyle.showAnnotations
     annotationHint = "辅助标记按 displayStyle 分类开关显示";
 end
 subtitle(diffractionLayout, spectrumLabel + "｜上/下：两种高度相位状态；" + annotationHint);
-stateResults = {baseline, result};
 stateImages = {};
 if hasRGB
     stateImages = {displayData.withoutHeightRGB, displayData.withHeightRGB};
@@ -438,11 +449,10 @@ for state = 1:2
     for column = 1:numel(previewIndices)
         k = previewIndices(column);
         nexttile((state-1)*columnCount + column);
-        imagesc(angleDeg, angleDeg, 10*log10(max( ...
-            stateResults{state}.spectralEnergy(:, :, k)/referenceEnergy, 10^(displayFloorDb/10))));
+        imagesc(angleDeg, angleDeg, stateDbImages{state}(:, :, column));
         formatFarFieldAxes(gca, cfg, displayStyle);
         colormap(gca, gray(256)); clim([displayFloorDb, 0]);
-        cb = colorbar; cb.Ticks = linspace(displayFloorDb, 0, 4); cb.Label.String = '相对能量 / dB';
+        cb = colorbar; cb.Ticks = linspace(displayFloorDb, 0, 4); cb.Label.String = '相对强度 / dB';
         title(sprintf('%s · %.0f nm', phaseStateLabels(state), cfg.wavelengths(k)*1e9));
         markDiffractionSpots(gca, diffractionSpots, "wavelength", cfg.wavelengths(k)*1e9, displayStyle);
     end
@@ -528,6 +538,27 @@ for outputFigure = [geometryFigure, diffractionFigure, metricsFigure, angularFig
 end
 
 %% 7. 保存物理数据、参数、指标表和图片
+% 接收面长度坐标图复用角度图的共同归一化 dB 数据，方便直接对照。
+receiverFigure = figure('Name', 'COE 接收面辐照度', 'Color', 'w', ...
+    'Position', [100, 80, 1200, 650]);
+receiverLayout = tiledlayout(2, numel(previewIndices), 'TileSpacing', 'compact');
+title(receiverLayout, sprintf('接收面 z=%.4g m；各波长独立入射 %.4g W/m²', ...
+    cfg.propagationDistance, cfg.incidentIrradiance));
+subtitle(receiverLayout, sprintf('与角度图共用参考和 dB 色标；I_{ref}=%.4g W/m²', ...
+    displayData.referenceIrradiance));
+for state = 1:2
+    for column = 1:numel(previewIndices)
+        k = previewIndices(column);
+        nexttile;
+        imagesc(result.receiverCoordinate*1e3, result.receiverCoordinate*1e3, ...
+            stateDbImages{state}(:, :, column));
+        axis image xy; colormap(gca, gray(256)); clim([displayFloorDb, 0]);
+        cb = colorbar; cb.Ticks = linspace(displayFloorDb, 0, 4); cb.Label.String = '相对强度 / dB';
+        xlabel('X / mm'); ylabel('Y / mm');
+        title(sprintf('%s · %.0f nm', phaseStateLabels(state), cfg.wavelengths(k)*1e9));
+    end
+end
+styleCoeFigure(receiverFigure, displayStyle);
 if saveResults
     if ~isfolder(outputDir)
         mkdir(outputDir);
@@ -571,6 +602,7 @@ if saveResults
     end
     exportgraphics(geometryFigure, fullfile(outputDir, caseName + "_geometry.png"), 'Resolution', 180);
     exportgraphics(diffractionFigure, fullfile(outputDir, caseName + "_diffraction.png"), 'Resolution', 180);
+    exportgraphics(receiverFigure, fullfile(outputDir, caseName + "_receiver_irradiance.png"), 'Resolution', 180);
     exportgraphics(metricsFigure, fullfile(outputDir, caseName + "_metrics.png"), 'Resolution', 180);
     exportgraphics(angularFigure, fullfile(outputDir, caseName + "_cumulative_energy.png"), 'Resolution', 180);
     fprintf('计算完成，结果已保存到：%s\n', outputDir);

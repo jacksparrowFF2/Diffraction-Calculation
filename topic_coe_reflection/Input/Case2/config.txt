@@ -18,6 +18,9 @@ cfg.pitch = 50e-6
 cfg.periods = [16, 16]
 cfg.samplesPerPeriod = 64
 cfg.paddingFactor = 2
+cfg.propagationDistance = 10
+cfg.incidentIrradiance = 1
+cfg.receiverBinSamples = 3
 cfg.outputSize = 401
 cfg.angleHalfRangeDeg = 6
 

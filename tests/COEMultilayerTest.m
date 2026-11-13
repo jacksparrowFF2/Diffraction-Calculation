@@ -140,5 +140,6 @@ end
 function cfg = smallConfig()
     cfg = coeReflectionDefaults();
     cfg.periods = [4, 4]; cfg.samplesPerPeriod = 16; cfg.paddingFactor = 2; cfg.outputSize = 129;
+    cfg.angleHalfRangeDeg = 3;
     cfg.wavelengths = [450, 550, 650]*1e-9; cfg.spectralWeights = [1, 1, 1]; cfg.channelResponse = eye(3);
 end

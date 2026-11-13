@@ -52,13 +52,13 @@ src/
 
 新增项目时复制一个 Case 文件夹并改名，替换五张图片及配置，再修改 `projectName` 即可（支持中文名称）。物理尺度、采样和材料由项目配置指定，不由文件夹名称推断；程序不自动缩放或平铺图片。`projectName=""` 使用旧的 Input/Output 根目录，启用配置时仍需在 Input 根目录提供 config.txt。
 
-默认使用 D65 380–780 nm、5 nm 步长（81波长），FFT补零倍数2，输出401×401、角域±6°。`cfg.heightMap=0`、`useHeightExample=false`；两种高度状态应相同，膜层自身的相位始终保留。
+默认使用 D65 380–780 nm、5 nm 步长（81波长），输出401×401、角域±6°、接收距离10 m。当前反射分支采用指定频率网格的二次相位卷积傅里叶积分；`paddingFactor` 保留兼容，不再控制反射输出采样。`cfg.heightMap=0`、`useHeightExample=false`；两种高度状态应相同，膜层自身的相位始终保留。
 
 <a id="project-config"></a>
 
 ## 项目配置 config.txt
 
-配置在光谱、几何和 FFT 计算前加载，**覆盖主脚本默认值**。以下示例应写入项目 config.txt；设置 `useProjectConfig=false` 时才完全采用主脚本参数。完整常用配置已经提供在 Case1~3 中。
+配置在光谱、几何和传播计算前加载，**覆盖主脚本默认值**。以下示例应写入项目 config.txt；设置 `useProjectConfig=false` 时才完全采用主脚本参数。完整常用配置已经提供在 Case1~3 中。
 
 常改参数如下（仅示例，完整配置已放入三个 Case）：
 
@@ -127,7 +127,65 @@ cfg.samplesPerPeriod = 64;    % 每单元的等间距采样点数
 - 采样间距 dx = dy = `cfg.pitch/cfg.samplesPerPeriod`。
 - 物面尺寸 Lx = `cfg.periods(1)*cfg.pitch`，Ly = `cfg.periods(2)*cfg.pitch`。
 
-当前使用正方形采样像素。`periods` 采用偶数与现有配置保持一致。若导出的图样每个 50 μm 单元有 100 点，则将 `samplesPerPeriod` 改为 100，并按上述公式核对完整矩阵尺寸。需要保留小于原采样间距的窄边/间隙时，应先提高真实版图的栅格采样；`paddingFactor` 只加密远场采样，不能修复物面欠采样。
+当前使用正方形采样像素。`periods` 采用偶数与现有配置保持一致。若导出的图样每个 50 μm 单元有 100 点，则将 `samplesPerPeriod` 改为 100，并按上述公式核对完整矩阵尺寸。需要保留小于原采样间距的窄边/间隙时，应先提高真实版图的栅格采样；当前反射传播由输出角域与 `outputSize` 控制接收像素，`receiverBinSamples` 控制像素内积分，`paddingFactor` 不再控制该分支，三者均不能修复物面欠采样。
+
+### 图片模式下比较 16、32、64 个 Pitch 单元
+
+保持 `cfg.pitch=50e-6`、`cfg.samplesPerPeriod=64`，则每像素始终为 0.78125 μm。五张图 anode、BM、CF_R/G/B 必须同尺寸、同原点、同样复制；优先使用无损二值 PNG，不能用图片缩放代替增加重复单元。
+
+| 项目 | cfg.periods | 每张图片尺寸（行×列） | 完整物面尺寸 |
+|---|---|---|---|
+| Period16 | [16,16] | 1024×1024 | 800×800 μm |
+| Period32 | [32,32] | 2048×2048 | 1600×1600 μm |
+| Period64 | [64,64] | 4096×4096 | 3200×3200 μm |
+
+这里的计数是 Pitch 单元数，未必是完整光学晶胞数。Diamond 的轴向完整晶胞为 2*Pitch，因此三组沿每轴分别含 8、16、32 个完整晶胞。应以包含各层材料、厚度及高度相位的复反射分布的真实平移周期判断级次。
+
+准备方法：先确认一个完整晶胞（Diamond 示例为128×128像素）在五层中均首尾周期衔接，然后分别铺8×8、16×16、32×32次。若已有严格周期且边界正确的1024×1024全物面图，也可原样保留16组，并将整张图分别平铺2×2、4×4次生成32和64组。裁取晶胞后不得重复包含首尾同一个采样端点；各层必须使用相同裁切位置。完整16组中若有缺陷或非周期边缘，平铺会制造更大的缺陷超晶胞，不等同于目标无限光栅。
+
+各项目复制相同的 Materials 和 config.txt，修改 periods 与对应图样路径，主脚本用 projectName 切换。对边界衔接正确的无损 Case1 图，可用以下显式离线操作准备全物面图片（在模块目录执行；不要覆盖现有项目）：
+
+```matlab
+layers = ["anode", "BM", "CF_R", "CF_G", "CF_B"];
+for count = [16, 32, 64]
+    target = fullfile("Input", "Period" + count);
+    assert(~isfolder(target), '目标项目已存在，请换名，避免覆盖输入。');
+    mkdir(target);
+    copyfile(fullfile("Input", "Case1", "Materials"), fullfile(target, "Materials"));
+    for layer = layers
+        image = imread(fullfile("Input", "Case1", layer + ".png"));
+        assert(size(image,1)==1024 && size(image,2)==1024);
+        imwrite(repmat(image, [count/16, count/16, 1]), fullfile(target, layer + ".png"));
+    end
+    text = fileread(fullfile("Input", "Case1", "config.txt"));
+    text = strrep(text, 'cfg.periods = [16, 16]', ...
+        sprintf('cfg.periods = [%d, %d]', count, count));
+    writelines(string(text), fullfile(target, "config.txt"), 'Encoding', 'UTF-8');
+end
+```
+
+先用三波长代理（`spectrumMode="RGB"`）检查周期收敛，再用 D65 光谱检查正式结果，避免宽带色散模糊掩盖单波长窄峰。三组使用相同波长、材料、厚度、入射辐照度、距离及输出角域。可在各组 config 中统一改为以下局部窗口配置；已有同名 key 必须替换，不能重复追加：
+
+```text
+spectrumMode = "RGB"
+cfg.propagationDistance = 100
+cfg.incidentIrradiance = 1
+cfg.angleHalfRangeDeg = 1
+cfg.outputSize = 1201
+cfg.receiverBinSamples = 3
+cfg.metricAngleDeg = 0.8
+observation.halfAngleDeg = 0.8
+colorView.halfAngleDeg = 0.8
+spotOptions.integrationHalfAngleDeg = 0.08
+spotOptions.zeroOrderExclusionDeg = 0.10
+spotOptions.minSeparationDeg = 0.18
+```
+
+`pupilRadius` 保持默认 Inf，heightMap 保持0；若使用有限光瞳，需使有效照明宽度随周期数一起增大，否则增加未照明区域不改变结果。100 m 在64组、380 nm下大于常用远场尺度2*D²/λ≈54 m；这是自由空间夫琅禾费近似的距离设置，不表示实际装置必须放置100 m接收面。若实际接收距离较短，应评估透镜傅里叶面或近场模型，不能靠增加z人为解释原测量。
+
+上述±1°/1201网格的角间距为0.001667°，64组在380 nm的峰中心至第一零点约0.0068°，有约4个间隔；比默认±6°/401的0.03°更适于分辨窄峰。该局部窗口不覆盖全部级次，出现窗口捕获不足98%的提示是预期现象。若保留±6°且要求同样角度分辨率，需要7201点/轴，计算和存储会明显增加。自动像素内细采样可以改善积分，不能使粗像素图显示出窄峰的真实宽度。
+
+收敛比较以逐波长的理论级次方向为固定中心，使用三组完全相同的积分半角；应覆盖64组和16组的峰及足够侧瓣，并保持相邻级次ROI不交叠。将积分半角0.08°与0.10°作敏感性比较；若边缘级次ROI越界则扩大输出窗口或不比较该级次。S1/S2是自动亮斑排序号，不是固定(m,n)编号，不能直接跨组按编号匹配。比较同一角位置的绝对反射率，并观察32→64的变化是否小于所需容差，例如相对1%（弱级次同时设绝对容差）。峰应随尺寸增大而变窄，峰高不必收敛；各组独立自动增强的彩色图不能用来判断效率收敛。先在固定周期数下增加samplesPerPeriod并重新栅格化图片，验证物面采样收敛；再在固定物面下增加outputSize、receiverBinSamples验证输出积分收敛，才能把剩余变化归因于有限周期数。
 
 ### 推荐：一个 MAT 文件导入各层
 
@@ -182,6 +240,10 @@ CF 图片白色表示有该色膜，黑色表示无该色膜。MAT 和图片输�
 当前不直接导入 DXF、DWG、GDS 等矢量版图，应先按统一物理尺度和原点栅格化为上述 MAT 或图片。
 
 ### 材料 nk 数据与厚度
+
+Case1、Case2、Case3 的 `Materials/` 目录也提供 `CF_R_nk.csv`、`CF_G_nk.csv`、`CF_B_nk.csv` 样例，均覆盖 380–780 nm。R 使用 n=1.65、k=0.03，G 使用 n=1.60、k=0.04，B 使用 n=1.55、k=0.05；均沿用程序默认占位常数，**不是实测数据，也不表示真实滤色片的光谱特性**。文件格式与 BM 相同，可直接替换为实测数据；在项目 `config.txt` 中按下方对应路径启用，厚度仍单独设置。
+
+`Input/Case1/Materials/BM_nk.csv`、`Input/Case2/Materials/BM_nk.csv` 和 `Input/Case3/Materials/BM_nk.csv` 已提供可读取的样例，覆盖 380–780 nm，沿用默认占位常数 n=1.80、k=0.35，**不是实测数据**。后续可直接按同样格式替换。样例未默认启用；使用时将对应项目 `config.txt` 中的 `stack.materials.BM.nkFile` 改为 `"Materials/BM_nk.csv"`。默认启用项目配置时，配置中的值会覆盖主脚本中的设定；该路径相对于当前项目文件夹。
 
 每种材料一个 CSV，推荐**无表头、无单位行、无空行**，恰好三列：`波长 nm,n,k`。例如文件的格式为：
 
@@ -250,7 +312,7 @@ stack.materials.B.thickness  = 900e-9;
 
 输入图样必须有一致的物理尺度、坐标原点和矩阵尺寸。分别保留阳极掩膜、BM 开口掩膜和三个 CF 掩膜；检查 BM 包含阳极、CF 覆盖开口及 CF 互不交叠。若导入实际 BM 图样，不应静默用自动外扩结果替换它。
 
-各位置先按局部平行平面膜堆计算随波长变化的复反射系数，再进入已有 FFT / 角域 / CIE 后处理。CF 局部厚度固定，位于 BM 实体上方时叠加在 BM 顶面，在开口内则从裸底平面起算。以 `BM厚度+最大CF厚度` 为共同空气参考面，补足各柱体顶面到该平面的往返相位。未包含侧壁或邻近柱体的矢量耦合，不能当作 RCWA/FDTD。
+各位置先按局部平行平面膜堆计算随波长变化的复反射系数，再进入指定频率网格的傅里叶积分传播 / 角域 / CIE 后处理。CF 局部厚度固定，位于 BM 实体上方时叠加在 BM 顶面，在开口内则从裸底平面起算。以 `BM厚度+最大CF厚度` 为共同空气参考面，补足各柱体顶面到该平面的往返相位。未包含侧壁或邻近柱体的矢量耦合，不能当作 RCWA/FDTD。
 
 膜厚传播与干涉相位属于膜层模型，不等同于可选的额外高度图；`heightMap` 默认仍为 0。几何采用 regionMap，局部光谱系数采用 16×波长数的查找表，避免构建庞大的逐像素光谱系数三维数组。
 
@@ -285,6 +347,22 @@ stack.materials.B.thickness  = 900e-9;
 <a id="metrics"></a>
 
 ## 指标与结果解释
+
+### 传播距离与接收面强度
+
+当前反射核心与 `topic_aperture_fraunhofer` 使用相同的二次相位卷积傅里叶积分算法（分两轴执行以节省内存），在指定频率网格计算F；物面端点不重复，积分面积元为dx*dy。传播按 `U=exp(i*2*pi*z/lambda)/(i*lambda*z)*F(X/(lambda*z),Y/(lambda*z))`，本次按需求省略观察面二次相位，它不影响强度。仍是夫琅禾费、法向、标量近轴模型，不会因加入z自动成为Fresnel近场求解器。
+
+`cfg.propagationDistance` 为z（m），`cfg.incidentIrradiance` 为每个波长独立标定的入射辐照度（W/m²，默认1），不是D65的每nm绝对光谱辐照度。`result.receiverCoordinate=z*result.coordinate` 为X/Y坐标（m），`result.spectralIrradiance(:,:,k)` 为每个接收像素内平均辐照度（W/m²）；主脚本输出 `*_receiver_irradiance.png`，MAT保留坐标、强度、像素面积、入射面积与入射功率。各波长以同一参考入射值分别计算，不能直接把这些参考强度数组相加当作绝对D65辐照度；绝对宽带输出还需实际入射光谱及积分权重。
+
+长度坐标图与角度坐标的单波长图复用同一组归一化dB数组：参考为两种高度状态、全部计算波长的共同最大值，下限为displayFloorDb（默认-60 dB），上限0 dB，灰度色表和刻度相同。等面积接收像素满足E/Eref=I/Iref，因此这里只变更坐标标签；MAT中的原始spectralIrradiance仍为W/m²，没有被显示归一化覆盖。displayData记录referenceEnergy、等价referenceIrradiance、实际预览波长及两种状态的dB数组。RGB/D65彩色图继续使用其色度显示映射，不转成dB。
+
+每个像素用midpoint细采样积分，`receiverBinSamples` 为每轴最少奇数采样数；程序按物面总宽度和波长自动增加，保证每λ/L至少4点，可进一步提高该参数验证精度。实际细分数记录在 `result.receiverSamplesPerBin`。`spectralEnergy=像素平均辐照度*接收像素面积/入射功率`（入射为零时按单位入射参考计算归一化能量），不会将窗口捕获能量强行归一化。扩大物面可能提高内部积分计算量，即使outputSize保持不变。
+
+固定角度网格、同一物面与入射辐照度时，z加倍后接收面X/Y加倍、辐照度变为1/4，而像素积分能量及反射率不变。固定物理接收尺寸比较不同z时，必须相应缩小angleHalfRangeDeg。程序检查接收像素边界不超过物面采样的Nyquist频带，并在z小于常用远场尺度2*D²/λ_min时提示；该尺度只是近似判据，应根据允许的相位误差判断是否足够远。
+
+`ParsevalAbsoluteError` 仍保留为独立未补零FFT的离散能量核对，只验证离散Parseval关系，不表示指定接收面上的积分误差。接收面积分精度应通过细化receiverBinSamples、输出网格和物面采样分别检查。
+
+人眼距COE 20–50 cm观察反射点光源光晕，与同距离放置裸接收屏的物理量不同：眼睛还通过瞳孔和眼内透镜成像。当前角域结果可用于分析理想平面波照明下的衍射方向和能量分配，但不是视网膜图像。对于距COE 5–50 cm的实际点光源，定量模拟还需球面入射波、实际照明/空间相干范围、COE到眼睛的传播、瞳孔及对焦；自由空间段可采用Fresnel或角谱法，眼内再进行成像。不能仅凭观察距离将整个系统判定为自由空间远场，也不能把propagationDistance直接当作人眼的等效焦距。
 
 `spectralEnergy(:,:,k)` 是每个输出角度 bin 的积分能量，相对于该波长入射能量；它不是未积分的强度密度，也不能直接命名为 BRDF。物理指标均来自原始数组，不使用显示增强图。
 
@@ -322,7 +400,7 @@ stack.materials.B.thickness  = 900e-9;
 
 本模块计算的是反射，因此使用 **“雾度评价值（反射锥外能量占比，模型代理指标）”**，而不标为标准透射雾度或标准反射雾度。标准反射雾度使用镜面角附近的特定测量几何，不能直接等同于全角 5° 圆锥之外的全部能量占比，参见 [Rhopoint：Reflection Haze](https://www.rhopointinstruments.com/faqs/appearance-measurement/)。
 
-本模块逐波长的评价公式为 `100*(1 - E_inside_cone/E_total_reflected)`，单位 %。`cfg.metricAngleDeg` 始终表示**半角**，默认 2.5°，圆锥中心是法向入射下的镜面反射方向。分母采用模型全 FFT 网格的反射能量，而不是显示窗口内能量，因此指标包含窗口外能量。它是标量近轴模型的估算，也未做标准仪器所需的光度加权及校正。若没有反射能量，该指标为 NaN（未定义）。
+本模块逐波长的评价公式为 `100*(1 - E_inside_cone/E_total_reflected)`，单位 %。`cfg.metricAngleDeg` 始终表示**半角**，默认 2.5°，圆锥中心是法向入射下的镜面反射方向。分母采用物面反射场的积分能量，并以独立FFT核对Parseval关系，而不是显示窗口内能量，因此指标包含窗口外能量。它是标量近轴模型的估算，也未做标准仪器所需的光度加权及校正。若没有反射能量，该指标为 NaN（未定义）。
 
 对比表还保存 `TotalReflectancePercent`、`ConeOutsideReflectancePercent`、`ZeroOrderReflectancePercent`，这三项均以**入射能量**为分母，便于区分绝对反射能量和反射能量内部的重新分配。零反射时后两项由未定义的归一化占比计算，仍为 NaN。高度示例会将较多能量移出 ±6° 窗口，`CapturedFraction` 应以实际结果为准。
 
@@ -416,7 +494,8 @@ assert(all([r.Passed]));
 | src/coeReflectionDefaults.m、src/runCOEReflection.m | 保留兼容的公共配置/批量计算接口 |
 | src/private/loadCoeProjectConfig.m | 项目文本配置解析 |
 | src/private/prepareCoeStack.m、reflectCoeFilmStack.m | 图样校验、区域查找表和相干膜堆 |
-| src/private/simulateDisplayDiffraction.m | 复振幅、FFT、保能量重采样与基础指标 |
+| src/private/simulateDisplayDiffraction.m | 复振幅、接收面积分与基础指标；独立FFT能量诊断 |
+| src/private/fourierIntegralCoe.m、propagateCoeReceiver.m | 二次相位卷积傅里叶积分、传播系数、像素内强度积分 |
 | src/private/loadCoeSpectrum.m、synthesizeCoeColor.m | D65、CIE积分和色度显示 |
 | src/private/computeCoeAngularMetrics.m、computeCoeDiffractionSpots.m | 角域与光斑积分 |
 | src/private/format*.m、markDiffractionSpots.m、styleCoeFigure.m | 图形样式和辅助标记 |
@@ -427,6 +506,19 @@ assert(all([r.Passed]));
 src 顶层仅保留主脚本与两个兼容公共接口。新增内部函数直接放在 private，使用小驼峰命名，文件名与首函数名一致；用户主流程和必要中文注释留在主脚本。现有数值算法回归由 tests/private/addCoeAlgorithmFixture.m 在临时副本运行，生产目录的私有解析由独立模块测试覆盖。
 
 继续开发时优先接入实测图样与色散数据，核对CF剖面/平坦化和吸光底参数；可再增加手动ROI/阶次跟踪、角度截线与色度分布、有限光源/入射角/偏振/接收孔径。标准反射雾度需单独实现相应测量几何与校正。用户说明统一维护在本 README，不再按功能拆出多个平行说明文件。
+
+### 后续提升计划：实际点光源与人眼观察（暂缓）
+
+当前阶段继续使用平面波照明、局部相干膜堆与标量近轴夫琅禾费模型，重点分析COE结构的衍射方向、能量分配及材料/图样参数影响。暂不实现有限距离点光源照明、近场传播或人眼成像；本项列为后续可选扩展，不作为当前运行和结果检查的前置条件。
+
+后续需要定量对应实际观察光晕时，再分步扩展：
+
+1. 有限距离点光源照明：加入球面入射波、光源位置/尺寸和空间相干性；实际关注光源距COE约5–50 cm。
+2. COE到观察位置的传播：增加Fresnel或角谱传播选项，并与现有夫琅禾费结果核对远场极限。
+3. 人眼接收与成像：加入有限瞳孔、眼内透镜及对焦，关注眼睛距COE约20–50 cm时的反射衍射光晕。
+4. 实测对照：统一光源光谱、观察几何和显示/曝光条件，比较光晕角宽、色彩及能量分布。
+
+扩展前需重新确认实际光源、观察和对焦条件；当前归一化dB图用于比较结构衍射特性，不声明为实际视网膜亮度图。
 
 批量接口示例（仅返回物理数组，不自动执行主脚本全部后处理，也不自动加载项目config）：
 

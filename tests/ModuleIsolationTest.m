@@ -281,7 +281,7 @@ function cfg = portableConfig(cfg)
     cfg.pupilRadius = Inf;
     cfg.outputSize = 129;
     cfg.sensorPitch = 10e-6;
-    cfg.angleHalfRangeDeg = 6;
+    cfg.angleHalfRangeDeg = 3;
 end
 
 function prepareSmallScript(testCase, scriptPath)
@@ -300,6 +300,7 @@ function prepareSmallScript(testCase, scriptPath)
     text = strrep(text, 'cfg.samplesPerPeriod = 64;', 'cfg.samplesPerPeriod = 16;');
     text = strrep(text, 'cfg.paddingFactor = 4;', 'cfg.paddingFactor = 2;');
     text = strrep(text, 'cfg.outputSize = 401;', 'cfg.outputSize = 129;');
+    text = strrep(text, 'cfg.angleHalfRangeDeg = 6;', 'cfg.angleHalfRangeDeg = 3;');
     text = strrep(text, 'spectrumMode = "D65";', 'spectrumMode = "RGB";');
     text = strrep(text, 'cfg.materials.enabled = true;', 'cfg.materials.enabled = false;');
     text = strrep(text, 'opticalModel = "multilayer";', 'opticalModel = "simple";');

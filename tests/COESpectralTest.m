@@ -56,6 +56,7 @@ classdef COESpectralTest < matlab.unittest.TestCase
             cfg = coeReflectionDefaults();
             cfg.periods = [4, 4]; cfg.samplesPerPeriod = 16; cfg.paddingFactor = 2;
             cfg.outputSize = 129; cfg.wavelengths = 550e-9; cfg.spectralWeights = 1; cfg.channelResponse = 1;
+            cfg.angleHalfRangeDeg = 3;
             cfg.mask = [zeros(64, 32), ones(64, 32)];
             cfg.materials = struct('enabled', true, 'incidentN', 1, 'featureN', 1.8, 'featureK', 0.05, ...
                 'backgroundN', 1.5, 'backgroundK', 0);

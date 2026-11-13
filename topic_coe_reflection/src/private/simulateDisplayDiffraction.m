@@ -1,7 +1,8 @@
 function result = simulateDisplayDiffraction(cfg)
 %simulateDisplayDiffraction Scalar, normal-incidence reflection or pupil-plane UDC.
-% Uses the existing customPattern geometry. Sampled FFT replaces the legacy
-% arbitrary-grid transform to make quadrature and energy accounting explicit.
+% Reflection uses the aperture module's chirp-convolution Fourier quadrature,
+% including exp(i*k*z)/(i*lambda*z), without receiver quadratic phase.
+% UDC retains its sampled FFT and energy-bin resampling.
 % Wavelengths add INCOHERENTLY after squaring; r/t remain complex amplitudes.
 % Output kernels are integrated energy per output bin, relative to an ideal
 % clear pupil. psf is unit-sum shape; kernel retains loss AND finite-window loss.
@@ -23,6 +24,9 @@ function result = simulateDisplayDiffraction(cfg)
     height = expandMap(cfg.heightMap, gridSize, 'heightMap');
     validateattributes(height, {'numeric'}, {'real', 'finite'});
     fftSize = 2^nextpow2(max(gridSize)*cfg.paddingFactor);
+    if cfg.mode == "reflection"
+        fftSize = max(gridSize); % Only the independent Parseval FFT; no output padding.
+    end
     frequency = (-fftSize/2:fftSize/2-1)/(fftSize*dx);
     outputCoordinate = outputGrid(cfg);
     binStep = outputCoordinate(2) - outputCoordinate(1);
@@ -36,6 +40,8 @@ function result = simulateDisplayDiffraction(cfg)
     zeroOrder = NaN(1, nLambda);
     outsideAngle = zeroOrder;
     nativeStep = throughput;
+    receiverSamples = zeros(1, nLambda);
+    receiverIrradiance = energy;
     phasePasses = 1 + double(cfg.mode == "reflection");
     [outX, outY] = meshgrid(outputCoordinate);
     metricMask = hypot(outX, outY) <= deg2rad(cfg.metricAngleDeg);
@@ -45,7 +51,12 @@ function result = simulateDisplayDiffraction(cfg)
         coefficient = opticalCoefficient(cfg, mask, k);
         phase = phasePasses*2*pi*cfg.deltaIndex*height/lambda;
         field = pupil.*coefficient.*exp(1i*phase);
-        nativeEnergy = transformEnergy(field, fftSize, incidentEnergy);
+        if cfg.mode == "reflection"
+            % Unpadded FFT is only an independent discrete Parseval diagnostic.
+            nativeEnergy = transformEnergy(field, max(gridSize), incidentEnergy);
+        else
+            nativeEnergy = transformEnergy(field, fftSize, incidentEnergy);
+        end
         throughput(k) = sum(abs(field(:)).^2)/incidentEnergy;
         parsevalError(k) = abs(sum(nativeEnergy(:)) - throughput(k));
         nativeCoordinate = lambda*frequency;
@@ -53,10 +64,19 @@ function result = simulateDisplayDiffraction(cfg)
             nativeCoordinate = cfg.focalLength*nativeCoordinate;
         end
         nativeStep(k) = nativeCoordinate(2) - nativeCoordinate(1);
-        weights = binOverlap(nativeCoordinate, outputCoordinate, binStep);
-        energy(:, :, k) = weights*nativeEnergy*weights.';
-        clearNative = transformEnergy(pupil, fftSize, incidentEnergy);
-        clearEnergy(:, :, k) = weights*clearNative*weights.';
+        if cfg.mode == "reflection"
+            incidentArea = incidentEnergy*dx^2;
+            [energy(:, :, k), intensityRatio, receiverSamples(k)] = ...
+                propagateCoeReceiver(field, x, y, outputCoordinate, lambda, cfg, incidentArea);
+            receiverIrradiance(:, :, k) = cfg.incidentIrradiance*intensityRatio;
+            clearEnergy(:, :, k) = propagateCoeReceiver(pupil, x, y, ...
+                outputCoordinate, lambda, cfg, incidentArea);
+        else
+            weights = binOverlap(nativeCoordinate, outputCoordinate, binStep);
+            energy(:, :, k) = weights*nativeEnergy*weights.';
+            clearNative = transformEnergy(pupil, fftSize, incidentEnergy);
+            clearEnergy(:, :, k) = weights*clearNative*weights.';
+        end
         captured(k) = sum(energy(:, :, k), 'all');
         clearCaptured(k) = sum(clearEnergy(:, :, k), 'all');
         if cfg.mode == "reflection" && throughput(k) > 0
@@ -106,6 +126,22 @@ function result = simulateDisplayDiffraction(cfg)
     result.channelCapturedThroughput = channelCaptured;
     result.nativeStep = nativeStep;
     result.fftSize = fftSize;
+    if cfg.mode == "reflection"
+        result.propagationMethod = "Fraunhofer chirp-convolution Fourier integral";
+        result.receiverCoordinate = cfg.propagationDistance*outputCoordinate; % m, X=z*theta.
+        result.receiverPixelArea = (cfg.propagationDistance*binStep)^2;
+        result.incidentArea = incidentEnergy*dx^2;
+        result.incidentPower = cfg.incidentIrradiance*result.incidentArea;
+        result.spectralIrradiance = receiverIrradiance; % Pixel-averaged W/m^2.
+        result.receiverSamplesPerBin = receiverSamples;
+        result.fraunhoferNumber = (max(gridSize)*dx)^2 ...
+            /(min(cfg.wavelengths)*cfg.propagationDistance);
+        if result.fraunhoferNumber > 0.5
+            warning('COEReflection:FraunhoferDistance', ...
+                'z=%.4g m 小于常用远场尺度 2*D^2/lambda_min=%.4g m；本计算仍使用夫琅禾费近似，请增加距离或使用近场传播模型。', ...
+                cfg.propagationDistance, 2*(max(gridSize)*dx)^2/min(cfg.wavelengths));
+        end
+    end
     if cfg.mode == "udc"
         [result.mtf, result.spatialFrequency] = computeMtf(psf, cfg.sensorPitch);
     end
@@ -162,6 +198,13 @@ function validateConfiguration(cfg)
     assert(any(cfg.channelResponse.*cfg.spectralWeights(:) > 0, 'all'), ...
         'DisplayDiffraction:Spectrum', 'At least one channel needs nonzero spectral weight.');
     if cfg.mode == "reflection"
+        validateattributes(cfg.propagationDistance, {'numeric'}, {'scalar', 'real', 'finite', 'positive'});
+        validateattributes(cfg.incidentIrradiance, {'numeric'}, {'scalar', 'real', 'finite', 'nonnegative'});
+        validateattributes(cfg.receiverBinSamples, {'numeric'}, {'scalar', 'integer', 'positive', 'odd'});
+        dx = cfg.pitch/cfg.samplesPerPeriod;
+        assert(deg2rad(cfg.angleHalfRangeDeg)*(1 + 1/(cfg.outputSize-1)) ...
+            <= min(cfg.wavelengths)/(2*dx)*(1 + 1e-12), 'COEReflection:ReceiverAliasing', ...
+            '输出像素边界超过物面采样的 Nyquist 角域；请提高 samplesPerPeriod 或缩小 angleHalfRangeDeg。');
         assert(cfg.angleHalfRangeDeg <= 10, 'DisplayDiffraction:ParaxialRange', ...
             'This paraxial model supports angleHalfRangeDeg <= 10 degrees.');
         assert(cfg.metricAngleDeg <= cfg.angleHalfRangeDeg, 'DisplayDiffraction:MetricAngle', ...

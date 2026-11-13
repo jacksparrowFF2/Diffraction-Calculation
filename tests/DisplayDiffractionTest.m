@@ -1,7 +1,7 @@
 classdef DisplayDiffractionTest < matlab.unittest.TestCase
     %DisplayDiffractionTest Analytical optics and image-formation regression tests.
     % Small rectangular pupils give known diffraction efficiencies and positions.
-    % FFT bins and output bins coincide, so these tests do not hide window loss.
+    % Reflection integrates receiver pixels; UDC retains matched FFT bins.
     methods (TestClassSetup)
         function addProjectSource(testCase)
             root = fileparts(fileparts(mfilename('fullpath')));
@@ -74,8 +74,9 @@ classdef DisplayDiffractionTest < matlab.unittest.TestCase
             result = runCOEReflection(cfg);
 
             % The same height now gives phase pi on half the pupil.
-            testCase.verifyEqual(result.kernel(65, 65), 0, 'AbsTol', 2e-13);
-            testCase.verifyEqual(result.baselineKernel(65, 65), 1/4, 'AbsTol', 2e-13);
+            testCase.verifyLessThan(result.kernel(65, 65), 0.1*result.baselineKernel(65, 65));
+            testCase.verifyEqual(result.baselineKernel(65, 65), ...
+                expectedRectangleBin(cfg, 65, 65, 0), 'AbsTol', 8e-4);
             testCase.verifyEqual(result.metrics.Throughput, 1, 'AbsTol', 2e-13);
         end
 
@@ -99,8 +100,9 @@ classdef DisplayDiffractionTest < matlab.unittest.TestCase
 
             testCase.verifyEqual(row, 65);
             testCase.verifyEqual(col, 73);
-            testCase.verifyEqual(result.coordinate(col), cfg.wavelengths/cfg.pitch, 'AbsTol', 2e-14);
-            testCase.verifyEqual(peak, 1/4, 'AbsTol', 2e-13);
+            testCase.verifyLessThan(abs(result.coordinate(col) - cfg.wavelengths/cfg.pitch), ...
+                (result.coordinate(2) - result.coordinate(1))/2);
+            testCase.verifyEqual(peak, expectedRectangleBin(cfg, row, col, 1/16), 'AbsTol', 8e-4);
         end
 
         function wavelengthAndFocalLengthSetSensorOrderPosition(testCase)
@@ -127,8 +129,12 @@ classdef DisplayDiffractionTest < matlab.unittest.TestCase
 
             result = computeConfiguredOptics(cfg);
 
-            testCase.verifyEqual(result.kernel(65, 65), 1/16, 'AbsTol', 2e-13);
-            testCase.verifyEqual(result.kernel(65, 73), 3/16, 'AbsTol', 2e-13);
+            testCase.verifyEqual(result.kernel(65, 65), ...
+                (expectedRectangleBin(cfg, 65, 65, 0) ...
+                + 3*expectedRectangleBin(cfg, 65, 65, 1/16))/4, 'AbsTol', 8e-4);
+            testCase.verifyEqual(result.kernel(65, 73), ...
+                (expectedRectangleBin(cfg, 65, 73, 0) ...
+                + 3*expectedRectangleBin(cfg, 65, 73, 1/16))/4, 'AbsTol', 8e-4);
             testCase.verifyEqual(result.channelSignal, 4*result.kernel, 'AbsTol', 2e-13);
             testCase.verifyEqual(sum(result.kernel(:)), 1, 'AbsTol', 2e-13);
         end
@@ -274,6 +280,46 @@ classdef DisplayDiffractionTest < matlab.unittest.TestCase
 
             testCase.verifyError(@() computeConfiguredOptics(cfg), 'DisplayDiffraction:PassiveCoefficient');
         end
+
+        function receiverDistanceScalesSizeAndIrradiance(testCase)
+            cfg = smallConfig("reflection");
+            cfg.complexCoefficient = 0.5;
+            cfg.incidentIrradiance = 12;
+            near = runCOEReflection(cfg);
+            cfg.propagationDistance = 2*cfg.propagationDistance;
+            far = runCOEReflection(cfg);
+
+            testCase.verifyEqual(far.receiverCoordinate, 2*near.receiverCoordinate, 'AbsTol', 1e-13);
+            testCase.verifyEqual(far.spectralIrradiance, near.spectralIrradiance/4, 'AbsTol', 1e-13);
+            testCase.verifyEqual(far.spectralEnergy, near.spectralEnergy, 'AbsTol', 1e-13);
+            testCase.verifyEqual(sum(far.spectralIrradiance, 'all')*far.receiverPixelArea, ...
+                far.incidentPower*far.metrics.CapturedThroughput, 'AbsTol', 1e-13);
+        end
+
+        function receiverMatchesIndependentDirectFourierSum(testCase)
+            cfg = smallConfig("reflection");
+            cfg.periods = [4, 2];
+            cfg.outputSize = 33;
+            cfg.angleHalfRangeDeg = 2;
+            cfg.metricAngleDeg = 1;
+            cfg.incidentIrradiance = 7;
+            cfg.complexCoefficient = reshape(exp(1i*(0:2047)/37), 32, 64)*0.6;
+            testCase.applyFixture(matlab.unittest.fixtures.SuppressedWarningsFixture( ...
+                'DisplayDiffraction:TruncatedEnergy'));
+            result = runCOEReflection(cfg);
+            count = result.receiverSamplesPerBin;
+            step = result.coordinate(2) - result.coordinate(1);
+            offsets = (((0:count-1) + 0.5)/count - 0.5)*step;
+            fx = (result.coordinate(19) + offsets)/cfg.wavelengths;
+            fy = (result.coordinate(16) + offsets)/cfg.wavelengths;
+            dx = cfg.pitch/cfg.samplesPerPeriod;
+            integral = exp(-2i*pi*fy(:)*result.y)*cfg.complexCoefficient ...
+                *exp(-2i*pi*result.x(:)*fx)*dx^2;
+            expected = cfg.incidentIrradiance*mean(abs(integral).^2, 'all') ...
+                /(cfg.wavelengths*cfg.propagationDistance)^2;
+
+            testCase.verifyEqual(result.spectralIrradiance(16, 19), expected, 'AbsTol', 1e-13);
+        end
     end
 end
 
@@ -289,6 +335,24 @@ function cfg = smallConfig(mode)
     cfg.outputSize = 129;
     cfg.sensorPitch = cfg.wavelengths*cfg.focalLength/(128*cfg.pitch/cfg.samplesPerPeriod);
     cfg.angleHalfRangeDeg = rad2deg(64*cfg.sensorPitch/cfg.focalLength);
+    if mode == "reflection"
+        % Pixel edges, rather than centres, span exactly one Nyquist interval.
+        cfg.angleHalfRangeDeg = cfg.angleHalfRangeDeg*128/129;
+        cfg.receiverBinSamples = 7;
+    end
+end
+
+function energy = expectedRectangleBin(cfg, row, col, phaseCycles)
+    % Exact integral of the finite-array Dirichlet intensity, via its cosine series.
+    dx = cfg.pitch/cfg.samplesPerPeriod;
+    half = deg2rad(cfg.angleHalfRangeDeg);
+    step = 2*half/(cfg.outputSize-1)*dx/cfg.wavelengths(1);
+    ux = (-half + (col-1)*2*half/(cfg.outputSize-1))*dx/cfg.wavelengths(1) - phaseCycles;
+    uy = (-half + (row-1)*2*half/(cfg.outputSize-1))*dx/cfg.wavelengths(1);
+    index = (1:63).';
+    ex = step + 2/64*sum((64-index).*cos(2*pi*index*ux).*sin(pi*index*step)./(pi*index));
+    ey = step + 2/64*sum((64-index).*cos(2*pi*index*uy).*sin(pi*index*step)./(pi*index));
+    energy = ex*ey;
 end
 
 function optics = asymmetricOptics()
