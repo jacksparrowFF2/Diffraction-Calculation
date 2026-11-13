@@ -109,9 +109,24 @@ function result = simulateDisplayDiffraction(cfg)
     if cfg.mode == "udc"
         [result.mtf, result.spatialFrequency] = computeMtf(psf, cfg.sensorPitch);
     end
-    if any(safeRatio(captured, throughput) < 0.98 & throughput > 0)
-        warning('DisplayDiffraction:TruncatedEnergy', ...
-            'Output window contains less than 98%% of the energy. See metrics.CapturedFraction.');
+    capturedFraction = result.metrics.CapturedFraction;
+    truncated = find(capturedFraction < 0.98 & throughput(:) > 0);
+    if ~isempty(truncated)
+        % 只列出未达到阈值的波长；两种能量分母明确区分，不修改物理数组。
+        message = sprintf('以下 %d 个波长在输出窗口内捕获的反射能量不足 98%%。\n', numel(truncated));
+        if cfg.mode == "reflection"
+            message = [message, sprintf('当前观察角域：θx、θy 均为 [-%.3f°, +%.3f°]。\n', ...
+                cfg.angleHalfRangeDeg, cfg.angleHalfRangeDeg)];
+        end
+        message = [message, sprintf('波长/nm\t窗口内/总反射\t窗口外/总反射\t窗口内/入射\n')];
+        for index = truncated(:).'
+            message = [message, sprintf('%.3f\t%.3f%%\t\t%.3f%%\t\t%.3f%%\n', ...
+                result.metrics.WavelengthNm(index), 100*capturedFraction(index), ...
+                100*(1-capturedFraction(index)), 100*captured(index))]; %#ok<AGROW>
+        end
+        message = [message, '这是观察窗口截断提示，不代表能量不守恒；可查看 result.metrics.CapturedFraction。', ...
+            '如需覆盖更完整的远场，可增大 cfg.angleHalfRangeDeg，并相应提高 cfg.outputSize 保持角度分辨率。'];
+        warning('DisplayDiffraction:TruncatedEnergy', '%s', message);
     end
     % Computing spacing by subtraction can round a matched grid slightly up.
     if cfg.mode == "udc" && any(nativeStep > cfg.sensorPitch*(1 + 1e-12))
