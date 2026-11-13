@@ -18,7 +18,7 @@ New-Item -ItemType Directory -Path $copiedDistDir -Force | Out-Null
 Copy-Item -LiteralPath $PSCommandPath -Destination (Join-Path $copiedDistDir 'BuildHandoff.ps1')
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'validate_handoff.m') -Destination (Join-Path $copiedDistDir 'validate_handoff.m')
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'validate_handoff.m') -Destination (Join-Path $bundleDir 'validate_handoff.m')
-Copy-Item -LiteralPath (Join-Path $moduleDir 'docs\程序使用说明.md') -Destination (Join-Path $bundleDir 'README.md')
+Set-Content -LiteralPath (Join-Path $bundleDir 'README.md') -Encoding UTF8 -Value '# COE Reflection', '', '[使用与交接说明](topic_coe_reflection/docs/README.md)'
 $testsDir = Join-Path $bundleDir 'tests'
 New-Item -ItemType Directory -Path $testsDir -Force | Out-Null
 foreach ($testFile in @('COESpectralTest.m', 'COESpotsTest.m')) {

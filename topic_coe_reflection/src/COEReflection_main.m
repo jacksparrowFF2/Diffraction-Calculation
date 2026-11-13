@@ -80,7 +80,7 @@ stack.geometry.requireCFCoverage = true; % CF 必须覆盖 BM 开口，各色之
 % 实测输入：改 source="mat" 或 "images"，文件名均相对于 Input/projectName/，可含子目录。
 % 输入必须覆盖完整计算面：[periods(2),periods(1)]*samplesPerPeriod，行 y、列 x。
 % 不自动缩放/平铺；输入 BM 后直接采用该图样，bmExpansion 只在缺省 BM 时生成开口。
-% 详细字段、物理尺寸、nk CSV 示例见 docs/实际图样与材料输入指南.md。
+% 详细字段、物理尺寸、nk CSV 示例见 docs/README.md。
 stack.bmExpansion = 5e-6;       % BM 开口相对阳极边界向外扩张 5 μm，可调
 stack.anodeReflectance = 1.0;   % 仅阳极图样内的裸底为 100% 反射
 stack.anodePhaseDeg = 180;      % 理想电反射边界相位；阳极外为匹配吸收底（裸底 r=0）
