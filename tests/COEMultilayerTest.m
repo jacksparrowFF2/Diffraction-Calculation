@@ -209,71 +209,48 @@ classdef COEMultilayerTest < matlab.unittest.TestCase
             testCase.verifyEqual(actual, expected, 'AbsTol', 2e-13);
         end
 
-        function expandedBMDoesNotExpandAnodeReflectance(testCase)
-            cfg = smallConfig(); stack = coeStackDefaults();
-            for name = ["BM", "R", "G", "B"]
-                stack.materials.(name).thickness = 0;
-            end
-            [model, geometry] = prepareCoeStack(cfg, stack);
-            testCase.verifyGreaterThan(nnz(geometry.expansionAbsorberMask), 0);
-            testCase.verifyFalse(any(geometry.anodeMask & geometry.expansionAbsorberMask, 'all'));
-            testCase.verifyFalse(any(double(geometry.cfRMask) + double(geometry.cfGMask) + double(geometry.cfBMask) > 1, 'all'));
-            for k = 1:3
-                lookup = model.coefficientLookup(:, k);
-                coefficient = reshape(lookup(double(model.regionMap(:)) + 1), size(model.regionMap));
-                testCase.verifyEqual(abs(coefficient), double(geometry.anodeMask), 'AbsTol', 2e-13);
-            end
-            cfg.coeStack = model; cfg.mask = double(geometry.anodeMask);
-            result = runCOEReflection(cfg);
-            testCase.verifyEqual(result.metrics.Throughput, mean(geometry.anodeMask, 'all')*ones(3, 1), ...
-                'AbsTol', 2e-13);
-            testCase.verifyEqual(result.kernel, result.baselineKernel, 'AbsTol', 2e-13);
+        function bmOpeningDoesNotExpandAnodeReflectance(testCase)
+            [cfg,stack,folder,data]=layerInput(testCase);
+            stack.layers.IJP.thickness=0;
+            stack.layers.BM.thickness=0;
+            stack.layers.CF_R.thickness=0;
+            stack.layers.CF_G.thickness=0;
+            stack.layers.CF_B.thickness=0;
+            result=runCOEReflection(cfg,stack,folder);
+            testCase.verifyGreaterThan(nnz(~data.BM & ~data.Anode),0);
+            testCase.verifyEqual(result.metrics.Throughput,mean(data.Anode,'all')*ones(3,1),'AbsTol',2e-13);
+            model=result.config.coeStack;
+            coefficient=reshape(model.coefficientLookup(double(model.regionMap(:))+1,1),64,64);
+            testCase.verifyEqual(abs(coefficient),double(data.Anode),'AbsTol',2e-13);
+            testCase.verifyEqual(result.kernel,result.baselineKernel,'AbsTol',2e-13);
         end
 
         function layerMATAndImagesRoundTripAndCSVNK(testCase)
-            temporary = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture());
-            cfg = smallConfig(); stack = coeStackDefaults();
-            [expectedModel, expected] = prepareCoeStack(cfg, stack);
-            fields = ["anodeMask", "bmOpenMask", "cfRMask", "cfGMask", "cfBMask"];
-            data = struct();
-            for name = fields
-                data.(name) = expected.(name);
-            end
-            save(fullfile(temporary.Folder, 'coe_layers.mat'), '-struct', 'data');
-            stack.geometry.source = "mat";
-            [fromMAT, actual] = prepareCoeStack(cfg, stack, temporary.Folder);
-            testCase.verifyEqual(actual.anodeMask, expected.anodeMask);
-            testCase.verifyEqual(fromMAT.coefficientLookup, expectedModel.coefficientLookup);
-            stack.geometry.source = "images";
-            imwrite(data.anodeMask, fullfile(temporary.Folder, 'anode.png'));
-            imwrite(~data.bmOpenMask, fullfile(temporary.Folder, 'bm.png'));
-            for j = 1:3
-                imwrite(data.(fields(j+2)), fullfile(temporary.Folder, stack.geometry.cfFiles(j)));
-            end
-            stack.geometry.bmFile = "bm.png"; stack.geometry.bmImageIsOpening = false;
-            writematrix([450, 1.9, 0.35; 550, 1.8, 0.35; 650, 1.7, 0.35], fullfile(temporary.Folder, 'bm_nk.csv'));
-            stack.materials.BM.nkFile = "bm_nk.csv";
-            [fromImages, actual] = prepareCoeStack(cfg, stack, temporary.Folder);
-            testCase.verifyEqual(actual.cfLabel, expected.cfLabel);
-            testCase.verifyEqual(fromImages.materialTable.n(1:3), [1.9; 1.8; 1.7]);
+            [cfg,stack,folder,data]=layerInput(testCase);
+            expected=runCOEReflection(cfg,stack,folder);
+            save(fullfile(folder,'layers.mat'),'-struct','data');
+            stack.geometry.source="mat";
+            fromMAT=runCOEReflection(cfg,stack,folder);
+            testCase.verifyEqual(fromMAT.layerGeometry.layerMasks,expected.layerGeometry.layerMasks);
+            testCase.verifyEqual(fromMAT.kernel,expected.kernel,'AbsTol',2e-13);
+            stack.geometry.source="images";
+            writematrix([450,1.9,0.35;550,1.8,0.35;650,1.7,0.35],fullfile(folder,'bm_nk.csv'));
+            stack.layers.BM.nkFile="bm_nk.csv";
+            fromImages=runCOEReflection(cfg,stack,folder);
+            selected=fromImages.config.coeStack.materialTable.Material=="BM";
+            testCase.verifyEqual(fromImages.config.coeStack.materialTable.n(selected),[1.9;1.8;1.7]);
+            testCase.verifyEqual(fromImages.layerGeometry.layerMasks,data);
         end
 
-        function CFOverlapAndMissingCoverageAreRejected(testCase)
-            cfg = smallConfig(); stack = coeStackDefaults();
-            [~, data] = prepareCoeStack(cfg, stack);
-            temporary = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture());
-            overlap = data;
-            overlap.cfRMask = data.cfGMask;
-            save(fullfile(temporary.Folder, 'overlap.mat'), '-struct', 'overlap');
-            stack.geometry.source = "mat";
-            stack.geometry.matFile = "overlap.mat";
-            testCase.verifyError(@() prepareCoeStack(cfg, stack, temporary.Folder), 'COEReflection:CFOverlap');
-            stack.geometry.matFile = "coe_layers.mat";
-            data.cfGMask(:) = false;
-            save(fullfile(temporary.Folder, 'coe_layers.mat'), '-struct', 'data');
-            stack.geometry.source = "mat";
-            testCase.verifyError(@() prepareCoeStack(cfg, stack, temporary.Folder), 'COEReflection:CFCoverage');
+        function rgbOverlapAndInvalidLayerOrderAreRejected(testCase)
+            [cfg,stack,folder]=layerInput(testCase);
+            stack.layers.CF_G.file="CF_R";
+            testCase.verifyError(@() runCOEReflection(cfg,stack,folder),'COEReflection:SameLevelOverlap');
+            stack.layers.CF_G.file="CF_G";
+            stack.layerLevels=[1,2,3,4,3,4];
+            testCase.verifyError(@() runCOEReflection(cfg,stack,folder),'COEReflection:LayerOrder');
         end
+
     end
 end
 
@@ -313,8 +290,11 @@ end
 
 function expected=independentSourcePointSum(cfg,stack,folder)
     diameter=cfg.source.diameter;
-    axis=((0:2)+0.5)/3-0.5;
+    count=cfg.source.samplesPerAxis;
+    axis=((0:count-1)+0.5)/count-0.5;
     [xx,yy]=meshgrid(axis*diameter);
+    inside=hypot(xx,yy)<=diameter/2;
+    xx=xx(inside); yy=yy(inside);
     expected=zeros(cfg.outputSize);total=0;
     cfg.source.diameter=0;
     for j=1:numel(xx)
@@ -325,4 +305,31 @@ function expected=independentSourcePointSum(cfg,stack,folder)
         total=total+power;
     end
     expected=expected/total;
+end
+
+function [cfg,stack,folder,data]=layerInput(testCase)
+    cfg=smallConfig();
+    temporary=testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture());
+    folder=string(temporary.Folder);
+    names=["Anode","IJP","BM","CF_R","CF_G","CF_B"];
+    base=struct('file',"",'field',"",'invert',false,'coverage',"image", ...
+        'method',"nk",'n',1.5,'k',0,'thickness',100e-9,'nkFile',"",'reflectance',1,'phaseDeg',180);
+    stack=struct('incidentN',1,'exitN',1,'backgroundMode',"absorber", ...
+        'layerNames',names,'layerLevels',[1,2,3,4,4,4], ...
+        'geometry',struct('source',"images",'matFile',"layers.mat",'threshold',0.5),'layers',struct());
+    data.Anode=false(64);data.Anode(25:40,25:40)=true;
+    data.IJP=true(64);
+    data.BM=true(64);data.BM(17:48,17:48)=false;
+    data.CF_R=false(64);data.CF_R(:,1:21)=true;
+    data.CF_G=false(64);data.CF_G(:,22:43)=true;
+    data.CF_B=false(64);data.CF_B(:,44:64)=true;
+    for name=names
+        stack.layers.(name)=base;
+        stack.layers.(name).file=name;
+        stack.layers.(name).field=name;
+        imwrite(data.(name),fullfile(folder,name+".png"));
+    end
+    stack.layers.Anode.method="reflectance";stack.layers.Anode.thickness=0;
+    stack.layers.IJP.thickness=10e-6;
+    stack.layers.BM.k=0.35;
 end

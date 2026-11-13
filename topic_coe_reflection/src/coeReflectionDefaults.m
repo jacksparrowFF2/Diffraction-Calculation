@@ -3,4 +3,5 @@ function cfg = coeReflectionDefaults()
     arguments
     end
     cfg = displayDiffractionDefaults("reflection");
+    cfg.outputSize = 1201;
 end

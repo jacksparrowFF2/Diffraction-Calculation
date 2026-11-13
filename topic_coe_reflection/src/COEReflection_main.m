@@ -21,6 +21,8 @@ outputDir = fullfile(moduleDir, 'Output', projectName); % 各项目结果分开�
 inputFile = "";                  % 可选额外高度/外部复系数 MAT；图样通过 stack.layerNames 声明
 caseName = "coe_reflection";     % 输出文件名前缀；同名结果会覆盖
 saveResults = true;             % 是否保存 MAT、CSV 和 PNG
+runSamplingBenchmark = false;   % true：运行独立采样基准并返回；结果写入 Output/项目/SamplingConvergence
+samplingBenchmarkMode = "all"; % all：五类采样扫描；periods：专门评估每轴Pitch数
 
 % MAT 文件可包含以下任意字段，读取后覆盖脚本中的对应值：
 % mask：二维 0~1 材料区域图，推荐二值；1 为特征区，0 为背景区。
@@ -74,18 +76,8 @@ stack = coeLayerStackDefaults();
 % 单个悬空膜同样声明为一项，backgroundMode="medium"、exitN=1 即空气/膜/空气。
 % 图片白色=材料，若白色=开口则该项 invert=true；不自动调整输入几何。
 
-% 2.2.2 非均匀高度示例（仅 inputFile 为空时启用；实际文件输入优先）
-useHeightExample = false;       % 默认关闭；需要演示非均匀高度时再改为 true
-heightExample.height = 687.5e-9; % 条纹高区 687.5 nm，低区为 0；550 nm 光下相位差为 pi
-heightExample.period = cfg.pitch/4; % 高度条纹周期 12.5 μm，与材料区域的 50 μm 周期不同
-heightExample.dutyCycle = 0.5;  % 每周期高区占比 50%
-heightExample.direction = "x"; % "x"：高度沿 x 交替，条纹平行 y；"y" 则相反
-% 示例作用于整个计算面（特征区和背景区），材料几何及强度反射率保持不变。
-% 这是验证相位作用的演示结构，不代表实际产品或优化结果。
-% 预计一级偏转约 lambda/period：RGB 分别为 2.84°、2.52°、2.06°。
-
 % 2.3 观察窗口、评价范围与显示
-cfg.outputSize = 801;           % 输出角度网格的边长，必须为奇数
+cfg.outputSize = 1201;          % 输出角度网格的边长，必须为奇数；±6°对应0.01°间隔
 cfg.angleHalfRangeDeg = 6;      % 观察角度范围 [-6°, 6°]，近轴模型上限为 10°
 cfg.metricAngleDeg = 2.5;       % 评价圆锥半角 2.5°，对应全角 5°，中心为镜面反射方向
 cfg.zeroOrderRadiusFactor = 0.45; % 零级积分半径 = 此系数 * lambda / pitch，单位 rad
@@ -140,8 +132,6 @@ if useProjectConfig
     settings.inputFile = inputFile;
     settings.caseName = caseName;
     settings.saveResults = saveResults;
-    settings.useHeightExample = useHeightExample;
-    settings.heightExample = heightExample;
     settings.observation = observation;
     settings.spotOptions = spotOptions;
     settings.displayFloorDb = displayFloorDb;
@@ -161,8 +151,6 @@ if useProjectConfig
     inputFile = settings.inputFile;
     caseName = settings.caseName;
     saveResults = settings.saveResults;
-    useHeightExample = settings.useHeightExample;
-    heightExample = settings.heightExample;
     observation = settings.observation;
     spotOptions = settings.spotOptions;
     displayFloorDb = settings.displayFloorDb;
@@ -173,6 +161,19 @@ if useProjectConfig
     fprintf('读取项目配置：%s（%d 项覆盖）。\n', projectConfig.file, numel(projectConfig.keys));
 end
 cfg.observation = observation;
+if runSamplingBenchmark
+    assert(strlength(inputFile)==0, 'COEReflection:BenchmarkInput', ...
+        '采样基准仅使用统一图片膜堆；请清空额外 MAT 输入。');
+    mustBeMember(samplingBenchmarkMode,["all","periods"]);
+    if samplingBenchmarkMode=="periods"
+        samplingBenchmark = benchmarkCoePeriods(cfg, stack, inputDir, ...
+            fullfile(outputDir, 'PitchConvergence'), projectConfig);
+    else
+        samplingBenchmark = benchmarkCoeSampling(cfg, stack, inputDir, ...
+            fullfile(outputDir, 'SamplingConvergence'), projectConfig);
+    end
+    return
+end
 mustBeMember(spectrumMode,["D65","custom","monochromatic","RGB"]);
 isColorimetric = spectrumMode ~= "RGB";
 colorImageSuffix = "_spectral_color.png";
@@ -231,15 +232,6 @@ if strlength(inputFile) > 0
     fprintf('读取设计文件：%s\n', inputPath);
 else
     fprintf('未使用额外 MAT 覆盖，按主脚本的图样与材料设置计算。\n');
-    if useHeightExample
-        cfg.heightMap = createCoeHeightExample(cfg, heightExample); %#ok<UNRCH> 可选示例默认关闭
-        fprintf('二值高度条纹：高区 %.1f nm，周期 %.2f μm，占空比 %.2f，变化方向 %s。\n', ...
-            heightExample.height*1e9, heightExample.period*1e6, ...
-            heightExample.dutyCycle, heightExample.direction);
-        fprintf('各波长高低区相位差 / pi：');
-        fprintf(' %.3f', 4*cfg.deltaIndex*heightExample.height./cfg.wavelengths);
-        fprintf('\n');
-    end
 end
 % 所有二维输入覆盖完整计算面，行为 y，列为 x；不自动缩放或插值。
 assert(isempty(cfg.mask) || isequal(size(cfg.mask), gridSize), ...
@@ -281,7 +273,7 @@ end
 % OutsideAngleFraction：评价圆锥外能量 / 总反射能量，包含窗口外能量。
 % 用其百分比作为反射雾度评价值；这是模型代理指标，不是 ASTM D1003 透射雾度。
 % ParsevalAbsoluteError：FFT 能量守恒的绝对误差。
-% 关闭高度示例且 heightMap=0 时两种状态相同，零级保持率应为 1（有非零分母时）。
+% heightMap=0 时复用单次传播结果，兼容零级保持率为 1（有非零分母时）。
 % 明确记录状态、半角、全角与百分比，避免将 5° 全角误用为 5° 半角。
 rowCount = numel(cfg.wavelengths);
 comparisonMetrics = table( ...
@@ -593,7 +585,7 @@ if saveResults
     save(fullfile(outputDir, caseName + "_results.mat"), 'cfg', 'result', 'baseline', ...
         'projectName', 'projectConfig', 'inputDir', 'inputFile', 'displayFloorDb', 'displayData', 'comparisonMetrics', 'phaseStateLabels', ...
         'sourceSpectrumFile','wavelengthRangeNm','monochromaticWavelengthNm','isColorimetric', ...
-        'displayStyle', 'useHeightExample', 'heightExample', 'spectrumMode', 'spectrum', ...
+        'displayStyle', 'spectrumMode', 'spectrum', ...
         'observation', 'withoutAngular', 'withAngular', 'observationMetrics', 'cumulativeMetrics', ...
         'colorData', 'colorOptions', 'colorView', 'spotOptions', 'diffractionSpots', 'spotMetrics', ...
         'stack', 'stackGeometry', 'heightPhaseEnabled', '-v7.3');

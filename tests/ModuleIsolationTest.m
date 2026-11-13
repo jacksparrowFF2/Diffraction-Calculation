@@ -13,7 +13,6 @@ classdef ModuleIsolationTest < matlab.unittest.TestCase
             saved = load(fullfile(folder, 'Output', 'coe_reflection_results.mat'));
             testCase.verifyEqual(saved.stack.layerLevels, [1,2,3,4,4,4]);
             testCase.verifyEqual(saved.cfg.heightMap, 0);
-            testCase.verifyFalse(saved.useHeightExample);
             testCase.verifyEqual(saved.result.kernel, saved.baseline.kernel, 'AbsTol', 2e-13);
             testCase.verifyGreaterThan(nnz(saved.stackGeometry.layerMasks.CF_R & ~saved.stackGeometry.layerMasks.Anode & ~saved.stackGeometry.layerMasks.BM), 0);
             testCase.verifyTrue(isfile(fullfile(folder, 'Output', 'coe_reflection_layer_patterns.mat')));
@@ -64,8 +63,11 @@ classdef ModuleIsolationTest < matlab.unittest.TestCase
             folder = portableModule(testCase, 'topic_coe_reflection');
             scriptPath = fullfile(folder, 'src', 'COEReflection_main.m');
             prepareSmallScript(testCase, scriptPath);
-            % 此用例显式启用演示高度；生产脚本默认高度为零。
-            text = strrep(fileread(scriptPath), 'useHeightExample = false;', 'useHeightExample = true;');
+            % 用户输入非零高度 MAT；不再依赖生产代码生成条纹。
+            heightValue=687.5e-9;
+            heightMap=repmat([1,1,0,0],64,16)*heightValue;
+            save(fullfile(folder,'Input','height_test.mat'),'heightMap');
+            text=strrep(fileread(scriptPath),'inputFile = "";','inputFile = "height_test.mat";');
             file = fopen(scriptPath, 'w', 'n', 'UTF-8');
             assert(file >= 0, 'Cannot write temporary script.');
             fprintf(file, '%s', text);
@@ -78,11 +80,10 @@ classdef ModuleIsolationTest < matlab.unittest.TestCase
             expected = runCOEReflection(saved.cfg);
             testCase.verifyEqual(saved.result.kernel, expected.kernel, 'AbsTol', 2e-13);
             testCase.verifyEqual(saved.result.metrics, expected.metrics);
-            testCase.verifyTrue(saved.useHeightExample);
-            testCase.verifyEqual(unique(saved.cfg.heightMap), [0; saved.heightExample.height]);
+            testCase.verifyEqual(unique(saved.cfg.heightMap), [0; 687.5e-9]);
             testCase.verifyEqual(mean(saved.cfg.heightMap(:) > 0), 0.5);
             testCase.verifyEqual(saved.cfg.heightMap(1, 1:8), ...
-                [1, 1, 0, 0, 1, 1, 0, 0]*saved.heightExample.height);
+                [1, 1, 0, 0, 1, 1, 0, 0]*687.5e-9);
             testCase.verifyGreaterThan(max(abs(saved.result.kernel(:) - saved.baseline.kernel(:))), 1e-6);
             testCase.verifyEqual(saved.result.metrics.Throughput, saved.baseline.metrics.Throughput, ...
                 'AbsTol', 2e-13);
@@ -156,7 +157,6 @@ classdef ModuleIsolationTest < matlab.unittest.TestCase
             runScriptIsolated(scriptPath);
 
             saved = load(fullfile(folder, 'Output', 'coe_reflection_results.mat'));
-            testCase.verifyFalse(saved.useHeightExample);
             testCase.verifyFalse(saved.heightPhaseEnabled);
             testCase.verifyEqual(saved.result.propagationRuns,1);
             testCase.verifyEqual(height(saved.observationMetrics),1);
@@ -308,6 +308,7 @@ function prepareSmallScript(testCase, scriptPath)
     text = strrep(text, 'cfg.paddingFactor = 4;', 'cfg.paddingFactor = 2;');
     text = strrep(text, 'cfg.outputSize = 401;', 'cfg.outputSize = 129;');
     text = strrep(text, 'cfg.outputSize = 801;', 'cfg.outputSize = 129;');
+    text = strrep(text, 'cfg.outputSize = 1201;', 'cfg.outputSize = 129;');
     text = strrep(text, 'cfg.angleHalfRangeDeg = 6;', 'cfg.angleHalfRangeDeg = 3;');
     text = strrep(text, 'spectrumMode = "D65";', 'spectrumMode = "RGB";');
     text = strrep(text, 'cfg.materials.enabled = true;', 'cfg.materials.enabled = false;');

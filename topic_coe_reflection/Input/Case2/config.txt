@@ -35,7 +35,7 @@ cfg.paddingFactor = 2
 cfg.propagationDistance = 10
 cfg.incidentIrradiance = 1
 cfg.receiverBinSamples = 3
-cfg.outputSize = 801
+cfg.outputSize = 1201
 cfg.angleHalfRangeDeg = 6
 
 # 光谱与额外高度（默认不添加）
@@ -44,7 +44,6 @@ wavelengthStepNm = 5
 previewWavelengthNm = [620, 550, 450]
 spotOptions.wavelengthNm = [620, 550, 450]
 cfg.heightMap = 0
-useHeightExample = false
 
 # 材料：示例占位；nkFile 非空时覆盖 n/k 常数，路径相对于本项目
 stack.incidentN = 1
@@ -94,7 +93,7 @@ cfg.source.type = "plane"
 cfg.source.centerXY = [0, 0]
 cfg.source.distance = 0.1
 cfg.source.diameter = 0
-cfg.source.samplesPerAxis = 3
+cfg.source.samplesPerAxis = 5
 cfg.source.beamHalfAngleDeg = 30
 cfg.source.laserSpecification = "waist"
 cfg.source.waistRadius = 100e-6
