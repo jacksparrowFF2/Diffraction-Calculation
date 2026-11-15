@@ -15,6 +15,8 @@ Input/
     README.md
   Case2/        # 同几何 BMP 示例，同样的图层名
   Case3/        # 同几何 JPG 示例，同样的图层名
+  Case1_Pitch64/  # Case1原图4×4平铺，4096×4096，完整64×64 Pitch
+  Case1_Pitch128/ # Case1原图8×8平铺，8192×8192，完整128×128 Pitch
   Colorimetry/  # 共享 CIE 数据，无需复制到每个项目
 ```
 

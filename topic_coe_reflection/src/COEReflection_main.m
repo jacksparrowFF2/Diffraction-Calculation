@@ -12,7 +12,7 @@ close all;
 %% 1. 文件输入与输出设置
 moduleDir = fileparts(fileparts(mfilename('fullpath')));
 inputRoot = fullfile(moduleDir, 'Input');
-projectName = "Case2";          % 项目文件夹名称：Case1=PNG，Case2=BMP，Case3=JPG；空字符串使用 Input 根目录
+projectName = "Case1_Pitch64"; % 当前完整64 Pitch项目；Case1/2/3为原16 Pitch示例，空字符串使用Input根目录
 assert(~any(projectName == [".", ".."]) && ~contains(projectName, ["/", "\", ":"]), ...
     'COEReflection:ProjectName', '项目名称必须是单个文件夹名称，不能包含路径分隔符。');
 useProjectConfig = true;       % 读取 Input/项目名称/config.txt；false 使用下方脚本参数

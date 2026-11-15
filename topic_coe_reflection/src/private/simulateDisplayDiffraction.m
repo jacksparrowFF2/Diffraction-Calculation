@@ -51,6 +51,9 @@ function result = simulateDisplayDiffraction(cfg)
 
     for k = 1:nLambda
         lambda = cfg.wavelengths(k);
+        if cfg.mode=="reflection" && nLambda>20 && max(gridSize)>=2048
+            fprintf('反射传播 %d/%d：%.0f nm\n',k,nLambda,lambda*1e9);
+        end
         coefficient = opticalCoefficient(cfg, mask, k);
         if cfg.mode == "reflection"
             [incidentFields,sourceWeights,illuminationInfo{k}] = buildCoeIllumination(cfg,xx,yy,pupil,lambda);
