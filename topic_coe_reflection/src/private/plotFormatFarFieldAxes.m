@@ -1,5 +1,5 @@
-function formatFarFieldAxes(ax, cfg, style)
-%formatFarFieldAxes 统一角度坐标，并标出雾度评价圆锥边界。
+function plotFormatFarFieldAxes(ax, cfg, style)
+%plotFormatFarFieldAxes 统一角度坐标，并标出雾度评价圆锥边界。
     axis(ax, 'image');
     ax.YDir = 'normal';
     limit = cfg.angleHalfRangeDeg;

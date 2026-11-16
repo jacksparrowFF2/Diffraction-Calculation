@@ -63,13 +63,30 @@ cfg.complexCoefficient = [];   % 留空时由 mask 和反射率构造；非空�
 % deltaIndex 仍是额外光程层的有效折射率差，不自动等同于任一种材料的 n。
 
 % 光源空间形式与光谱相互独立；激光一般将 spectrumMode 设为 monochromatic。
-cfg.source = coeSourceDefaults();
+cfg.source = coreSourceDefaults();
 % type=plane 理想平面波；point 有限距离点源/非相干发光圆盘；laser 基模高斯。
 % 点源 diameter、distance、beamHalfAngleDeg 控制尺寸/距离/半强度半角。
 % laserSpecification=waist 或 divergence，束腰与发散角只指定一种。
 
 % 2.2.1 统一膜堆：从下到上的层级，与同层的不同材料区域
-stack = coeLayerStackDefaults();
+stack.incidentN = 1;
+stack.exitN = 1; % 无基底有限膜：空气/膜堆/空气
+stack.backgroundMode = "absorber"; % COE 阳极外匹配吸收底；悬空膜用 medium
+stack.layerNames = ["Anode", "IJP", "BM", "CF_R", "CF_G", "CF_B"];
+stack.layerLevels = [1, 2, 3, 4, 4, 4];
+stack.geometry = struct('source', "images", 'matFile', "layers.mat", 'threshold', 0.5);
+for name = stack.layerNames
+    stack.layers.(name) = coreLayerDefaults(name);
+end
+stack.layers.Anode.file = "anode";
+stack.layers.Anode.method = "reflectance";
+stack.layers.IJP.file = "IJP"; % 与其它图层一样读取同尺寸全白图片
+stack.layers.IJP.n = 1.5; stack.layers.IJP.k = 0;
+stack.layers.IJP.thickness = 10e-6;
+stack.layers.BM.n = 1.8; stack.layers.BM.k = 0.35; stack.layers.BM.thickness = 1e-6;
+stack.layers.CF_R.n = 1.65; stack.layers.CF_R.k = 0.03; stack.layers.CF_R.thickness = 1.1e-6;
+stack.layers.CF_G.n = 1.60; stack.layers.CF_G.k = 0.04; stack.layers.CF_G.thickness = 1e-6;
+stack.layers.CF_B.n = 1.55; stack.layers.CF_B.k = 0.05; stack.layers.CF_B.thickness = 0.9e-6;
 % stack.layerNames 声明图片/材料名称；stack.layerLevels 声明物理层级。
 % 默认 Anode / IJP / BM / [CF_R,CF_G,CF_B]；IJP为整面n=1.5、k=0、厚10μm。
 % 每个 stack.layers.名称.method 可选 nk 或 reflectance，具体参数在项目 config.txt。
@@ -139,7 +156,7 @@ if useProjectConfig
     settings.rgbOptions = rgbOptions;
     settings.colorOptions = colorOptions;
     settings.colorView = colorView;
-    [settings, projectConfig] = loadCoeProjectConfig(fullfile(inputDir, 'config.txt'), settings);
+    [settings, projectConfig] = coreLoadProjectConfig(fullfile(inputDir, 'config.txt'), settings);
     cfg = settings.cfg;
     stack = settings.stack;
     spectrumMode = settings.spectrumMode;
@@ -166,10 +183,10 @@ if runSamplingBenchmark
         '采样基准仅使用统一图片膜堆；请清空额外 MAT 输入。');
     mustBeMember(samplingBenchmarkMode,["all","periods"]);
     if samplingBenchmarkMode=="periods"
-        samplingBenchmark = benchmarkCoePeriods(cfg, stack, inputDir, ...
+        samplingBenchmark = benchPeriods(cfg, stack, inputDir, ...
             fullfile(outputDir, 'PitchConvergence'), projectConfig);
     else
-        samplingBenchmark = benchmarkCoeSampling(cfg, stack, inputDir, ...
+        samplingBenchmark = benchSampling(cfg, stack, inputDir, ...
             fullfile(outputDir, 'SamplingConvergence'), projectConfig);
     end
     return
@@ -180,7 +197,7 @@ colorImageSuffix = "_spectral_color.png";
 if isColorimetric
     dataDir=fullfile(inputRoot,'Colorimetry');
     if spectrumMode=="monochromatic"
-        spectrum=loadCoeSpectrum(monochromaticWavelengthNm,dataDir,"",true);
+        spectrum=coreLoadSpectrum(monochromaticWavelengthNm,dataDir,"",true);
         spectrumLabel=sprintf('单色 %.3f nm',monochromaticWavelengthNm);
     else
         validateattributes(wavelengthStepNm,{'numeric'},{'scalar','real','finite','positive','<=',20});
@@ -195,7 +212,7 @@ if isColorimetric
         else
             colorImageSuffix="_d65_color.png";
         end
-        spectrum=loadCoeSpectrum(wavelengths,dataDir,file);
+        spectrum=coreLoadSpectrum(wavelengths,dataDir,file);
         spectrumLabel=sprintf('%s %.1f–%.1f nm',spectrumMode,wavelengthRangeNm);
     end
     cfg.wavelengths=spectrum.wavelengthNm.'/1e9;
@@ -243,16 +260,40 @@ fprintf('计算面采样：%d×%d，采样间距 %.3f μm。\n', gridSize(1), gr
 
 %% 3.1 建立局部膜层区域与复反射系数（不依赖其它 topic）
 assert(isempty(cfg.mask), 'COEReflection:LegacyMask', '请通过 stack.layerNames 声明各层图样，不使用旧 mask 字段。');
-[cfg.coeStack, stackGeometry] = prepareCoeLayerStack(cfg, stack, inputDir);
+[cfg.coeStack, stackGeometry] = corePrepareLayerStack(cfg, stack, inputDir);
 cfg.mask = double(stackGeometry.unionMask); % 仅作几何显示；实际反射系数来自局部膜堆查找表
 fprintf('统一膜堆：%d 个图样区域，%d 个物理层级，%d 种局部结构，参考面 %.3f μm。\n', ...
     numel(stack.layerNames), numel(unique(stack.layerLevels)), ...
     height(cfg.coeStack.regionTable), cfg.coeStack.referenceHeight*1e6);
 disp(cfg.coeStack.regionTable);
-reportCoeSampling(cfg,cfg.coeStack);
+% 3.1 图像网格与厚膜光谱采样提示，不为消除提示而修改物理参数。
+extent = max(cfg.periods)*cfg.pitch;
+angularStepDeg = 2*cfg.angleHalfRangeDeg/(cfg.outputSize-1);
+diffractionWidthDeg = rad2deg(min(cfg.wavelengths)/extent);
+fprintf('角域 ±%.3f°，%d×%d 网格，间距 %.5f°；最短波长 λ/D≈%.5f°，约 %.2f 个显示间隔。\n', ...
+    cfg.angleHalfRangeDeg, cfg.outputSize, cfg.outputSize, angularStepDeg, ...
+    diffractionWidthDeg, diffractionWidthDeg/angularStepDeg);
+fprintf('输出像素内部仍自动细分积分；局部放大只裁切显示，不补充真实角度分辨率。\n');
+if numel(cfg.wavelengths) > 1
+    materialsTable = cfg.coeStack.materialTable;
+    opticalDepth = 0;
+    for level = unique(materialsTable.Level).'
+        selected = materialsTable.Level == level & materialsTable.Method == "nk";
+        if any(selected)
+            opticalDepth = opticalDepth + max(materialsTable.n(selected).*materialsTable.ThicknessM(selected));
+        end
+    end
+    phaseStep = 4*pi*opticalDepth*max(abs(diff(1./cfg.wavelengths)));
+    if phaseStep > pi/2
+        suggested = min(cfg.wavelengths)^2/(8*opticalDepth)*1e9;
+        warning('COEReflection:ThickFilmSpectrum', ...
+            '厚膜的光谱干涉可能欠采样（最大往返相位步进约 %.2f rad）。当前可作预览；材料/色度定量比较建议波长步长约 %.3g nm 或更小，并检查收敛。', ...
+            phaseStep, suggested);
+    end
+end
 
 %% 4. 反射计算：零高度仅计算一次；非零高度才作两状态比较
-[result, baseline, heightPhaseEnabled] = simulateCoeHeightStates(cfg);
+[result, baseline, heightPhaseEnabled] = coreSimulateHeightStates(cfg);
 stateCount = 1+double(heightPhaseEnabled);
 resultLineStyle = '--';
 if ~heightPhaseEnabled
@@ -297,9 +338,9 @@ disp(comparisonMetrics(1:max(1, floor(rowCount/8)):end, :));
 
 %% 5.1 观察角域绝对反射率与累计角能量
 % 每个波长的 spectralEnergy 已除以入射能量；先积分能量，再作光谱加权，不能平均各波长占比。
-withAngular = computeCoeAngularMetrics(result, observation, spectrum);
+withAngular = coreComputeAngularMetrics(result, observation, spectrum);
 if heightPhaseEnabled
-    withoutAngular = computeCoeAngularMetrics(baseline, observation, spectrum);
+    withoutAngular = coreComputeAngularMetrics(baseline, observation, spectrum);
 else
     withoutAngular = withAngular;
 end
@@ -344,7 +385,7 @@ disp(observationMetrics);
 %% 5.2 非零级光斑位置与绝对反射率
 % S1、S2 等仅是检测到的局部亮斑编号，不自动代表理论 (m,n) 衍射阶数。
 % 全部统计基于未增强的物理数组，分母为入射能量（photopic 组为入射明视觉光通量）。
-diffractionSpots = computeCoeDiffractionSpots(baseline, result, spectrum, spotOptions, heightPhaseEnabled);
+diffractionSpots = coreComputeDiffractionSpots(baseline, result, spectrum, spotOptions, heightPhaseEnabled);
 spotMetrics = diffractionSpots.metrics;
 disp('非零级主要衍射斑（宽带明视觉组；RGB 模式为代理权重）：');
 disp(spotMetrics(spotMetrics.Group == "photopic", :));
@@ -393,7 +434,7 @@ displayData = struct('referenceEnergy', referenceEnergy, 'floorDb', displayFloor
 colorData = struct();
 if isColorimetric
     [colorData.withoutHeight, colorData.withHeight, colorData.mapping] = ...
-        synthesizeCoeColor(baseline, result, spectrum, colorOptions, heightPhaseEnabled);
+        coreSynthesizeColor(baseline, result, spectrum, colorOptions, heightPhaseEnabled);
     displayData.withoutHeightRGB = colorData.withoutHeight.displaySRGB;
     displayData.withHeightRGB = colorData.withHeight.displaySRGB;
     rgbTitle = string(spectrumLabel)+" / sRGB（显示增强）";
@@ -405,7 +446,7 @@ if isColorimetric
 elseif hasRGB
     % channelSignal 已计入光谱权重及响应；channelResponse 的列应依次表示 R/G/B。
     [displayData.withoutHeightRGB, displayData.withHeightRGB, displayData.rgbMapping] = ...
-        composeCoeReflectionRgb(baseline.channelSignal, result.channelSignal, rgbOptions, heightPhaseEnabled);
+        plotComposeReflectionRgb(baseline.channelSignal, result.channelSignal, rgbOptions, heightPhaseEnabled);
     rgbTitle = "三波长 RGB 代理（增强显示）";
 else
     warning('COEReflection:RGBChannels', '通道数不是 3，跳过 RGB 预览；单波长图正常输出。');
@@ -452,18 +493,18 @@ for state = 1:stateCount
         k = previewIndices(column);
         nexttile((state-1)*columnCount + column);
         imagesc(angleDeg, angleDeg, stateDbImages{state}(:, :, column));
-        formatFarFieldAxes(gca, cfg, displayStyle);
+        plotFormatFarFieldAxes(gca, cfg, displayStyle);
         colormap(gca, gray(256)); clim([displayFloorDb, 0]);
         cb = colorbar; cb.Ticks = linspace(displayFloorDb, 0, 4); cb.Label.String = '相对强度 / dB';
         title(sprintf('%s · %.0f nm', phaseStateLabels(state), cfg.wavelengths(k)*1e9));
-        markDiffractionSpots(gca, diffractionSpots, "wavelength", cfg.wavelengths(k)*1e9, displayStyle);
+        plotMarkDiffractionSpots(gca, diffractionSpots, "wavelength", cfg.wavelengths(k)*1e9, displayStyle);
     end
     if hasRGB
         nexttile(state*columnCount);
         imagesc(angleDeg, angleDeg, stateImages{state});
-        formatFarFieldAxes(gca, cfg, displayStyle);
+        plotFormatFarFieldAxes(gca, cfg, displayStyle);
         title(phaseStateLabels(state) + " · " + rgbTitle);
-        markDiffractionSpots(gca, diffractionSpots, "photopic", NaN, displayStyle);
+        plotMarkDiffractionSpots(gca, diffractionSpots, "photopic", NaN, displayStyle);
     end
 end
 
@@ -490,7 +531,7 @@ if isColorimetric
         for state = 1:stateCount
             nexttile;
             imagesc(angleDeg, angleDeg, colorImages{state});
-            formatFarFieldAxes(gca, cfg, displayStyle);
+            plotFormatFarFieldAxes(gca, cfg, displayStyle);
             if region == 1
                 title(phaseStateLabels(state) + " · 全范围");
             else
@@ -500,7 +541,7 @@ if isColorimetric
                 yticks(colorView.centerDeg(2) + linspace(-1, 1, 5)*colorView.halfAngleDeg);
                 title(phaseStateLabels(state) + " · 局部放大");
             end
-            markDiffractionSpots(gca, diffractionSpots, "photopic", NaN, displayStyle);
+            plotMarkDiffractionSpots(gca, diffractionSpots, "photopic", NaN, displayStyle);
         end
     end
 end
@@ -539,17 +580,17 @@ if heightPhaseEnabled
 end
 hold on;
 plot(withAngular.radiusDeg, 100*withAngular.radiantCumulativeReflectance, resultLineStyle, 'LineWidth', 1.5);
-formatCumulativeAxes(observation, phaseStateLabels(1:stateCount), spectrumLabel, displayStyle);
+plotFormatCumulativeAxes(observation, phaseStateLabels(1:stateCount), spectrumLabel, displayStyle);
 nexttile;
 if heightPhaseEnabled
     plot(withoutAngular.radiusDeg, 100*withoutAngular.photopicCumulativeReflectance, '-', 'LineWidth', 1.5);
 end
 hold on;
 plot(withAngular.radiusDeg, 100*withAngular.photopicCumulativeReflectance, resultLineStyle, 'LineWidth', 1.5);
-formatCumulativeAxes(observation, phaseStateLabels(1:stateCount), photopicLabel, displayStyle);
+plotFormatCumulativeAxes(observation, phaseStateLabels(1:stateCount), photopicLabel, displayStyle);
 % 统一本次输出图的字体、线宽与刻度风格，不修改 MATLAB 全局图形默认值。
 for outputFigure = [geometryFigure, diffractionFigure, metricsFigure, angularFigure, colorFigure]
-    styleCoeFigure(outputFigure, displayStyle);
+    plotStyleFigure(outputFigure, displayStyle);
 end
 
 %% 7. 保存物理数据、参数、指标表和图片
@@ -573,7 +614,7 @@ for state = 1:stateCount
         title(sprintf('%s · %.0f nm', phaseStateLabels(state), cfg.wavelengths(k)*1e9));
     end
 end
-styleCoeFigure(receiverFigure, displayStyle);
+plotStyleFigure(receiverFigure, displayStyle);
 if saveResults
     if ~isfolder(outputDir)
         mkdir(outputDir);

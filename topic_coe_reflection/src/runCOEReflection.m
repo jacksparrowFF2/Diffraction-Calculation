@@ -11,10 +11,10 @@ function result = runCOEReflection(cfg, stack, inputDir)
     end
     assert(cfg.mode == "reflection", 'DisplayDiffraction:Mode', 'Use reflection configuration.');
     if ~isempty(fieldnames(stack))
-        [cfg.coeStack, geometry] = prepareCoeLayerStack(cfg, stack, inputDir);
+        [cfg.coeStack, geometry] = corePrepareLayerStack(cfg, stack, inputDir);
         cfg.mask = double(geometry.unionMask);
     end
-    result = simulateCoeHeightStates(cfg);
+    result = coreSimulateHeightStates(cfg);
     if ~isempty(fieldnames(stack))
         result.layerGeometry = geometry;
     end

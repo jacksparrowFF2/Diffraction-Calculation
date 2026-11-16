@@ -1,5 +1,5 @@
-function report = benchmarkCoePeriods(cfg,stack,inputDir,outputDir,projectConfig)
-%benchmarkCoePeriods 已验证完整晶胞的有限重复阵列效率，逐波长与无限周期比较。
+function report = benchPeriods(cfg,stack,inputDir,outputDir,projectConfig)
+%benchPeriods 已验证完整晶胞的有限重复阵列效率，逐波长与无限周期比较。
 % 用晶胞非周期自相关与有限阵列三角权重精确积分角度矩形；不展开大物面。
 % 与生产代码采用相同的离散物面点求积，不增加像素孔径或删除膜堆相位。
     assert(stack.geometry.source=="images" && all(cfg.heightMap(:)==0) ...
@@ -11,10 +11,10 @@ function report = benchmarkCoePeriods(cfg,stack,inputDir,outputDir,projectConfig
     cfg.wavelengths=(380:5:780)*1e-9;
     cfg.spectralWeights=ones(size(cfg.wavelengths));
     cfg.channelResponse=ones(numel(cfg.wavelengths),1);
-    cfg.source=coeSourceDefaults(); % 平面波隔离重复数效应；不将有限源改成平面波结论。
+    cfg.source=coreSourceDefaults(); % 平面波隔离重复数效应；不将有限源改成平面波结论。
     cfg.propagationDistance=1e4; % 只作角分布参考；效率与该距离无关。
     cfg.angleHalfRangeDeg=6; cfg.outputSize=1201;
-    [model,~]=prepareCoeLayerStack(cfg,stack,inputDir);
+    [model,~]=corePrepareLayerStack(cfg,stack,inputDir);
     q=2*cfg.samplesPerPeriod;
     map=model.regionMap;
     assert(all(mod(size(map),q)==0) && ...
@@ -101,7 +101,7 @@ function report = benchmarkCoePeriods(cfg,stack,inputDir,outputDir,projectConfig
     end
     assert(max(report.parsevalError,[],'all')<1e-9,'COEReflection:BenchmarkParseval','周期积分Parseval检查失败。');
     assert(min(report.efficiency,[],'all')>=-1e-10,'COEReflection:BenchmarkPassivity','积分出现负能量。');
-    spectrum=loadCoeSpectrum(report.wavelengthNm);
+    spectrum=coreLoadSpectrum(report.wavelengthNm);
     report.radiant=reshape(permute(report.efficiency,[1,3,2]),[],numel(cfg.wavelengths))*spectrum.energyWeights;
     report.radiant=reshape(report.radiant,numel(counts),[]);
     report.photopic=reshape(permute(report.efficiency,[1,3,2]),[],numel(cfg.wavelengths))*spectrum.photopicWeights;

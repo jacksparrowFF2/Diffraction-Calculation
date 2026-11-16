@@ -10,7 +10,7 @@ classdef COESpotsTest < matlab.unittest.TestCase
     methods (Test)
         function sharedROIsMeasureDifferentStatesWithoutNormalizingLoss(testCase)
             [a, b, spectrum, options] = syntheticSpots();
-            spots = computeCoeDiffractionSpots(a, b, spectrum, options);
+            spots = coreComputeDiffractionSpots(a, b, spectrum, options);
             rows = spots.metrics(spots.metrics.Group == "wavelength" & abs(spots.metrics.WavelengthNm - 500) < 1e-6, :);
             testCase.verifyEqual(height(rows), 4);
             left = rows(rows.CenterThetaXDeg < 0, :);
@@ -34,7 +34,7 @@ classdef COESpotsTest < matlab.unittest.TestCase
             b = a;
             options.minSeparationDeg = 0;
             options.integrationHalfAngleDeg = 0.15;
-            spots = computeCoeDiffractionSpots(a, b, spectrum, options);
+            spots = coreComputeDiffractionSpots(a, b, spectrum, options);
             group = spots.groups(1);
             centers = group.centersDeg;
             for j = 1:size(centers, 1)
@@ -51,7 +51,7 @@ classdef COESpotsTest < matlab.unittest.TestCase
             [a, b, spectrum, options] = syntheticSpots();
             a.spectralEnergy(:) = 0; b.spectralEnergy(:) = 0;
             options.wavelengthNm = [];
-            spots = computeCoeDiffractionSpots(a, b, spectrum, options);
+            spots = coreComputeDiffractionSpots(a, b, spectrum, options);
             testCase.verifyEmpty(spots.metrics);
             testCase.verifyEqual(numel(spots.groups), 4);
             testCase.verifyTrue(ismember('AbsoluteReflectancePercent', spots.metrics.Properties.VariableNames));
@@ -60,7 +60,7 @@ classdef COESpotsTest < matlab.unittest.TestCase
         function undersampledIntegrationIsRejected(testCase)
             [a, b, spectrum, options] = syntheticSpots();
             options.integrationHalfAngleDeg = 0.01;
-            testCase.verifyError(@() computeCoeDiffractionSpots(a, b, spectrum, options), ...
+            testCase.verifyError(@() coreComputeDiffractionSpots(a, b, spectrum, options), ...
                 'COEReflection:SpotSampling');
         end
     end

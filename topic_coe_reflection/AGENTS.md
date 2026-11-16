@@ -3,7 +3,7 @@
 - 用户运行入口为 `src/COEReflection_main.m`，集中呈现输入、参数、计算、展示及保存流程，并保留必要中文注释。
 - `src/` 顶层仅保留主脚本，以及已供外部代码调用的公共接口 `coeReflectionDefaults.m`、`runCOEReflection.m`。未经明确需求，不新增公共接口。
 - 新增内部计算、输入读取、绘图与保存辅助函数时，直接创建在 `src/private/`，不要先放在主脚本同级再要求用户手动移动。
-- 内部函数及其文件使用 lowerCamelCase（小驼峰），例如 `prepareCoeLayerStack.m`、`composeCoeReflectionRgb.m`；文件名必须与首函数名一致。沿用的两个公共接口名称和主脚本名称保留兼容。
+- 内部函数及其文件统一遵循文末“函数命名与拆分规则”，采用 `core`、`plot`、`bench` 三类前缀。
 - 保留 MATLAB 特殊目录名 `private`，不要对其单独 `addpath`，不要使用 `genpath` 展开私有目录。模块只需添加 `src/`。
 - 移动函数时检查基于 `mfilename('fullpath')` 的输入路径，并同步修改所有调用、测试、说明与打包脚本。通过主脚本和独立复制模块的回归验证真实私有函数解析。
 - 新的功能测试优先通过公共入口验证。现有数值算法测试的临时副本由 `tests/private/addCoeAlgorithmFixture.m` 管理，不为测试暴露生产私有函数。
@@ -22,7 +22,24 @@
 - 照明支持plane、有限距离/尺寸point和近轴TEM00 laser；有限源点按强度叠加，勿相干叠加。光谱与空间模型独立，支持D65/自定义SPD/单色谱线，不增加相机预览。入射功率按物面平均辐照度标定。
 - 默认IJP采用全白图片，与其它图层同尺寸同坐标，n=1.5、k=0、厚10μm，在Anode/BM之间。透明不代表无界面反射或无相位。厚膜需报告光谱欠采样风险。常规方案比较暂用5 nm；默认角域±6°、输出1201，有限圆盘源每轴5点；只裁切显示不等于提高计算分辨率。
 
-- 当前仿真仅读取用户图样与可选heightMap输入；Diamond/图片/高度演示生成器及旧固定COE入口已存档，不再调用。回归测试应使用统一图层公共接口和临时输入夹具，不依赖archive。customPattern/normalIncidenceReflection暂为历史批量接口兼容保留，不得误认为无引用后直接删除。
+- 当前仿真仅读取用户图样与可选heightMap输入；Diamond/图片/高度演示生成器及旧固定COE入口已存档，不再调用。回归测试应使用统一图层公共接口和临时输入夹具，不依赖archive。`coreCustomPattern` / `coreNormalIncidenceReflection` 暂为历史批量接口兼容保留，不得误认为无引用后直接删除。
 
 - 采样基准由主脚本runSamplingBenchmark显式开启，默认关闭，内部实现放private。复用项目图片和统一膜堆，不改写Input、不增加相机或公共接口。重复数扫描先验证完整晶胞周期，仅在基准内存中显式平铺；物面抽取与硬像素保持细化要分别标记，不能把插值图当作更高分辨率真实版图。光谱曲线误差、宽带积分、固定ROI和角分布误差分别记录，最细参照样本的自比较不作为独立精度证明。
 - samplingBenchmarkMode="periods"专门评估每轴Pitch数：以完整晶胞自相关和有限阵列三角权重精确积分矩形ROI，必须通过生产传播交叉验证并检查Nyquist窗口Parseval。平面波下与无限周期阶次效率比较；D65宽带通过与逐波长通过分开记录。不得将平面波推荐Pitch数直接宣称为有限距离光源的通用结论，不因推荐数改变现有用户图片尺寸或隐式平铺正式输入。
+
+## 函数命名与拆分规则
+
+本规则适用于本 COE 模块中新增或重命名的独立私有函数。名称采用 lowerCamelCase（小驼峰），以用途前缀开头，后接明确的功能名称；文件名必须与首函数名一致。
+
+| 前缀 | 用途 | 示例 |
+|---|---|---|
+| `core` | 正式仿真的输入读取、配置、膜堆、照明、传播、色度及指标计算 | `corePrepareLayerStack.m`、`coreReflectFilmStack.m`、`coreSynthesizeColor.m` |
+| `plot` | 绘图、坐标轴格式、样式、标记及 RGB 代理预览 | `plotFormatFarFieldAxes.m`、`plotMarkDiffractionSpots.m`、`plotComposeReflectionRgb.m` |
+| `bench` | 可选的采样、收敛性及精度对比验证 | `benchSampling.m`、`benchPeriods.m` |
+
+- 按职责分类，不以是否被 main 直接调用为依据；间接参与正式仿真计算的函数同样归入 `core`。
+- `bench` 表示可选验证，可以重复运行；真正的一次性输入生成工具继续归档到 `archive/input_generation/`。
+- 主脚本 `COEReflection_main.m` 和公共接口 `coeReflectionDefaults.m`、`runCOEReflection.m` 保留原名及调用兼容。
+- 文件内局部函数不增加分类前缀，跟随所属文件管理。
+- 仅在一处使用的简短辅助逻辑优先直接并入调用处，不为缩短文件而单独创建函数；有复用价值或需要独立验证的算法保留函数边界。
+- 重命名时同步修改文件名、首函数声明、调用点、测试和说明，并检查打包脚本；完成回归测试及独立复制模块运行验证。

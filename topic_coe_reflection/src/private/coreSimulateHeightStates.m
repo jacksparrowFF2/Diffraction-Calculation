@@ -1,11 +1,11 @@
-function [result, baseline, heightPhaseEnabled] = simulateCoeHeightStates(cfg)
-%simulateCoeHeightStates 额外高度全零时只传播一次，兼容保留 baseline 数组字段。
-    result = simulateDisplayDiffraction(cfg);
+function [result, baseline, heightPhaseEnabled] = coreSimulateHeightStates(cfg)
+%coreSimulateHeightStates 额外高度全零时只传播一次，兼容保留 baseline 数组字段。
+    result = coreSimulateDiffraction(cfg);
     heightPhaseEnabled = any(cfg.heightMap(:) ~= 0);
     if heightPhaseEnabled
         baselineCfg = cfg;
         baselineCfg.heightMap = 0;
-        baseline = simulateDisplayDiffraction(baselineCfg);
+        baseline = coreSimulateDiffraction(baselineCfg);
     else
         baseline = result; % MATLAB 写时复制；复用结果，不再执行传播或膜厚计算
     end

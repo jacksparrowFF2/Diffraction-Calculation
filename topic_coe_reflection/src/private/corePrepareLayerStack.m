@@ -1,5 +1,5 @@
-function [model, geometry] = prepareCoeLayerStack(cfg, stack, inputDir)
-%prepareCoeLayerStack 按声明读取图样，统一构造任意层数的局部复反射系数。
+function [model, geometry] = corePrepareLayerStack(cfg, stack, inputDir)
+%corePrepareLayerStack 按声明读取图样，统一构造任意层数的局部复反射系数。
 % nk 为有限膜；reflectance 为不透明有效反射边界，不由 R 猜测透射系数。
     arguments
         cfg (1,1) struct
@@ -39,7 +39,27 @@ function [model, geometry] = prepareCoeLayerStack(cfg, stack, inputDir)
         if coverage=="full"
             value=true(shape); % 可选程序接口；正式IJP项目使用全白图片以统一输入
         elseif stack.geometry.source == "images"
-            file = resolveCoeImageFile(fullfile(inputDir,layer.file));
+            % 支持明确文件名或无扩展名图层名；同名多格式必须显式选择。
+            file = fullfile(inputDir,layer.file);
+            [folder, stem, extension] = fileparts(file);
+            if strlength(extension) == 0
+                candidates = dir(fullfile(folder, stem + ".*"));
+                supported = [".png", ".bmp", ".jpg", ".jpeg", ".tif", ".tiff"];
+                matches = strings(0, 1);
+                for candidateIndex = 1:numel(candidates)
+                    candidate = candidates(candidateIndex);
+                    [~, candidateStem, candidateExtension] = fileparts(candidate.name);
+                    if ~candidate.isdir && strcmpi(candidateStem, stem) && any(strcmpi(candidateExtension, supported))
+                        matches(end+1, 1) = fullfile(folder, candidate.name); %#ok<AGROW>
+                    end
+                end
+                assert(~isempty(matches), 'COEReflection:StackImage', ...
+                    '未找到图层图片：%s（支持 PNG/BMP/JPG/JPEG/TIF/TIFF）。', file);
+                assert(isscalar(matches), 'COEReflection:AmbiguousImage', ...
+                    '同名图层存在多种格式，请在主脚本明确填写扩展名：%s', file);
+                file = matches(1);
+            end
+            assert(isfile(file), 'COEReflection:StackImage', '图样文件不存在：%s', file);
             value = imread(file);
             if isinteger(value)
                 value = double(value)/double(intmax(class(value)));
@@ -70,7 +90,25 @@ function [model, geometry] = prepareCoeLayerStack(cfg, stack, inputDir)
                 'COEReflection:LayerSpectrum', '反射率和相位应为常数或与波长数对应的向量。');
             bareCoefficients(j,:) = sqrt(layer.reflectance(:).').*exp(1i*deg2rad(layer.phaseDeg(:).'));
         else
-            [nk(j,:), thickness(j)] = coeMaterialSpectrum(layer,cfg.wavelengths,inputDir);
+            % 材料光谱优先读取 nkFile，否则使用常数或逐波长 n/k。
+            validateattributes(layer.thickness, {'numeric'}, {'scalar', 'real', 'finite', 'nonnegative'});
+            thickness(j) = layer.thickness;
+            if isfield(layer, 'nkFile') && strlength(layer.nkFile) > 0
+                nkData = readmatrix(fullfile(inputDir, layer.nkFile));
+                assert(size(nkData, 2) == 3 && all(isfinite(nkData), 'all') && all(diff(nkData(:, 1)) > 0), ...
+                    'COEReflection:NKTable', 'n/k 文件必须为严格递增的三列：波长 nm、n、k。');
+                n = interp1(nkData(:, 1), nkData(:, 2), cfg.wavelengths*1e9, 'linear');
+                k = interp1(nkData(:, 1), nkData(:, 3), cfg.wavelengths*1e9, 'linear');
+            else
+                n = layer.n; k = layer.k;
+            end
+            validateattributes(n, {'numeric'}, {'vector', 'real', 'finite', 'positive'});
+            validateattributes(k, {'numeric'}, {'vector', 'real', 'finite', 'nonnegative'});
+            assert((isscalar(n) || numel(n) == numel(cfg.wavelengths)) && ...
+                (isscalar(k) || numel(k) == numel(cfg.wavelengths)), ...
+                'COEReflection:NKSamples', 'n、k 应为常数或与波长一一对应的向量，文件须覆盖全部计算波段。');
+            nk(j,:) = reshape(n, 1, []).*ones(size(cfg.wavelengths)) ...
+                + 1i*reshape(k, 1, []).*ones(size(cfg.wavelengths));
         end
         geometry.layerMasks.(names(j)) = masks(:,:,j);
     end
@@ -99,7 +137,7 @@ function [model, geometry] = prepareCoeLayerStack(cfg, stack, inputDir)
             present = present(present>top);
         end
         films = fliplr(present(~direct(present))); % 算法输入为从入射侧到下方
-        lookup(region,:) = reflectCoeFilmStack(cfg.wavelengths,stack.incidentN, ...
+        lookup(region,:) = coreReflectFilmStack(cfg.wavelengths,stack.incidentN, ...
             nk(films,:),thickness(films),bare,referenceHeight-baseHeight);
     end
     model.enabled = true;

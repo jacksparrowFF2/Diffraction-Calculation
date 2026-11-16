@@ -150,12 +150,12 @@ classdef COEMultilayerTest < matlab.unittest.TestCase
 
         function bareMirrorAbsorberAndCommonReferencePlane(testCase)
             wavelengths = [450, 550, 650]*1e-9;
-            mirror = reflectCoeFilmStack(wavelengths, 1, zeros(0, 3), zeros(1, 0), -1, 0);
-            absorber = reflectCoeFilmStack(wavelengths, 1, zeros(0, 3), zeros(1, 0), 0, 0);
+            mirror = coreReflectFilmStack(wavelengths, 1, zeros(0, 3), zeros(1, 0), -1, 0);
+            absorber = coreReflectFilmStack(wavelengths, 1, zeros(0, 3), zeros(1, 0), 0, 0);
             testCase.verifyEqual(mirror, -ones(1, 3));
             testCase.verifyEqual(absorber, zeros(1, 3));
-            airLayer = reflectCoeFilmStack(wavelengths, 1, ones(1, 3), 100e-9, -1, 500e-9);
-            bareAtReference = reflectCoeFilmStack(wavelengths, 1, zeros(0, 3), zeros(1, 0), -1, 500e-9);
+            airLayer = coreReflectFilmStack(wavelengths, 1, ones(1, 3), 100e-9, -1, 500e-9);
+            bareAtReference = coreReflectFilmStack(wavelengths, 1, zeros(0, 3), zeros(1, 0), -1, 500e-9);
             testCase.verifyEqual(airLayer, bareAtReference, 'AbsTol', 2e-13);
         end
 
@@ -163,9 +163,9 @@ classdef COEMultilayerTest < matlab.unittest.TestCase
             lambda = 550e-9;
             filmN = sqrt(1.5);
             depth = lambda/(4*filmN);
-            coefficient = reflectCoeFilmStack(lambda, 1, filmN, depth, -0.2, depth);
+            coefficient = coreReflectFilmStack(lambda, 1, filmN, depth, -0.2, depth);
             testCase.verifyEqual(coefficient, 0, 'AbsTol', 2e-13);
-            zeroDepth = reflectCoeFilmStack(lambda, 1, filmN, 0, -0.2, 0);
+            zeroDepth = coreReflectFilmStack(lambda, 1, filmN, 0, -0.2, 0);
             testCase.verifyEqual(zeroDepth, -0.2, 'AbsTol', 2e-13);
         end
 
@@ -173,17 +173,17 @@ classdef COEMultilayerTest < matlab.unittest.TestCase
             wavelengths = (380:5:780)*1e-9;
             films = [1.7; 2.1].*ones(2, numel(wavelengths));
             depths = [120, 250]*1e-9;
-            coefficient = reflectCoeFilmStack(wavelengths, 1, films, depths, -1, sum(depths));
+            coefficient = coreReflectFilmStack(wavelengths, 1, films, depths, -1, sum(depths));
             testCase.verifyEqual(abs(coefficient).^2, ones(size(wavelengths)), 'AbsTol', 2e-13);
-            lossy = reflectCoeFilmStack(wavelengths, 1, 1.7 + 0.2i, 600e-9, -1, 600e-9);
+            lossy = coreReflectFilmStack(wavelengths, 1, 1.7 + 0.2i, 600e-9, -1, 600e-9);
             testCase.verifyLessThan(abs(lossy).^2, 1);
         end
 
         function opaqueFilmHidesUnderlyingTermination(testCase)
             wavelengths = [450, 550, 650]*1e-9;
             film = 1.8 + 5i;
-            mirror = reflectCoeFilmStack(wavelengths, 1, film, 1e-6, -1, 1e-6);
-            absorber = reflectCoeFilmStack(wavelengths, 1, film, 1e-6, 0, 1e-6);
+            mirror = coreReflectFilmStack(wavelengths, 1, film, 1e-6, -1, 1e-6);
+            absorber = coreReflectFilmStack(wavelengths, 1, film, 1e-6, 0, 1e-6);
             expected = (1 - film)/(1 + film);
             testCase.verifyEqual(mirror, expected*ones(1, 3), 'AbsTol', 2e-13);
             testCase.verifyEqual(absorber, mirror, 'AbsTol', 2e-13);
@@ -205,7 +205,7 @@ classdef COEMultilayerTest < matlab.unittest.TestCase
                 admittance = (matrix(2, 1) + matrix(2, 2))/(matrix(1, 1) + matrix(1, 2));
                 expected(k) = (1 - admittance)/(1 + admittance);
             end
-            actual = reflectCoeFilmStack(wavelengths, 1, indices, depths, 0, sum(depths));
+            actual = coreReflectFilmStack(wavelengths, 1, indices, depths, 0, sum(depths));
             testCase.verifyEqual(actual, expected, 'AbsTol', 2e-13);
         end
 

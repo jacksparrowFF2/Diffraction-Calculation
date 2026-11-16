@@ -1,5 +1,5 @@
-function [settings, record] = loadCoeProjectConfig(file, settings)
-%loadCoeProjectConfig 读取 UTF-8 key=value 文本，仅允许覆盖已有配置字段。
+function [settings, record] = coreLoadProjectConfig(file, settings)
+%coreLoadProjectConfig 读取 UTF-8 key=value 文本，仅允许覆盖已有配置字段。
 % 数字/数组/布尔/字符串使用 JSON 字面量；不执行 MATLAB 表达式或脚本。
     assert(isfile(file), 'COEReflection:MissingConfig', '项目配置不存在：%s', file);
     record.file = string(file);
@@ -16,7 +16,7 @@ function [settings, record] = loadCoeProjectConfig(file, settings)
                     'COEReflection:LayerNames','layerNames 应为非空、唯一的有效名称列表。');
                 for name = names
                     if ~isfield(settings.stack.layers,name)
-                        settings.stack.layers.(name)=coeLayerDefaults(name);
+                        settings.stack.layers.(name)=coreLayerDefaults(name);
                     end
                 end
                 settings.stack.layerNames=names;

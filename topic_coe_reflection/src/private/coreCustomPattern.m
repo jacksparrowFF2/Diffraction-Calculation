@@ -1,4 +1,4 @@
-function Aperture = customPattern(angle,x,y,a,b,offsetx,offsety)
+function Aperture = coreCustomPattern(angle,x,y,a,b,offsetx,offsety)
     % 生成椭圆或圆的离散化矩阵
     % 椭圆旋转角度
     theta = deg2rad(angle);

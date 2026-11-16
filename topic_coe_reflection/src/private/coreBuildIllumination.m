@@ -1,7 +1,7 @@
-function [fields, weights, info] = buildCoeIllumination(cfg, xx, yy, pupil, lambda)
-%buildCoeIllumination 各互不相干源点的物面复场；各自场内保留空间相干。
+function [fields, weights, info] = coreBuildIllumination(cfg, xx, yy, pupil, lambda)
+%coreBuildIllumination 各互不相干源点的物面复场；各自场内保留空间相干。
 % 总入射功率统一标定到 Iinc*几何光瞳面积，不猜测未知的LED总功率。
-    source = coeSourceDefaults();
+    source = coreSourceDefaults();
     if isfield(cfg,'source'), source=cfg.source; end
     mustBeMember(source.type,["plane","point","laser"]);
     validateattributes(source.centerXY,{'numeric'},{'size',[1,2],'real','finite'});

@@ -219,7 +219,7 @@ IJP下方仅Anode图样范围内为反射底，其余位置沿用理想匹配吸
 
 ### 采样收敛基准
 
-选定项目后，将主脚本 `runSamplingBenchmark=true`，完整运行。默认关闭；开启后复用项目配置、用户图片与统一膜堆，完成基准后返回，不执行常规绘图/导出。实现位于 `src/private/benchmarkCoeSampling.m`，不增加公共接口。基准要求图片输入、零额外高度、空外部复系数及无限光瞳；不调用archive，不改写Input。
+选定项目后，将主脚本 `runSamplingBenchmark=true`，完整运行。默认关闭；开启后复用项目配置、用户图片与统一膜堆，完成基准后返回，不执行常规绘图/导出。实现位于 `src/private/benchSampling.m`，不增加公共接口。基准要求图片输入、零额外高度、空外部复系数及无限光瞳；不调用archive，不改写Input。
 
 这是独立的固定条件实验：D65 380–780 nm、平面照明、100 m夫琅禾费接收距离；有限源实验另设距离0.1 m、直径0.2 mm的均匀非相干发光圆盘。参数与项目日常配置分开记录。首个基准使用Case1：50 μm Pitch、16×16单元、每Pitch 64点。其它尺度应先核对Nyquist角域、ROI完整性及计算资源。
 
@@ -714,18 +714,26 @@ assert(all([r.Passed]));
 
 ### 私有函数审计与生成工具存档
 
-当前 `src/private/` 保留28个函数文件；按主脚本及两个公共接口的静态调用关系检查，没有完全不可达的独立函数。但“可达”包含条件分支，不等于每次运行都会调用所有函数。
+私有函数按用途使用三类前缀，文件列表按名称排序即可分组；分类不取决于是否被主脚本直接调用。主脚本 `COEReflection_main.m`、公共接口 `coeReflectionDefaults.m` 和 `runCOEReflection.m` 保留原名，文件内局部函数也保留原名。
+
+| 前缀 | 文件数 | 用途与示例 |
+|---|---|---|
+| `core` | 15 | 正式仿真的输入、物理计算、色度和指标，例如 `corePrepareLayerStack`、`coreReflectFilmStack`；`coreSynthesizeColor` 保留原始 XYZ 并生成色度显示 |
+| `plot` | 5 | 绘图、样式、标记及 RGB 代理预览，例如 `plotFormatFarFieldAxes`、`plotComposeReflectionRgb` |
+| `bench` | 2 | 可选采样和收敛性对比：`benchSampling`、`benchPeriods`；可重复运行，不代表一次性工具 |
+
+当前 `src/private/` 保留22个函数文件。只在一处使用的简短辅助逻辑直接并入调用处：反射默认值集中在 `coeReflectionDefaults.m`；膜堆默认设置和采样提示在主脚本；图片查找和材料光谱在 `corePrepareLayerStack.m`；两轴傅里叶积分在 `corePropagateReceiver.m`，两轴共用的一维变换保留为局部函数。按主脚本及两个公共接口的静态调用关系检查，没有完全不可达的独立函数；条件分支中的函数并非每次运行都会调用。
 
 | 分类 | 函数 | 触发条件或作用 |
 |---|---|---|
-| 默认配置 | displayDiffractionDefaults、coeLayerDefaults、coeLayerStackDefaults、coeSourceDefaults | 初始化配置；每次运行需要，不是一次性工具 |
-| 文件读取与膜堆构建 | loadCoeProjectConfig、loadCoeSpectrum、resolveCoeImageFile、coeMaterialSpectrum、prepareCoeLayerStack | 按项目配置读取实际图样和材料；图层/光谱方式决定具体分支 |
-| 照明与传播 | buildCoeIllumination、simulateCoeHeightStates、simulateDisplayDiffraction、propagateCoeReceiver、fourierIntegralCoe、reflectCoeFilmStack | 当前统一计算链；零高度只计算一个高度状态 |
-| 指标与采样提示 | computeCoeAngularMetrics、computeCoeDiffractionSpots、reportCoeSampling | 角域、光斑、能量与采样评估 |
-| 独立采样基准 | benchmarkCoeSampling、benchmarkCoePeriods | 主脚本runSamplingBenchmark=true时运行，mode="all"隔离五类因素，mode="periods"评估每轴Pitch数 |
-| 绘图样式 | formatCumulativeAxes、formatFarFieldAxes、markDiffractionSpots、styleCoeFigure | 当前图形显示，标记开关只改变显示内容 |
-| 条件色彩处理 | synthesizeCoeColor、composeCoeReflectionRgb | 前者用于D65/custom/monochromatic；后者仅RGB代理模式 |
-| 历史批量接口兼容 | customPattern、normalIncidenceReflection | 主脚本不调用该旧几何/单界面分支；仅传cfg的历史runCOEReflection接口和兼容测试仍可能使用，当前不能算完全无用函数 |
+| 默认配置 | coreLayerDefaults、coreSourceDefaults | 图层模板和光源默认值被多处复用 |
+| 文件读取与膜堆构建 | coreLoadProjectConfig、coreLoadSpectrum、corePrepareLayerStack | 按项目配置读取实际图样和材料；图层/光谱方式决定具体分支 |
+| 照明与传播 | coreBuildIllumination、coreSimulateHeightStates、coreSimulateDiffraction、corePropagateReceiver、coreReflectFilmStack | 当前统一计算链；零高度只计算一个高度状态 |
+| 指标 | coreComputeAngularMetrics、coreComputeDiffractionSpots | 角域、光斑和能量评估；采样提示直接在主脚本中给出 |
+| 独立采样基准 | benchSampling、benchPeriods | 主脚本runSamplingBenchmark=true时运行，mode="all"隔离五类因素，mode="periods"评估每轴Pitch数 |
+| 绘图样式 | plotFormatCumulativeAxes、plotFormatFarFieldAxes、plotMarkDiffractionSpots、plotStyleFigure | 当前图形显示，标记开关只改变显示内容 |
+| 条件色彩处理 | coreSynthesizeColor、plotComposeReflectionRgb | 前者用于D65/custom/monochromatic；后者仅RGB代理模式 |
+| 历史批量接口兼容 | coreCustomPattern、coreNormalIncidenceReflection | 主脚本不调用该旧几何/单界面分支；仅传cfg的历史runCOEReflection接口和兼容测试仍可能使用，当前不能算完全无用函数 |
 
 以下5个文件已移至 `archive/input_generation/`，不再放在当前private目录：
 
@@ -734,8 +742,8 @@ assert(all([r.Passed]));
 | createCoeDiamondGeometry.m | 程序生成固定Diamond几何 | 已有用户图片，不在主流程调用 |
 | createCoeImageExamples.m | 导出PNG/BMP/JPG示例输入 | 开发阶段数据准备工具，运行仿真不需要 |
 | createCoeHeightExample.m | 生成可选二值高度条纹 | 演示工具；当前仅加载用户提供的heightMap |
-| coeStackDefaults.m | 旧Anode/BM/CF固定结构默认值 | 已由coeLayerStackDefaults替代，归档前仅被旧工具和旧测试使用 |
-| prepareCoeStack.m | 旧固定COE图样与膜堆入口 | 已由prepareCoeLayerStack替代，旧测试已迁移至统一图层接口 |
+| coeStackDefaults.m | 旧Anode/BM/CF固定结构默认值 | 已由主脚本中的统一图层默认设置替代，归档前仅被旧工具和旧测试使用 |
+| prepareCoeStack.m | 旧固定COE图样与膜堆入口 | 已由 `corePrepareLayerStack` 替代，旧测试已迁移至统一图层接口 |
 
 归档保存原始实现以便查阅，不加入MATLAB路径、不由主脚本/测试/打包入口调用。归档函数保留其原依赖，不承诺单独可运行；如需恢复，应在隔离副本中结合Git历史恢复相应上下文，不能直接将归档目录加入当前工程搜索路径。当前`src/`与`Input/`即可独立运行，不需要archive目录。
 
@@ -747,19 +755,19 @@ assert(all([r.Passed]));
 |---|---|
 | src/COEReflection_main.m | 输入、配置、两状态计算、展示和保存 |
 | src/coeReflectionDefaults.m、src/runCOEReflection.m | 保留兼容的公共配置/批量计算接口 |
-| src/private/loadCoeProjectConfig.m | 项目文本配置解析 |
-| src/private/prepareCoeLayerStack.m、reflectCoeFilmStack.m | 图样校验、区域查找表和相干膜堆 |
-| src/private/simulateDisplayDiffraction.m | 复振幅、接收面积分与基础指标；独立FFT能量诊断 |
-| src/private/fourierIntegralCoe.m、propagateCoeReceiver.m | 二次相位卷积傅里叶积分、传播系数、像素内强度积分 |
-| src/private/loadCoeSpectrum.m、synthesizeCoeColor.m | D65、CIE积分和色度显示 |
-| src/private/computeCoeAngularMetrics.m、computeCoeDiffractionSpots.m | 角域与光斑积分 |
-| src/private/format*.m、markDiffractionSpots.m、styleCoeFigure.m | 图形样式和辅助标记 |
+| src/private/coreLoadProjectConfig.m | 项目文本配置解析 |
+| src/private/corePrepareLayerStack.m、coreReflectFilmStack.m | 图样校验、区域查找表和相干膜堆 |
+| src/private/coreSimulateDiffraction.m | 复振幅、接收面积分与基础指标；独立FFT能量诊断 |
+| src/private/corePropagateReceiver.m | 二次相位卷积傅里叶积分、传播系数、像素内强度积分 |
+| src/private/coreLoadSpectrum.m、coreSynthesizeColor.m | D65、CIE积分和色度显示 |
+| src/private/coreComputeAngularMetrics.m、coreComputeDiffractionSpots.m | 角域与光斑积分 |
+| src/private/plot*.m | RGB 代理预览、图形样式和辅助标记 |
 | Input/Colorimetry/ | 原始CIE数据、元数据、许可与校验值 |
 | AGENTS.md | 本模块维护规则 |
 | dist/ | 历史打包工具与旧快照，继续工作以当前源码为准 |
 | archive/input_generation/ | 已退役的几何/图片/高度生成和固定结构入口，仅作历史源码存档 |
 
-src 顶层仅保留主脚本与两个兼容公共接口。新增内部函数直接放在 private，使用小驼峰命名，文件名与首函数名一致；用户主流程和必要中文注释留在主脚本。现有数值算法回归由 tests/private/addCoeAlgorithmFixture.m 在临时副本运行，生产目录的私有解析由独立模块测试覆盖。
+src 顶层仅保留主脚本与两个兼容公共接口。仅在一处使用的简短逻辑优先直接写在调用处，不为减少单个文件行数而新增函数；有复用价值或需要独立验证的算法再保留函数边界。新增独立内部函数直接放在 private，使用小驼峰命名，文件名与首函数名一致；用户主流程和必要中文注释留在主脚本。现有数值算法回归由 tests/private/addCoeAlgorithmFixture.m 在临时副本运行，生产目录的私有解析由独立模块测试覆盖。
 
 继续开发时优先接入实测图样与色散数据，核对CF剖面/平坦化和吸光底参数；可再增加手动ROI/阶次跟踪、角度截线与色度分布、有限光源/入射角/偏振/接收孔径。标准反射雾度需单独实现相应测量几何与校正。用户说明统一维护在本 README，不再按功能拆出多个平行说明文件。
 

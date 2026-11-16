@@ -1,5 +1,5 @@
-function source = coeSourceDefaults()
-%coeSourceDefaults 光源空间模型；光谱独立设置，入射辐照度为物面平均值。
+function source = coreSourceDefaults()
+%coreSourceDefaults 光源空间模型；光谱独立设置，入射辐照度为物面平均值。
     source.type = "plane"; % plane / point / laser
     source.centerXY = [0,0]; % 点源中心或高斯光轴在物面的投影，m
     source.distance = 0.1; % 点源到物面法向距离，m

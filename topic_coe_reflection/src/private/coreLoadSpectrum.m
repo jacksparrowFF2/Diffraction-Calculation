@@ -1,5 +1,5 @@
-function spectrum = loadCoeSpectrum(wavelengthNm, dataDir, spectrumFile, discreteLine)
-%loadCoeSpectrum 读取 CIE 官方 D65 / 1931 2° 数据，生成光谱与色度积分权重。
+function spectrum = coreLoadSpectrum(wavelengthNm, dataDir, spectrumFile, discreteLine)
+%coreLoadSpectrum 读取 CIE 官方 D65 / 1931 2° 数据，生成光谱与色度积分权重。
 % 仅对输入的波段积分；梯形积分包含端点半权重，避免遗漏或重复乘波长步长。
     arguments
         wavelengthNm (1,:) double {mustBeReal, mustBeFinite, mustBeInRange(wavelengthNm, 380, 780)}

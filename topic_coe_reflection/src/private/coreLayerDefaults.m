@@ -1,5 +1,5 @@
-function layer = coeLayerDefaults(name)
-%coeLayerDefaults 任意命名图样区域的统一参数；反射率为强度比例。
+function layer = coreLayerDefaults(name)
+%coreLayerDefaults 任意命名图样区域的统一参数；反射率为强度比例。
     layer = struct('file', string(name), 'field', string(name), 'invert', false, 'coverage', "image", ...
         'method', "nk", 'n', 1.5, 'k', 0, 'thickness', 0, 'nkFile', "", ...
         'reflectance', 1, 'phaseDeg', 180);

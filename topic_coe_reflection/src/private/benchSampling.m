@@ -1,5 +1,5 @@
-function report = benchmarkCoeSampling(cfg, stack, inputDir, outputDir, projectConfig)
-%benchmarkCoeSampling 独立扫描采样参数；复用实际图片及统一相干膜堆。
+function report = benchSampling(cfg, stack, inputDir, outputDir, projectConfig)
+%benchSampling 独立扫描采样参数；复用实际图片及统一相干膜堆。
 % 光谱部分只计算区域系数/周期阶次，不构造数千波长的全物面传播数组。
 % 空间部分使用生产传播入口；基准的平铺/抽样仅作用于内存副本。
     assert(stack.geometry.source=="images" && all(cfg.heightMap(:)==0) ...
@@ -7,12 +7,12 @@ function report = benchmarkCoeSampling(cfg, stack, inputDir, outputDir, projectC
         'COEReflection:BenchmarkInput', '基准要求图片输入、零额外高度、空外部复系数及无限光瞳。');
     if ~isfolder(outputDir), mkdir(outputDir); end
     originalCfg=cfg;
-    cfg.source=coeSourceDefaults();
+    cfg.source=coreSourceDefaults();
     cfg.propagationDistance=100;
     cfg.wavelengths=(380:0.0625:780)*1e-9;
     fprintf('采样基准：区域光谱 0.0625 nm，D65 380–780 nm；空间扫描使用单色。\n');
     timer=tic;
-    [model,geometry]=prepareCoeLayerStack(cfg,stack,inputDir);
+    [model,geometry]=corePrepareLayerStack(cfg,stack,inputDir);
     report.schemaVersion=1;
     report.createdAt=string(datetime('now','Format','yyyy-MM-dd HH:mm:ss'));
     report.matlabVersion=string(version);
@@ -187,7 +187,7 @@ function result = spectralSweep(cfg,model,periodic,outputDir)
 end
 
 function values = integrateSpectrum(nm,signals)
-    spectrum=loadCoeSpectrum(nm);
+    spectrum=coreLoadSpectrum(nm);
     values.radiant=signals*spectrum.energyWeights;
     values.photopic=signals*spectrum.photopicWeights;
     values.XYZ=signals*spectrum.xyzWeights;
@@ -205,7 +205,7 @@ function [error,rows] = checkIjp(cfg,stack,inputDir,geometry)
     end
     stack.layerNames="IJP"; stack.layerLevels=1; stack.backgroundMode="medium";
     stack.incidentN=1; stack.exitN=1;
-    film=prepareCoeLayerStack(cfg,stack,inputDir);
+    film=corePrepareLayerStack(cfg,stack,inputDir);
     phase=exp(4i*pi*1.5*10e-6./cfg.wavelengths);
     analytic=abs((-0.2+0.2*phase)./(1-0.04*phase)).^2;
     error=max(abs(abs(film.coefficientLookup).^2-analytic),[],'all');

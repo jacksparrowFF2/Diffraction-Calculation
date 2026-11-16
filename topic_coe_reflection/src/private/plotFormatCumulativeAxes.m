@@ -1,5 +1,5 @@
-function formatCumulativeAxes(observation, labels, panelTitle, style)
-%formatCumulativeAxes 半径内累计值始终以入射量为分母，不强制将曲线末端归一化到 100%。
+function plotFormatCumulativeAxes(observation, labels, panelTitle, style)
+%plotFormatCumulativeAxes 半径内累计值始终以入射量为分母，不强制将曲线末端归一化到 100%。
     if style.showAnnotations && style.showObservationRegion
         xline(observation.halfAngleDeg, ':', '观察外半角', 'HandleVisibility', 'off');
     end

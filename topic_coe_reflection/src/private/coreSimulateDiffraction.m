@@ -1,5 +1,5 @@
-function result = simulateDisplayDiffraction(cfg)
-%simulateDisplayDiffraction Scalar, normal-incidence reflection or pupil-plane UDC.
+function result = coreSimulateDiffraction(cfg)
+%coreSimulateDiffraction Scalar, normal-incidence reflection or pupil-plane UDC.
 % Reflection uses the aperture module's chirp-convolution Fourier quadrature,
 % including exp(i*k*z)/(i*lambda*z), without receiver quadratic phase.
 % UDC retains its sampled FFT and energy-bin resampling.
@@ -56,7 +56,7 @@ function result = simulateDisplayDiffraction(cfg)
         end
         coefficient = opticalCoefficient(cfg, mask, k);
         if cfg.mode == "reflection"
-            [incidentFields,sourceWeights,illuminationInfo{k}] = buildCoeIllumination(cfg,xx,yy,pupil,lambda);
+            [incidentFields,sourceWeights,illuminationInfo{k}] = coreBuildIllumination(cfg,xx,yy,pupil,lambda);
             sourceAngle=illuminationInfo{k}.maxIncidenceAngleDeg;
             assert(deg2rad(cfg.angleHalfRangeDeg)*(1+1/(cfg.outputSize-1))+sind(sourceAngle) ...
                 <= lambda/(2*dx)*(1+1e-12),'COEReflection:IlluminationAliasing', ...
@@ -74,10 +74,10 @@ function result = simulateDisplayDiffraction(cfg)
                 throughput(k)=throughput(k)+weight*modeThroughput;
                 parsevalError(k)=parsevalError(k)+weight*abs(sum(nativeEnergy(:))-modeThroughput);
                 incidentArea=incidentEnergy*dx^2;
-                [modeEnergy,intensityRatio,samples]=propagateCoeReceiver(field,x,y,outputCoordinate,lambda,cfg,incidentArea);
+                [modeEnergy,intensityRatio,samples]=corePropagateReceiver(field,x,y,outputCoordinate,lambda,cfg,incidentArea);
                 energy(:,:,k)=energy(:,:,k)+weight*modeEnergy;
                 receiverIrradiance(:,:,k)=receiverIrradiance(:,:,k)+weight*cfg.incidentIrradiance*intensityRatio;
-                clearEnergy(:,:,k)=clearEnergy(:,:,k)+weight*propagateCoeReceiver(incoming,x,y,outputCoordinate,lambda,cfg,incidentArea);
+                clearEnergy(:,:,k)=clearEnergy(:,:,k)+weight*corePropagateReceiver(incoming,x,y,outputCoordinate,lambda,cfg,incidentArea);
                 receiverSamples(k)=max(receiverSamples(k),samples);
                 if k==ceil(nLambda/2)
                     if mode==1, incidentIrradianceMap=zeros(gridSize); end
@@ -255,7 +255,7 @@ function [mask, x, y] = buildGeometry(cfg)
         unit = zeros(2*n);
         for row = 1:2
             for col = 1:2
-                unit((row-1)*n+(1:n), (col-1)*n+(1:n)) = customPattern( ...
+                unit((row-1)*n+(1:n), (col-1)*n+(1:n)) = coreCustomPattern( ...
                     cfg.cellAnglesDeg(row, col), cx, cy, cfg.radius*cfg.aspectRatio, cfg.radius, 0, 0);
             end
         end
@@ -277,9 +277,9 @@ function coefficient = opticalCoefficient(cfg, mask, k)
             coefficient = reshape(values(double(cfg.coeStack.regionMap(:)) + 1), size(mask));
         elseif isfield(cfg, 'materials') && cfg.materials.enabled
             % 两种材料的常数 n/k：法向单界面 Fresnel 复系数，包含材料反射相位。
-            feature = normalIncidenceReflection(cfg.materials.incidentN, ...
+            feature = coreNormalIncidenceReflection(cfg.materials.incidentN, ...
                 cfg.materials.featureN, cfg.materials.featureK);
-            background = normalIncidenceReflection(cfg.materials.incidentN, ...
+            background = coreNormalIncidenceReflection(cfg.materials.incidentN, ...
                 cfg.materials.backgroundN, cfg.materials.backgroundK);
             assert(isscalar(feature) && isscalar(background), 'COEReflection:ConstantNK', ...
                 '当前材料模型要求每种材料的 n、k 为常数标量。');

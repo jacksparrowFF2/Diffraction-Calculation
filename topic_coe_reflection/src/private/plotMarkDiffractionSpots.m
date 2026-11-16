@@ -1,5 +1,5 @@
-function markDiffractionSpots(ax, spots, groupName, wavelength, style)
-%markDiffractionSpots 标出共同积分圆、编号与零级排除圆；不使用显示增强结果找峰。
+function plotMarkDiffractionSpots(ax, spots, groupName, wavelength, style)
+%plotMarkDiffractionSpots 标出共同积分圆、编号与零级排除圆；不使用显示增强结果找峰。
     if ~style.showAnnotations
         return;
     end
