@@ -12,7 +12,7 @@ close all;
 %% 1. 文件输入与输出设置
 moduleDir = fileparts(fileparts(mfilename('fullpath')));
 inputRoot = fullfile(moduleDir, 'Input');
-projectName = "case04"; % case01~case04四图样对比；F192_AnodeBM_PlaneRGB为真实版图基线
+projectName = "case01"; % 默认普通单项目；case01~04、F192、COEB3等均可切换
 assert(~any(projectName == [".", ".."]) && ~contains(projectName, ["/", "\", ":"]), ...
     'COEReflection:ProjectName', '项目名称必须是单个文件夹名称，不能包含路径分隔符。');
 useProjectConfig = true;       % 读取 Input/项目名称/config.txt；false 使用下方脚本参数
@@ -25,7 +25,7 @@ showProgress = true;            % 是否显示仿真进度窗口；也可在项�
 runSamplingBenchmark = false;   % true：运行独立采样基准并返回；结果写入 Output/项目/SamplingConvergence
 samplingBenchmarkMode = "all"; % all：五类采样扫描；periods：Pitch数；raster：物面采样率收敛
 runPlaneWaveComparison = projectName=="F192_AnodeBM_PlaneRGB"; % 可手动设true：局部单元/阵列共同曝光RGB对比后返回
-runFourPatternComparison = any(projectName==["case01","case02","case03","case04"]); % 四图样共同条件对比
+runFourPatternComparison = false; % true批量比较四图样；false走普通单项目指标/绘图
 
 % MAT 文件可包含以下任意字段，读取后覆盖脚本中的对应值：
 % mask：二维 0~1 材料区域图，推荐二值；1 为特征区，0 为背景区。
@@ -42,7 +42,7 @@ cfg.periods = [16, 16];         % [x 方向周期数, y 方向周期数]，均�
 cfg.samplesPerPeriod = 64;      % 每周期采样点数；采样间距 = pitch / samplesPerPeriod
 cfg.paddingFactor = 2;          % 兼容旧配置；当前反射传播的输出采样由 outputSize/角域控制
 cfg.propagationDistance = 10;   % 接收面距离 z，单位 m；须满足夫琅禾费远场条件
-cfg.incidentIrradiance = 1;     % 每个波长单独以此入射辐照度标定，单位 W/m^2
+cfg.incidentIrradiance = 1;     % 平面波：实际照亮交集内的辐照度，W/m^2；其它源沿用光瞳平均值
 cfg.receiverBinSamples = 3;     % 每像素每轴最少积分点数（奇数），窄峰时自动增加
 cfg.pupilRadius = Inf;          % Inf 表示整个矩形计算面参与反射
 cfg.mask = [];                 % 由各层图片统一建立显示掩膜，不在这里另行输入几何
@@ -67,6 +67,10 @@ cfg.complexCoefficient = [];   % 留空时由 mask 和反射率构造；非空�
 
 % 光源空间形式与光谱相互独立；激光一般将 spectrumMode 设为 monochromatic。
 cfg.source = coreSourceDefaults();
+cfg.source.apertureShape = "rectangle"; % 平面波物面照明形状：rectangle / circle / none
+cfg.source.rectangleSize = [1e-3,1e-3]; % 矩形全宽×全高，m；此例1×1 mm
+cfg.source.circleDiameter = 1e-3; % 圆形照明直径，m；此例1 mm
+% 单波长内部空间相干；不同波长非相干叠加强度。centerXY控制照明中心。
 % type=plane 理想平面波；point 有限距离点源/非相干发光圆盘；laser 基模高斯。
 % 点源 diameter、distance、beamHalfAngleDeg 控制尺寸/距离/半强度半角。
 % laserSpecification=waist 或 divergence，束腰与发散角只指定一种。
@@ -427,7 +431,7 @@ disp(spotMetrics(spotMetrics.Group == "photopic", :));
 %% 6. 展示反射面与各波长的远场结果
 updateProgress(0.84, "绘制输入图层与合成反射颜色");
 geometryFigure = figure('Name', '输入图层与额外高度', 'Color', 'w', 'Position', [60, 80, 1450, 700]);
-showIllumination = cfg.source.type ~= "plane";
+showIllumination = cfg.source.type ~= "plane" || result.illuminationAperture.enabled;
 geometryTileCount = numel(stack.layerNames)+double(heightPhaseEnabled)+double(showIllumination);
 columnCount = ceil(geometryTileCount/ceil(geometryTileCount/4));
 tiledlayout(ceil(geometryTileCount/columnCount),columnCount,'TileSpacing','compact');

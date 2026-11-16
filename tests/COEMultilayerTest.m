@@ -8,6 +8,55 @@ classdef COEMultilayerTest < matlab.unittest.TestCase
         end
     end
     methods (Test)
+        function rectanglePlaneIlluminationUsesLitAreaAndKnownReflectance(testCase)
+            cfg=smallConfig(); cfg.wavelengths=550e-9; cfg.spectralWeights=1; cfg.channelResponse=1;
+            cfg.complexCoefficient=0.5; cfg.incidentIrradiance=7;
+            cfg.source.apertureShape="rectangle";
+            cfg.source.rectangleSize=[100e-6,75e-6];
+            value=runCOEReflection(cfg);
+            [xx,yy]=meshgrid(value.x,value.y);
+            expected=xx>=-50e-6 & xx<50e-6 & yy>=-37.5e-6 & yy<37.5e-6;
+            testCase.verifyEqual(value.pupil,double(expected));
+            testCase.verifyEqual(value.incidentIrradianceMap,7*double(expected),'AbsTol',1e-12);
+            testCase.verifyEqual(value.incidentArea,nnz(expected)*(cfg.pitch/cfg.samplesPerPeriod)^2,'AbsTol',1e-18);
+            testCase.verifyEqual(value.incidentPower,7*value.incidentArea,'AbsTol',1e-18);
+            testCase.verifyEqual(value.metrics.Throughput,0.25,'AbsTol',1e-12);
+            testCase.verifyLessThan(value.metrics.ParsevalAbsoluteError,1e-12);
+        end
+
+        function circlePlaneIlluminationUsesDiameterAndCentre(testCase)
+            cfg=smallConfig(); cfg.complexCoefficient=0.5;
+            cfg.source.apertureShape="circle"; cfg.source.circleDiameter=100e-6;
+            cfg.source.centerXY=[12.5e-6,-6.25e-6];
+            value=runCOEReflection(cfg);
+            [xx,yy]=meshgrid(value.x,value.y);
+            expected=(xx-12.5e-6).^2+(yy+6.25e-6).^2<=(50e-6)^2;
+            testCase.verifyEqual(value.pupil,double(expected));
+            testCase.verifyEqual(value.metrics.Throughput,0.25*ones(3,1),'AbsTol',1e-12);
+            testCase.verifyLessThan(abs(value.incidentArea-pi*(50e-6)^2), ...
+                2*pi*50e-6*cfg.pitch/cfg.samplesPerPeriod);
+        end
+
+        function millimetreBeamDoesNotExpandSmallInput(testCase)
+            cfg=smallConfig(); cfg.complexCoefficient=0.5;
+            reference=runCOEReflection(cfg);
+            cfg.source.apertureShape="rectangle"; cfg.source.rectangleSize=[1e-3,2e-3];
+            value=runCOEReflection(cfg);
+            testCase.verifyTrue(value.illuminationAperture.extendsBeyondGrid);
+            testCase.verifyEqual(value.illuminationAperture.requestedArea,2e-6,'AbsTol',1e-18);
+            testCase.verifyEqual(value.incidentArea,reference.incidentArea,'AbsTol',1e-18);
+            testCase.verifyEqual(value.spectralEnergy,reference.spectralEnergy,'AbsTol',1e-12);
+            testCase.verifyEqual(value.config.periods,cfg.periods);
+        end
+
+        function emptyOrInvalidPlaneFootprintIsRejected(testCase)
+            cfg=smallConfig(); cfg.source.apertureShape="circle";
+            cfg.source.circleDiameter=10e-6; cfg.source.centerXY=[1e-3,0];
+            testCase.verifyError(@()runCOEReflection(cfg),'COEReflection:EmptyIllumination');
+            cfg.source.apertureShape="triangle";
+            testCase.verifyError(@()runCOEReflection(cfg),'MATLAB:validators:mustBeMember');
+        end
+
         function sourceConvolutionMatchesDirectParaxialDisk(testCase)
             [cfg,stack,folder]=sourceConvolutionInput(testCase);
             direct=runCOEReflection(cfg,stack,folder);

@@ -3,6 +3,11 @@ classdef ModuleIsolationTest < matlab.unittest.TestCase
     methods (Test)
         function coeFourPatternsRunFromCopiedModule(testCase)
             folder=portableModule(testCase,'topic_coe_reflection');
+            scriptPath=fullfile(folder,'src','COEReflection_main.m');
+            scriptText=strrep(fileread(scriptPath),'runFourPatternComparison = false;', ...
+                'runFourPatternComparison = true;');
+            scriptFile=fopen(scriptPath,'w','n','UTF-8'); assert(scriptFile>=0);
+            fprintf(scriptFile,'%s',scriptText); fclose(scriptFile);
             index=floor(((0:31)+0.5)*500/32)+1;
             for name=["case01","case02","case03","case04"]
                 projectDir=fullfile(folder,'Input',name);

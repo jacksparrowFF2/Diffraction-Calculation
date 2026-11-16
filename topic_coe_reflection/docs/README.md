@@ -72,7 +72,7 @@ Case1/2/3原始图片均为 **1024×1024**，Pitch=50 μm，输入单元为16×1
 
 截图中的毫米尺寸仅用于确定相对比例。本次统一缩放为中心间距Pitch=59.06 μm、圆半径Pitch/4=14.765 μm；椭圆半轴为r√1.15、r/√1.15，连续面积相同，二值采样后覆盖率会有微小差异。每张500×500图片覆盖2×2 Pitch（118.12 μm），保留250点/Pitch。case04的左上/右上/左下/右下旋转角采用60°/30°/−30°/−60°，是明确的示意假设，截图未提供精确角度。Anode图中白区反射率1、相位180°；BM与Anode同图，白色表示开口、invert=true，其余为零反射黑区。
 
-主脚本当前选择 `projectName="case04"`；选择case01~case04任一个时，`runFourPatternComparison` 默认开启，统一读取并比较全部四组，然后返回。私有 `benchFourPatterns` 复用正式 `runCOEReflection` 传播。每组分别计算完整2×2 Pitch局部图样与8×8 Pitch阵列（完整图片每轴重复4次），均使用平面波、620/550/450 nm、±6°角域、1201×1201输出及相同D65三点权重。四组共八张RGB图共享同一个曝光参考与显示参数；灰度行仅比较局部图样，共享550 nm峰值参考、显示−60至0 dB。单圆和四圆的总反射面积不同，因此共同曝光图保留功率差异，没有按各自峰值归一化。
+主脚本当前选择 `projectName="case01"`、`runFourPatternComparison=false`，默认执行普通单项目的完整指标和绘图。手动设`runFourPatternComparison=true`时，统一读取并比较全部四组，然后返回。私有 `benchFourPatterns` 复用正式 `runCOEReflection` 传播。每组分别计算完整2×2 Pitch局部图样与8×8 Pitch阵列（完整图片每轴重复4次），均使用平面波、620/550/450 nm、±6°角域、1201×1201输出及相同D65三点权重。四组共八张RGB图共享同一个曝光参考与显示参数；灰度行仅比较局部图样，共享550 nm峰值参考、显示−60至0 dB。单圆和四圆的总反射面积不同，因此共同曝光图保留功率差异，没有按各自峰值归一化。
 
 输出：各项目 `Output/case01` 至 `Output/case04` 保存 `local_rgb.png`、`array_rgb.png` 和 `pattern_metrics.csv`。统一 `Output/FourPatterns/` 保存 `four_patterns_comparison.png`（四列依次case01~04，四行依次输入图样、局部550 nm、局部RGB、重复阵列RGB）、`case03_case04_local_rgb.png`（局部四圆/四椭圆大图）、`four_patterns_summary.csv` 及 `four_patterns_results.mat`。MAT中的report保留各case局部/阵列的原始spectralEnergy、配置、入射面积与功率、重复数、局部有效反射图和共同映射；可用spectralEnergy乘cfg.spectralWeights重建RGB输入。图像仍是每单位总入射功率的角像素能量，未模拟光源大小、连续光谱或相机，不因视觉相似而宣称复现实拍。
 
@@ -186,6 +186,28 @@ stack.layers.singlelayer.phaseDeg = 180
 可直接选择项目 CaseSingleNK 或 CaseSingleReflectance，分别验证上述两种设定；两者均只读取singlelayer.bmp。旧项目需将 stack.materials.* 改成 stack.layers.实际名称.*，删除opticalModel及固定anodeFile/bmFile/cfFiles字段。Case1~3已迁移。
 
 ### 光源空间形式（不模拟相机）
+
+平面波可显式设置物面照明范围（长度单位m）：
+
+当前16个项目config统一采用`type="plane"`、`integrationMethod="direct"`、`wavefront="plane"`，默认1×1 mm矩形照明。这里采用不同波长非相干叠加、单个入射模式内部空间相干的单方向近似，不称为“完全空间非相干平面波”。原ConvolutionRGB/ParaxialRGB项目名称及旧结果用于历史追溯；这些项目的当前config也已切换为plane，旧point的distance/diameter在plane模式下不生效。若要恢复有限发光面研究，应显式改回point和相应传播假设。
+
+```text
+cfg.source.type = "plane"
+cfg.source.apertureShape = "rectangle"
+cfg.source.rectangleSize = [0.001, 0.001]
+cfg.source.circleDiameter = 0.001
+cfg.source.centerXY = [0, 0]
+```
+
+`rectangleSize`是矩形[x全宽,y全高]；切换`apertureShape="circle"`时使用`circleDiameter`全直径。`none`为历史全物面均匀照明。该设置在物面上形成均匀强度足迹，不修改任何反射图片；每个波长内部仍空间相干，不等于完全空间非相干照明。完全空间非相干场不能同时限定为单一传播方向，需要另行规定角分布/互强度模型。
+
+照明足迹与输入物面、`pupilRadius`共同取交集。平面波的incidentIrradiance为实际照亮交集内的均匀辐照度，incidentArea及入射功率分母使用该交集的离散面积；不会把变小的照明区重新放大到原物面总功率。`result.illuminationAperture`保存请求面积、实际面积、覆盖比例及是否超出物面。照明超出物面时打印提示，不自动扩大或平铺；若需完整1 mm光斑作用于大屏，应显式提供足够大的反射物面。例如case01~04的局部物面仅0.11812 mm宽，8×8 Pitch阵列也仅0.47248 mm宽；1 mm矩形/圆形照明均覆盖整个当前物面，切换形状不会改变这些小物面的结果。物面足够大、能看见照明边界时，矩形/圆形才会体现不同的衍射响应。
+
+main当前默认`projectName="case01"`、`runFourPatternComparison=false`，直接执行所选项目的完整指标和绘图流程。四图样批量对比需手动设true。周期物面raster基准依赖全物面均匀照明，须显式设置`cfg.source.apertureShape="none"`。
+
+2026-11-16已实际跑通case01的完整普通主流程，输出在`Output/case01/`；照明交集面积约0.223237 mm²。新矩形/圆形照明、入射功率、偏心光斑、空交集和超出物面不自动平铺等检查通过；完整仓库89项测试通过、0失败、0未完成，记录在本地`Output/IlluminationValidation/`。此次未更换夫琅禾费传播积分器，变更的是物面照明窗及对应入射功率归一化。
+
+2026-11-16随后按用户要求，case01~04逐一关闭`runFourPatternComparison`、平面波、完整普通main流程重跑（均为8×8 Pitch），与旧`Output/FourPatterns/four_patterns_results.mat`中的array结果对照：四组逐波长spectralEnergy、总反射率、窗口捕获比例及零级比例的最大绝对差全部为0；使用旧共同曝光映射重绘后的RGB最大绝对差也全部为0。本次默认普通main对每个case单独确定曝光，因此原生RGB数组与旧共同曝光图的最大显示差分别约0.1450、0.1473、0.00429、0.00759（0~1范围），不代表物理强度改变。1×1 mm照明完整覆盖当前0.47248×0.47248 mm物面，覆盖率均为1。数值表为`Output/SingleFlowComparison/comparison_summary.csv`与`spectral_comparison.csv`，三行对比图为同目录`ordinary_vs_batch_rgb.png`，依次是旧共同曝光、本次独立曝光、本次按旧共同曝光重绘。绘图统一正θy向上；旧批量纯PNG使用flipud保存、普通main纯PNG直接保存，直接对照无坐标PNG时还须注意上下方向约定。原始旧批量结果未覆盖；运行结束后main恢复case01、四图样开关false。
 
 屏幕本身不发光，程序计算照明被膜堆反射/衍射后的理想角分布及接收平面辐照度。光源空间形式与光谱独立选择：
 
@@ -860,11 +882,11 @@ assert(all([r.Passed]));
 
 | 前缀 | 文件数 | 用途与示例 |
 |---|---|---|
-| `core` | 17 | 正式仿真的输入、进度、物理计算、色度和指标，例如 `corePrepareLayerStack`、`coreReflectFilmStack`；`coreSynthesizeColor` 保留原始 XYZ 并生成色度显示 |
+| `core` | 18 | 正式仿真的输入、进度、物理计算、色度和指标，例如 `corePrepareLayerStack`、`coreReflectFilmStack`；`coreSynthesizeColor` 保留原始 XYZ 并生成色度显示 |
 | `plot` | 5 | 绘图、样式、标记及 RGB 代理预览，例如 `plotFormatFarFieldAxes`、`plotComposeReflectionRgb` |
 | `bench` | 6 | 可选采样及结构对比：`benchSampling`、`benchPeriods`、`benchRaster`、`benchInputCell`、`benchPlaneWaveComparison`、`benchFourPatterns`；可重复运行，不代表一次性工具 |
 
-当前 `src/private/` 保留28个函数文件。只在一处使用的简短辅助逻辑直接并入调用处：反射默认值集中在 `coeReflectionDefaults.m`；膜堆默认设置和采样提示在主脚本；图片查找和材料光谱在 `corePrepareLayerStack.m`；两轴傅里叶积分在 `corePropagateReceiver.m`，两轴共用的一维变换保留为局部函数。按主脚本及两个公共接口的静态调用关系检查，没有完全不可达的独立函数；条件分支中的函数并非每次运行都会调用。
+当前 `src/private/` 保留29个函数文件。只在一处使用的简短辅助逻辑直接并入调用处：反射默认值集中在 `coeReflectionDefaults.m`；膜堆默认设置和采样提示在主脚本；图片查找和材料光谱在 `corePrepareLayerStack.m`；两轴傅里叶积分在 `corePropagateReceiver.m`，两轴共用的一维变换保留为局部函数。按主脚本及两个公共接口的静态调用关系检查，没有完全不可达的独立函数；条件分支中的函数并非每次运行都会调用。
 
 | 分类 | 函数 | 触发条件或作用 |
 |---|---|---|

@@ -15,6 +15,10 @@ function result = coreSimulateDiffraction(cfg, progressFcn)
     [mask, x, y] = buildGeometry(cfg);
     [xx, yy] = meshgrid(x, y);
     pupil = double(xx.^2 + yy.^2 <= cfg.pupilRadius^2);
+    illuminationAperture=struct();
+    if cfg.mode=="reflection"
+        [pupil,illuminationAperture]=corePlaneAperture(cfg,xx,yy,pupil);
+    end
     incidentEnergy = sum(pupil(:).^2);
     assert(incidentEnergy > 0, 'DisplayDiffraction:EmptyPupil', ...
         'The sampled pupil is empty. Increase pupilRadius or sampling density.');
@@ -171,6 +175,7 @@ function result = coreSimulateDiffraction(cfg, progressFcn)
     if cfg.mode == "reflection"
         result.propagationMethod = "Fraunhofer chirp-convolution Fourier integral";
         result.illumination=[illuminationInfo{:}];
+        result.illuminationAperture=illuminationAperture;
         if any(~cellfun(@isempty,sourceConvolution))
             result.sourceConvolution=[sourceConvolution{:}];
         end

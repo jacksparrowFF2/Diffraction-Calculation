@@ -47,3 +47,8 @@ displayStyle.showAnnotations = false
 saveResults = true
 showProgress = true
 caseName = "coe_reflection"
+
+# 物面照明范围：rectangle/circle/none；长度单位m，仅对plane照明生效
+cfg.source.apertureShape = "rectangle"
+cfg.source.rectangleSize = [0.001, 0.001]
+cfg.source.circleDiameter = 0.001

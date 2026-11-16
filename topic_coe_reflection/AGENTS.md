@@ -50,3 +50,4 @@
 
 - 图样对齐可显式选择F192_AnodeBM_ConvolutionRGB/ParaxialRGB：仅Anode/BM，BM为理想不透明黑区，不读取CF/IJP；三波长按D65采样权重，仅称RGB代理。原F192/COEB3完整膜堆不改写。
 - 面源卷积为source.integrationMethod="angularConvolution"，仅point源并显式选择wavefront="plane"或"paraxial"，假设均匀非相干圆盘及源点相同振幅。球面精确直接积分保留direct/spherical默认，不得静默替换。逐波长在物理强度上做线性卷积，先向外补足源角半径再裁切，核积分为1但不能重标定最终窗口能量。plane对应远场PSF平移模型，paraxial另含中心源二次相位；两者均不是完整相机/目视光路。验证应与相同波前假设下显式源点求和对照。
+- plane照明范围由source.apertureShape=none/rectangle/circle、rectangleSize全宽高、circleDiameter全直径和centerXY定义，单位m，不改变反射图样。与物面/几何光瞳取交集，incidentArea及功率分母使用实际照亮交集；照明越界只报告，不自动扩大或平铺输入。API默认none保留兼容，各项目当前显式1×1mm矩形、plane/direct。单波长模式内部仍空间相干，不同波长/独立源模式叠加强度，不得称为完全空间非相干平面波。main默认case01且runFourPatternComparison=false；批量比较需显式开启。

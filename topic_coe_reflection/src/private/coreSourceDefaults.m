@@ -1,6 +1,10 @@
 function source = coreSourceDefaults()
 %coreSourceDefaults 光源空间模型；光谱独立设置，入射辐照度为物面平均值。
     source.type = "plane"; % plane / point / laser
+    % none保留历史全物面接口；项目config显式选择rectangle/circle，长度单位m。
+    source.apertureShape = "none"; % plane照明足迹：none / rectangle / circle
+    source.rectangleSize = [1e-3,1e-3]; % [x宽度,y高度]，全尺寸，不是半宽
+    source.circleDiameter = 1e-3; % 圆形照明直径，不是点源发光直径source.diameter
     source.centerXY = [0,0]; % 点源中心或高斯光轴在物面的投影，m
     source.distance = 0.1; % 点源到物面法向距离，m
     source.diameter = 0; % 点源发光圆盘直径，0=理想点；m

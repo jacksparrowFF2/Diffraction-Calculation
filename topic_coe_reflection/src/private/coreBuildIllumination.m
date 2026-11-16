@@ -1,6 +1,6 @@
 function [fields, weights, info] = coreBuildIllumination(cfg, xx, yy, pupil, lambda)
 %coreBuildIllumination 各互不相干源点的物面复场；各自场内保留空间相干。
-% 总入射功率统一标定到 Iinc*几何光瞳面积，不猜测未知的LED总功率。
+% 总入射功率标定到Iinc*有效光瞳面积；plane已与照明范围取交集。
     source = coreSourceDefaults();
     if isfield(cfg,'source')
         for name=string(fieldnames(cfg.source)).', source.(name)=cfg.source.(name); end

@@ -104,3 +104,10 @@ cfg.source.divergenceHalfAngleDeg = 0.1
 sourceSpectrumFile = ""
 wavelengthRangeNm = [380, 780]
 monochromaticWavelengthNm = 532
+
+# 物面照明范围：rectangle/circle/none；长度单位m，仅对plane照明生效
+cfg.source.apertureShape = "rectangle"
+cfg.source.rectangleSize = [0.001, 0.001]
+cfg.source.circleDiameter = 0.001
+cfg.source.integrationMethod = "direct"
+cfg.source.wavefront = "plane"
