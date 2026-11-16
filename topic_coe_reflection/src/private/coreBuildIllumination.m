@@ -2,19 +2,27 @@ function [fields, weights, info] = coreBuildIllumination(cfg, xx, yy, pupil, lam
 %coreBuildIllumination 各互不相干源点的物面复场；各自场内保留空间相干。
 % 总入射功率统一标定到 Iinc*几何光瞳面积，不猜测未知的LED总功率。
     source = coreSourceDefaults();
-    if isfield(cfg,'source'), source=cfg.source; end
+    if isfield(cfg,'source')
+        for name=string(fieldnames(cfg.source)).', source.(name)=cfg.source.(name); end
+    end
     mustBeMember(source.type,["plane","point","laser"]);
+    mustBeMember(source.integrationMethod,["direct","angularConvolution"]);
+    mustBeMember(source.wavefront,["spherical","paraxial","plane"]);
+    convolution=source.integrationMethod=="angularConvolution";
+    assert(~convolution || (source.type=="point" && source.wavefront~="spherical"), ...
+        'COEReflection:SourceConvolution','面源卷积要求point源并显式选择paraxial或plane波前。');
     validateattributes(source.centerXY,{'numeric'},{'size',[1,2],'real','finite'});
     weights=1; fields={complex(ones(size(xx)))};
     info=struct('type',source.type,'modeCount',1,'normalizationScale',1, ...
-        'maxIncidenceAngleDeg',0,'beamRadius',NaN,'divergenceHalfAngleDeg',NaN);
+        'maxIncidenceAngleDeg',0,'beamRadius',NaN,'divergenceHalfAngleDeg',NaN, ...
+        'integrationMethod',source.integrationMethod,'wavefront',source.wavefront);
     if source.type=="point"
         validateattributes(source.distance,{'numeric'},{'scalar','real','finite','positive'});
         validateattributes(source.diameter,{'numeric'},{'scalar','real','finite','nonnegative'});
         validateattributes(source.samplesPerAxis,{'numeric'},{'scalar','integer','positive','odd'});
         validateattributes(source.beamHalfAngleDeg,{'numeric'},{'scalar','real','finite','>',0,'<',90});
         positions=[0,0];
-        if source.diameter>0
+        if source.diameter>0 && ~convolution
             assert(source.samplesPerAxis>=3,'COEReflection:SourceSampling', ...
                 '有限尺寸光源需至少3×3采样；请进一步增加采样检查收敛。');
             axis=((0:source.samplesPerAxis-1)+0.5)/source.samplesPerAxis-0.5;
@@ -30,10 +38,23 @@ function [fields, weights, info] = coreBuildIllumination(cfg, xx, yy, pupil, lam
             angle=atan2d(radius,source.distance);
             % 路径差的稳定写法，避免 R-z 在远距离下的消减误差。
             path=radius.^2./(range+source.distance);
-            amplitude=(source.distance./range).^1.5 ...
-                .*exp(-0.5*log(2)*(angle/source.beamHalfAngleDeg).^2);
-            fields{j}=amplitude.*exp(2i*pi*path/lambda);
-            info.maxIncidenceAngleDeg=max(info.maxIncidenceAngleDeg,max(angle(pupil>0)));
+            if source.wavefront=="spherical"
+                amplitude=(source.distance./range).^1.5 ...
+                    .*exp(-0.5*log(2)*(angle/source.beamHalfAngleDeg).^2);
+                fields{j}=amplitude.*exp(2i*pi*path/lambda);
+                incidence=max(angle(pupil>0));
+            elseif source.wavefront=="paraxial"
+                fields{j}=exp(1i*pi*radius.^2/(lambda*source.distance));
+                incidence=rad2deg(max(radius(pupil>0))/source.distance);
+            else
+                position=source.centerXY+positions(j,:);
+                fields{j}=exp(-2i*pi*(xx*position(1)+yy*position(2))/(lambda*source.distance));
+                incidence=rad2deg(norm(position)/source.distance);
+            end
+            info.maxIncidenceAngleDeg=max(info.maxIncidenceAngleDeg,incidence);
+        end
+        if convolution
+            info.maxIncidenceAngleDeg=info.maxIncidenceAngleDeg+rad2deg(source.diameter/(2*source.distance));
         end
     elseif source.type=="laser"
         mustBeMember(source.laserSpecification,["waist","divergence"]);
@@ -58,6 +79,8 @@ function [fields, weights, info] = coreBuildIllumination(cfg, xx, yy, pupil, lam
         info.maxIncidenceAngleDeg=rad2deg(max(sqrt(radiusSquared(pupil>0)))*abs(inverseCurvature));
     end
     info.modeCount=numel(weights);
+    if source.type=="plane", info.wavefront="plane"; end
+    if source.type=="laser", info.wavefront="TEM00"; end
     power=0;
     for j=1:numel(weights), power=power+weights(j)*sum(abs(fields{j}.*pupil).^2,'all'); end
     assert(power>0 && isfinite(power),'COEReflection:SourcePower','光源在物面上的入射能量为零或非有限值。');

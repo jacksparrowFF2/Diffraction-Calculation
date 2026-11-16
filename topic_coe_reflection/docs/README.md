@@ -1,12 +1,15 @@
 # COE 反射衍射：使用与交接说明
 
-更新日期：2026-11-13。本文件是本模块的统一使用说明，包含项目配置、实际图样输入、物理模型、结果解释与开发交接。文中 `src/`、`Input/`、`Output/` 均相对于 `topic_coe_reflection/`。
+更新日期：2026-11-16。本文件是本模块的统一使用说明，包含项目配置、实际图样输入、物理模型、结果解释与开发交接。文中 `src/`、`Input/`、`Output/` 均相对于 `topic_coe_reflection/`。
 
 正式仿真按图层列表读取用户提供的任意命名图样（默认阳极、BM、RGB CF），不调整像素形状。主入口是 `src/COEReflection_main.m`；选定项目后，自动读取该项目的 `config.txt`，无需反复修改 MATLAB 中的常用参数。额外高度默认 **0 nm**。
+
+可编辑的详细流程图：[topic_coe_reflection_flow.drawio](topic_coe_reflection_flow.drawio)。用 draw.io 打开后，依次查看底部四个页签：总览与项目数据流、图层到局部膜堆、照明与远场传播、指标色度与输出。图中标注实际函数名、主要公式、数组尺寸、能量归一化分母和当前默认 `Case1_Pitch64` 参数实例；内容依据 2026-11-16 工作区源码整理。
 
 ## 目录
 
 - [快速开始与项目切换](#quick-start)
+- [收敛性结论、当前选型与验证记录](#convergence-decisions)
 - [项目配置 config.txt](#project-config)
 - [图样、物理尺寸与材料输入](#inputs)
 - [光学模型与计算流程](#model)
@@ -25,6 +28,8 @@
 2. 主脚本第 1 节选择 `projectName="Case1"`，保持 `useProjectConfig=true`。
 3. 编辑 `Input/Case1/config.txt`，完整运行主脚本。脚本会执行 `clearvars`、`clc`、`close all`，保留搜索路径与 MCP 连接；不要在运行前通过工作区变量设置参数。
 4. 结果保存到 `Output/Case1/`，同一 `caseName` 再次运行会覆盖同名文件。
+
+主脚本默认 `showProgress=true`，显示中文仿真进度窗口：包含读图/膜堆计算、逐波长与源点传播、非零高度的两状态、指标统计、绘图及保存；显示当前波长、源点序号和已用时间。百分比按任务阶段分配，不表示精确耗时占比或剩余时间。完成或报错后自动关闭，手动关闭窗口只隐藏进度，计算继续。可在主脚本或项目 `config.txt` 设置 `showProgress=false` 关闭；无 MATLAB 桌面时自动跳过窗口。采样基准与批量公共接口沿用原有输出，不弹出该窗口。进度回调不写入 `cfg`、原始 XYZ 或物理结果。
 
 ```text
 Input/
@@ -53,13 +58,47 @@ src/
   private/            内部算法和绘图函数
 ```
 
-三套示例均为 **1024×1024**，Pitch=50 μm，16×16 个 R/B 网格间距，每周期64点，物面800×800 μm。参考图的实线 PDL 作为阳极，虚线是 Mask，不当作 BM。R/B 在网格上交错，G 位于四邻中心并交替倾斜；每个2×2晶胞有2R、4G、2B。BM 开口和 CF 按先前约定分别外扩5 μm和7 μm。参考图未标注尺寸，示例只匹配布局及轮廓特征，不代表产品尺寸或实测材料。
+Case1/2/3原始图片均为 **1024×1024**，Pitch=50 μm，输入单元为16×16 Pitch，每Pitch 64点、单元800×800 μm。当前config显式开启repeatToFit，按4×4平铺到64×64 Pitch，计算物面为4096×4096点、3.2×3.2 mm。参考图的实线 PDL 作为阳极，虚线是 Mask，不当作 BM。R/B 在网格上交错，G 位于四邻中心并交替倾斜；每个2×2晶胞有2R、4G、2B。BM 开口和 CF 按先前约定分别外扩5 μm和7 μm。参考图未标注尺寸，示例只匹配布局及轮廓特征，不代表产品尺寸或实测材料。
 
-新增项目时复制一个 Case 文件夹并改名，替换六张图片及配置，再修改 `projectName` 即可（支持中文名称）。物理尺度、采样和材料由项目配置指定，不由文件夹名称推断；程序不自动缩放或平铺图片。`projectName=""` 使用旧的 Input/Output 根目录，启用配置时仍需在 Input 根目录提供 config.txt。
+新增项目时复制一个 Case 文件夹并改名，替换六张图片及配置，再修改 `projectName` 即可（支持中文名称）。物理尺度、采样和材料由项目配置指定，不由文件夹名称推断；程序不缩放图片；只有显式开启stack.geometry.repeatToFit时才按下述规则平铺。`projectName=""` 使用旧的 Input/Output 根目录，启用配置时仍需在 Input 根目录提供 config.txt。
 
 默认使用 D65 380–780 nm、5 nm 步长（81波长），输出1201×1201、角域±6°、接收距离10 m。有限圆盘光源默认每轴5点，光源类型仍由项目选择，默认plane。当前反射分支采用指定频率网格的二次相位卷积傅里叶积分；`paddingFactor` 保留兼容，不再控制反射输出采样。`cfg.heightMap=0`；只计算和展示一组反射结果，膜层自身的相位始终保留。两个单图层校验项目保留小尺寸输出，光谱同样使用5 nm。
 
 <a id="project-config"></a>
+
+### case01~case04 四图样平面波对比
+
+用户指定四种理想图样，按截图从左到右命名：`case01`单圆、`case02`等面积椭圆（长短半轴比1.15）、`case03`四圆阵列、`case04`四个不同取向的等面积椭圆。各项目在 `Input/case01` 至 `Input/case04`，分别包含anode.png、BM.png和config.txt；图样是理想对照，不替代F192真实版图。由归档工具 `archive/input_generation/createFourPatternCases.m` 一次性建立，该工具拒绝覆盖既有项目；正式计算仅从图片读取，不提供形状调整参数。
+
+截图中的毫米尺寸仅用于确定相对比例。本次统一缩放为中心间距Pitch=59.06 μm、圆半径Pitch/4=14.765 μm；椭圆半轴为r√1.15、r/√1.15，连续面积相同，二值采样后覆盖率会有微小差异。每张500×500图片覆盖2×2 Pitch（118.12 μm），保留250点/Pitch。case04的左上/右上/左下/右下旋转角采用60°/30°/−30°/−60°，是明确的示意假设，截图未提供精确角度。Anode图中白区反射率1、相位180°；BM与Anode同图，白色表示开口、invert=true，其余为零反射黑区。
+
+主脚本当前选择 `projectName="case04"`；选择case01~case04任一个时，`runFourPatternComparison` 默认开启，统一读取并比较全部四组，然后返回。私有 `benchFourPatterns` 复用正式 `runCOEReflection` 传播。每组分别计算完整2×2 Pitch局部图样与8×8 Pitch阵列（完整图片每轴重复4次），均使用平面波、620/550/450 nm、±6°角域、1201×1201输出及相同D65三点权重。四组共八张RGB图共享同一个曝光参考与显示参数；灰度行仅比较局部图样，共享550 nm峰值参考、显示−60至0 dB。单圆和四圆的总反射面积不同，因此共同曝光图保留功率差异，没有按各自峰值归一化。
+
+输出：各项目 `Output/case01` 至 `Output/case04` 保存 `local_rgb.png`、`array_rgb.png` 和 `pattern_metrics.csv`。统一 `Output/FourPatterns/` 保存 `four_patterns_comparison.png`（四列依次case01~04，四行依次输入图样、局部550 nm、局部RGB、重复阵列RGB）、`case03_case04_local_rgb.png`（局部四圆/四椭圆大图）、`four_patterns_summary.csv` 及 `four_patterns_results.mat`。MAT中的report保留各case局部/阵列的原始spectralEnergy、配置、入射面积与功率、重复数、局部有效反射图和共同映射；可用spectralEnergy乘cfg.spectralWeights重建RGB输入。图像仍是每单位总入射功率的角像素能量，未模拟光源大小、连续光谱或相机，不因视觉相似而宣称复现实拍。
+
+2026-11-16实算：case01~04的总反射率分别为4.9124%、4.9100%、19.6496%、19.6304%，局部与重复阵列相同；最大Parseval绝对误差2.78×10⁻¹⁶，±6°窗口捕获约96.3%~97.4%的反射能量。局部单圆/单椭圆主要形成彩色环，四圆形成规则彩色光点，四个不同取向椭圆使环状结构破碎且光点强度随方向变化。重复后均有更锐利的点阵；case01/02此时也会产生阵列干涉，不能把“圆只产生环”推广到重复阵列。与实拍只作定性比较，不能由相似性唯一反推结构。新增四图样独立复制运行测试及原真实图样平面波复制测试均通过；测试用低分辨率临时夹具验证流程和共同曝光，不作为原生几何精度证明。
+
+若只运行某个case的普通单项目输出，手动设置 `runFourPatternComparison=false` 即可。切换 `projectName="F192_AnodeBM_PlaneRGB"` 可恢复真实Anode/BM单元/阵列对比；其它旧项目不触发四图样分支。
+
+### 真实Anode/BM平面波局部单元与阵列对比
+
+选择 `projectName="F192_AnodeBM_PlaneRGB"` 时，该项目默认开启 `runPlaneWaveComparison`，运行后返回，不再重复执行普通单项目计算。计算由私有 `benchPlaneWaveComparison` 调用现有公共 `runCOEReflection` 完成。切换其它项目时此开关默认关闭；也可手动设为false，恢复当前项目的普通输出流程。采样基准开启时优先执行采样基准。
+
+本项目保留现有Anode/BM图片的原始像素，只计算Anode反射与BM遮挡，不读取CF/IJP。原图1000×1000为4×4 Pitch完整输入单元，Pitch=59.06 μm；本次不裁切、更不推断最小晶胞。局部单元为4×4 Pitch（236.24 μm边长），阵列按config中的 `cfg.periods=[16,16]` 显式平铺为4000×4000（944.96 μm边长），均保留250点/Pitch。平面波、零额外高度；接收距离100 m仅服务于理想远场角分布，不代表实拍相机距离。
+
+两组使用相同的±6°角域、1201×1201输出与接收像素积分。先分别计算620/550/450 nm强度，再用D65三点采样权重合成RGB代理；不是完整连续光谱色度，也不是相机预览。RGB直接使用同一个 `plotComposeReflectionRgb` 调用取得共同曝光和映射，禁止两图各自归一化。默认clipQuantile=0.9985、alpha=60、gamma=0.72；单波长图采用两组共同550 nm峰值作为0 dB参考、显示−60至0 dB。中心±1.5°图仅裁切显示，不重新计算，也不提高分辨率。
+
+输出目录 `Output/F192_AnodeBM_PlaneRGB/PlaneWaveComparison/`：
+
+- `plane_wave_comparison.png`：每行一组，依次为550 nm、全角域RGB、中心放大RGB。
+- `local_rgb.png` / `array_rgb.png`：共同曝光的纯RGB图，无坐标；上方对应正θy。
+- `geometry_and_profile.png`：实际有效反射区域与两组共同参考的550 nm水平剖面。
+- `plane_wave_summary.csv`：各波长总反射率、窗口捕获率、零级占比、Parseval误差及物面面积。
+- `plane_wave_comparison.mat`：`report.local/array` 内保存原始spectralEnergy、channelSignal、cfg、角坐标、入射面积/功率、输入周期和重复数，另保存共同显示映射、局部有效复反射图和汇总表；不保存无关大网格。
+
+图中的强度为**每单位总入射功率对应的角像素能量**，适合比较能量分布形状；两组物面平均辐照度相同，但16×16阵列的入射面积/总功率是4×4单元的16倍。不要把归一化图直接解释为相同辐照度下的绝对接收亮度。代码检查共同角网格、完整平铺前后总反射率相同、每组仅传播一次高度状态及逐波长Parseval误差。以上检查不是物面或光谱收敛性证明。实拍比较优先看斑点排列、间距与包络；颜色及绝对强度还依赖真实光谱、材料和成像条件。
+
+2026-11-16原生250点/Pitch实算：两组总反射率均为0.1575，最大Parseval绝对误差2.78×10⁻¹⁷；±6°窗口捕获局部单元反射能量的93.12%/93.87%/94.98%，阵列的93.93%/94.63%/95.61%（依次620/550/450 nm），窗口外能量未重新归一化。局部单元呈现较宽的彩色干涉光点，阵列呈现更窄的规则点阵，两组仍有明显横纵方向增强；与实拍有定性结构相似，尚未匹配其近圆形包络、光点宽度及蓝绿色颜色分布。三波长不能用来排除连续光谱影响。验证：新比较分支独立复制模块运行测试、原主脚本非零高度回归和D65色度/角域回归均通过（共3项）；新测试使用临时低分辨率夹具，仅验证流程/归一化/私有函数解析，不用于真实版图精度证明。
 
 ## 项目配置 config.txt
 
@@ -97,7 +136,18 @@ cfg.heightMap = 0
 
 ### 统一的图层声明与两种光学设定
 
-不再选择 simple/multilayer。`stack.layerNames` 同时决定读取哪些图片/材料；未声明的图层不读取。名称必须是唯一的有效 MATLAB 字段名，可自定义。`stack.layerLevels` 与列表一一对应，正整数按从下到上非递减排列；省略时按列表顺序逐项叠放。相同层级表示同一物理层中的互斥材料区域，其图片不允许交叠。因此默认 CF_R/G/B 均为层级4，绝不是R膜、G膜、B膜依次上下叠加。
+不再选择 simple/multilayer。`stack.layerNames` 同时决定读取哪些图片/材料；未声明的图层不读取。名称必须是唯一的有效 MATLAB 字段名，可自定义。`stack.layerLevels` 与列表一一对应，正整数按从下到上非递减排列；省略时按列表顺序逐项叠放。相同层级表示同一物理层中的互斥材料区域，其图片不允许交叠。旧Case示例的CF_R/G/B均为层级4，表示同层互斥。主脚本默认和F192/COEB3采用下述独立膜层配置，支持真实交叠。
+
+实际RGB CF默认制作顺序为从下到上 **R→B→G**。直接重排名称列表即可自定义，不新增数字颜色编号；层级始终与列表一一对应并按从下到上递增：
+
+```text
+stack.layerNames = ["Anode", "IJP", "BM", "CF_R", "CF_B", "CF_G"]
+stack.layerLevels = [1, 2, 3, 4, 5, 6]
+```
+
+例如改为R→G→B时，将最后三项改为 `"CF_R", "CF_G", "CF_B"`，层级仍为 `[1,2,3,4,5,6]`。材料参数按名称绑定，重排列表不改变该颜色的n/k或厚度。仅在掩膜实际重合处叠加膜层；缺失的膜不会保留空气占位层。交叠处各膜保持其配置厚度，局部总高度为所有存在膜厚之和，统一计算多界面反射、吸收及相位，并补足到共同参考面。额外`heightMap=0`不删除这些膜层相位。当前不模拟交叠处减薄或平坦化。
+
+F192和COEB3均为1000×1000像素的4×4 Pitch单元，每Pitch 250像素；配置目标64×64 Pitch时各轴重复16次，得到16000×16000网格。按阈值0.5、BM反相后的原图统计，CF交叠分别占整个单元3.2416%和3.5168%，均位于BM实体上，且无三色共同交叠；BM上的交叠仍参与完整膜堆计算。
 
 每项可设置 `file`（默认同名图片，可省略扩展名）、`field`（MAT字段名，默认同名）、`invert`（默认false，白色=材料；白色=开口时true）和以下两种 method：
 
@@ -201,9 +251,9 @@ wavelengthStepNm = 5
 
 D65沿用*_d65_color.png；自定义/单色输出*_spectral_color.png，*_spectrum.csv记录实际IncidentSPD。源SPD只定义相对光谱形状，功率标定仍由物面平均辐照度决定；辐射度和明视觉分母分别按实际入射光谱归一化。
 
-### IJP：统一用全白图片输入
+### IJP：图片颜色由invert解释
 
-默认顺序是 **Anode → IJP → BM → [CF_R,CF_G,CF_B]**。IJP全平面连续覆盖，上下表面平坦，n=1.5、k=0、厚10 μm。Case1~3已提供与其它图层严格同尺寸、同原点的全白IJP.png/.bmp/.jpg，不再需要特殊的无图片输入流程。白色表示“此处有膜”，透明性由k=0定义；透明膜仍有界面反射和传播干涉，绝不能以删除复反射相位的方式模拟透明。
+实际项目默认顺序是 **Anode → IJP → BM → CF_R → CF_B → CF_G**；Case1~3保留显式同层互斥CF设置。IJP全平面连续覆盖，上下表面平坦，n=1.5、k=0、厚10 μm。Case1~3已提供与其它图层严格同尺寸、同原点的全白IJP.png/.bmp/.jpg，不再需要特殊的无图片输入流程。白色表示“此处有膜”，透明性由k=0定义；透明膜仍有界面反射和传播干涉，绝不能以删除复反射相位的方式模拟透明。
 
 ```text
 stack.layers.IJP.file = "IJP"
@@ -213,9 +263,39 @@ stack.layers.IJP.k = 0
 stack.layers.IJP.thickness = 10e-6
 ```
 
-IJP下方仅Anode图样范围内为反射底，其余位置沿用理想匹配吸收终端；覆盖IJP/BM/CF后的界面反射仍计算。工程接口保留coverage="full"便于算法验证，默认项目统一读取全白图片。
+F192/COEB3的IJP原图为全黑，必须保持 `stack.layers.IJP.invert = true`，反相后为整面有膜；旧Case全白图采用false。invert只解释几何覆盖，不改变材料n/k、膜厚或光学相位。
+
+IJP下方仅Anode图样范围内为反射底，其余位置沿用理想匹配吸收终端；覆盖IJP/BM/CF后的界面反射仍计算。工程接口保留coverage="full"便于算法验证，项目统一读取图片，并通过invert声明黑白含义。
 
 厚膜干涉对光谱步长更敏感：仅10 μm、n=1.5的IJP在380 nm附近，往返相位变化周期约4.8 nm，5 nm可能不能分辨局部干涉条纹。当前常规方案比较按用户选择暂用统一5 nm；对很接近的候选排序或精细光谱形状，再用更细步长复核。主脚本保留厚膜采样提醒；完整膜堆的最严要求可能比单独IJP更高，建议步长不是精度保证。
+
+<a id="convergence-decisions"></a>
+
+### 收敛性结论、当前选型与验证记录
+
+以下汇总用于后续参数选择与交接。**当前采用的计算参数与已经通过的收敛判据应分别理解**：64 Pitch、5 nm、±6°/1201、有限源5×5是目前结合计算资源和用户选择的常规配置，不代表所有物理量均已联合收敛。详细扫描条件、数据表和公式继续保留在本节后的采样/Pitch专项及输入单元说明中。
+
+| 因素 | 已有验证结果 | 当前采用及适用范围 |
+|---|---|---|
+| 光谱步长 | 10 μm、n=1.5的IJP及完整膜堆均有快速干涉；完整膜堆5 nm的区域R曲线最大重建差约30.05个百分点，0.25 nm约0.37个百分点。宽带积分可比局部曲线更早稳定 | 方案常规比较统一5 nm；候选差异很小、材料/光源存在尖锐光谱或关注干涉细节时，再以更细步长复核。局部曲线误差不能直接当成方案差值或排序误差 |
+| 输出角网格 | ±6°/801相对1601的共同角图L1差约占窗口能量9.04–25.70%，所选积分指标却可相差仅约0.0017个百分点；真实±1°/801比宽图裁切有更细采样 | 采用±6°/1201，间隔0.01°；属于当前计算预算的选择，不能据此宣称窄峰形状已充分分辨。积分量、角图和峰宽分别检查 |
+| 像素内积分 | 在±1°/401、16 Pitch的已测条件下，最少3点相对7点的共同角图差约0.044–0.154% | 保留receiverBinSamples=3；它是每轴最少点数，实际值可能由生产算法自动提高，不等于输出角网格数 |
+| 每轴Pitch数量 | 对同一无限周期效率参照，128 Pitch通过D65辐射/明视觉判据；192 Pitch通过所测81波长全部ROI判据，256 Pitch进一步确认；64 Pitch未通过该判据 | Case1/2/3暂用64×64 Pitch作为资源折中，原生64像素/Pitch时为4096×4096物面；需要上述宽带/逐波长效率标准时，分别用128/192 Pitch并复核资源 |
+| 物面像素数 | 每Pitch 32点相对原生64点的共同角图差约1.99–3.21%；64→128点的硬像素保持细化差不超过约0.108%，后者仅验证同一栅格的积分 | 推荐64像素/Pitch起步；50 μm Pitch对应0.78125 μm间距。细边界验证用真实重新栅格化的128像素/Pitch输入，间距0.390625 μm；插值放大旧图不能证明几何收敛 |
+| 有限光源采样 | 在550 nm、8×8 Pitch、距离0.1 m/直径0.2 mm圆盘条件下，3×3相对25×25参照的共同角图差约6.40%；17×17约0.070%；5×5、9×9误差不单调 | 按用户选择保留5×5（圆盘内实际21点）。当前样例照明仍为plane，该参数不触发源点循环；有限距离光源的结果不能直接套用平面波Pitch结论 |
+
+效率的初始判据为`绝对差 ≤ 1e-4 + 0.01×abs(参照量)`，反射率按0–1计，1e-4即0.01个百分点，并非纯粹的“相对误差小于1%”。弱阶次使用同一绝对容差。最细样本的自比较为零不构成独立精度证明；推荐Pitch档位还要求更大样本继续通过。早期圆形ROI与Pitch专项的方形ROI需各自使用本阶段固定定义，不能逐行混比；自动S编号不能代替固定理论阶次。
+
+自动平铺的正确性已于**2026-11-16**验证：42项COE回归通过，包括公共入口下2×2 Pitch、4×4 Pitch及2×4 Pitch输入单元与预先平铺完整图片的传播结果对照，以及目标不可整除、图层原始尺寸不一致的报错检查。Case1、Case2、Case3的实际config也逐项检查通过：输入16×16 Pitch、横纵各平铺4次、目标64×64 Pitch。此项证明图像装配和调用行为正确，**不替代物理采样收敛验证**。
+
+记录阶段与复核入口：
+
+- **2026-11-13五类采样扫描**：68组空间计算；基于当时16 Pitch Case1输入。原始数据在`Output/Case1/SamplingConvergence/`的`spectral.csv`、`ijp_spectral.csv`、`spatial.csv`、`spectral_reference.mat`、`sampling_convergence.mat`；保留半格偏移、材料/区域表、实际积分点数及源码快照。
+- **Pitch专项**：数据在`Output/Case1/PitchConvergence/`的`pitch_summary.csv`、`pitch_convergence.mat`、`production_validation.csv`；保留无限周期参照、逐波长/宽带分开的通过标志、ROI及6组生产传播交叉检查。使用主脚本`runSamplingBenchmark=true`、`samplingBenchmarkMode="periods"`复核；五类扫描用mode="all"。
+- **64 Pitch完整仿真**：数据在`Output/Case1_Pitch64/`，81个波长均已完成；`run_validation.json`记录原始数组/CSV、角域积分和完整输入哈希复核。此结果只代表实际运行的64 Pitch；准备好的128 Pitch图片项目未被标记为已完成完整仿真。
+- **2026-11-16平铺回归与真实配置检查**：本地日志为`Output/repeat_config_check_20261116/matlab_verified.log`，回归记录为同目录`regression_results.mat`；对应测试在`tests/COEMultilayerTest.m`及现有COE回归套件中。
+
+`Output/`默认不进入Git。复核或迁移时应单独备份所需MAT/CSV/日志及对应配置、原始输入和源码版本；本README中的已测条件与数值为版本化交接记录。2026-11-13的16 Pitch基准与2026-11-16的64 Pitch样例配置属于不同阶段，不能把旧输出当作当前config重新运行的结果。更换图样、材料、厚度、光源、目标角域或ROI后，应重新检查相关采样维度；离散Parseval通过仅说明离散能量核对，不保证光谱、空间或ROI都已收敛。
 
 ### 采样收敛基准
 
@@ -244,7 +324,7 @@ IJP下方仅Anode图样范围内为反射底，其余位置沿用理想匹配吸
 
 日常不同方案的初步比较统一采用5 nm，保持光谱网格、光源和其它采样条件相同；不要求所有方案改用0.25 nm。局部光谱曲线的最大重建误差不能直接当成方案差值或排序误差。对差异很小的候选，再以更细步长抽查结论是否稳定。
 
-“有限源采样”指照明光源发光面的积分，不是版图重复数。例如每轴17点是在发光圆盘的包围方形内建立17×17候选点，本次圆盘内实际225点；每点分别照明完整版图，再叠加强度。版图重复数由cfg.periods独立控制，本次有限源扫描为[8,8]，常规Case1为[16,16]。
+“有限源采样”指照明光源发光面的积分，不是版图重复数。例如每轴17点是在发光圆盘的包围方形内建立17×17候选点，本次圆盘内实际225点；每点分别照明完整版图，再叠加强度。版图重复数由cfg.periods独立控制，历史有限源扫描为[8,8]、当时Case1为[16,16]；当前Case1/2/3的目标配置为[64,64]。
 
 `angle_grid_380nm.png`、`angle_grid_550nm.png`、`angle_grid_780nm.png`提供直接图片对照：左为±6°/801全图，中为同一结果裁切显示±1°，右为真正按±1°/801重新计算。中栏只有约133个原始角度样本横跨当前视窗，右栏有801个；两者间距分别为0.015°与0.0025°。三栏使用共同能量密度dB标尺；均为平面波、16×16 Pitch、单色空间采样对照，不是D65彩色合成。原始数组和显示参考保存在`angle_grid_comparison.mat`。
 
@@ -360,7 +440,7 @@ cfg.outputSize = 1201
 
 ### 先确定图样物理尺寸与采样
 
-所有层必须覆盖同一个完整矩形物面、采用相同原点与像素网格，行为 y、列为 x。不自动识别 Pitch，不缩放图片，也不把单个像素或晶胞自动平铺。需要重复版图时，先在外部生成完整矩阵。
+所有层必须覆盖同一个输入矩形、采用相同原点与像素网格，行为 y、列为 x。关闭平铺时，该输入矩形就是完整计算物面。图片本身不提供物理Pitch。默认仍按完整物面读取；用户可显式开启stack.geometry.repeatToFit，将所有图片作为同坐标输入单元平铺到cfg.periods指定的目标，默认不重采样、裁切或改写输入；仅显式指定inputSamplesPerPeriod且计算采样率更低时，允许在内存中进行共同像素中心最近邻降采样。
 
 以下是对应的 MATLAB 参数写法（复制到 config.txt 时去掉分号和行尾注释）：
 
@@ -378,6 +458,40 @@ cfg.samplesPerPeriod = 64;    % 每单元的等间距采样点数
 - 物面尺寸 Lx = `cfg.periods(1)*cfg.pitch`，Ly = `cfg.periods(2)*cfg.pitch`。
 
 当前使用正方形采样像素。`periods` 采用偶数与现有配置保持一致。若导出的图样每个 50 μm 单元有 100 点，则将 `samplesPerPeriod` 改为 100，并按上述公式核对完整矩阵尺寸。需要保留小于原采样间距的窄边/间隙时，应先提高真实版图的栅格采样；当前反射传播由输出角域与 `outputSize` 控制接收像素，`receiverBinSamples` 控制像素内积分，`paddingFactor` 不再控制该分支，三者均不能修复物面欠采样。
+
+### 实际项目：物面采样率与Pitch数分开选择
+
+F192/COEB3的原图采样率固定记录为250；计算采样率可以降低，但须先运行收敛基准。仅改变cfg.samplesPerPeriod而不声明原图采样率会改变物理尺度解释，因此应同时配置：
+
+```text
+stack.geometry.inputSamplesPerPeriod = 250
+cfg.samplesPerPeriod = 125
+```
+
+这里125只是语法示例，不是已通过的推荐值。原图保持1000×1000，程序先在所有图层相同像素中心位置最近邻采样为500×500，再按原来的4×4 Pitch物理范围平铺。原始图片不会覆盖或裁切；不允许用该功能上采样。inputSamplesPerPeriod=0（默认）表示沿用cfg.samplesPerPeriod，不重采样。结果geometry记录inputGridSize、sampledInputGridSize、inputSamplesPerPeriod、samplesPerPeriod和repeatCounts。
+
+主脚本设 `runSamplingBenchmark=true`、`samplingBenchmarkMode="raster"`，逐项目运行。基准直接读取完整4Pitch原图单元，扫描40/50/64/80/100/125/160/200/250像素/Pitch及0.25/0.5/0.75像素采样偏移，不先展开64Pitch物面。所有候选与原生250比较：380:5:780nm的总反射率、±6°方窗、2.5°圆锥及0.3°外非零级能量，以及同一组物理衍射阶次的强度L1误差。积分量容差为1e-4+1%×参考值，角分布L1容差1%；宽带D65辐射和视见函数积分另列。要求候选和更细候选的所有采样偏移均通过，避免幸运对齐。
+
+若筛出较低采样率，再经完整4Pitch有限物面生产传播逐波长复核；这只能说明当前离散原图相对误差，不能证明连续几何已收敛，也不能代替64Pitch窄峰形状验证。若没有较低候选通过，则保留250，生产复核只检查550nm参考状态。结果在 `Output/项目/RasterConvergence/`，包括raster_summary.csv、production_validation.csv、MAT记录和误差/单缓冲区内存图。内存列是一个复数网格或regionMap的理论大小，不是总进程峰值。
+
+再设 `samplingBenchmarkMode="periods"` 扫描每轴Pitch数。现在支持完整4Pitch输入单元，不再限定2Pitch晶胞；只考虑原图单元的整数重复，向下扫描到一个完整输入单元，最大值为当前cfg.periods。复用自相关精确积分并核对生产传播和Nyquist窗口Parseval；固定ROI内若包含多个无限周期阶次，应将全部阶次求和。逐波长与D65宽带的通过条件分别报告，ROI效率与峰高/峰宽不同，不能据积分通过宣称较小阵列具有相同峰形。
+
+250像素/Pitch、64Pitch为16000²网格，仅一个complex double网格约3.815GiB；相同采样率下32Pitch降至8000²，单网格约0.954GiB，16Pitch约0.238GiB。实际流程同时保留多个实数/复数网格，因此优先依据指标收敛减少Pitch数，不能仅凭单数组大小推断整个任务可用内存。
+
+### F192 / COEB3本轮采样结果
+
+采用R→B→G、交叠区完整膜厚、黑色IJP反相，以及当前配置的占位材料常数。原64Pitch作为有限物面资源比较参照，不作为无限阵列或连续几何真值。380:5:780nm、D65，积分容差1e-4+1%×参考值，角分布强度L1容差1%。
+
+| 项目 | 物面采样率结论 | 相对64Pitch的D65固定ROI最低通过周期数 | 当前共同配置 |
+|---|---|---|---|
+| F192 | 40～200未全部通过角分布门槛，保留原生250 | 32；最大归一化容差比0.7004 | 250像素/Pitch、32×32Pitch |
+| COEB3 | 40～200未全部通过角分布门槛，保留原生250 | 24；32Pitch的最大归一化容差比0.5725 | 250像素/Pitch、32×32Pitch |
+
+这里的固定ROI包括±6°方窗，以及所列阶次中心的0.08°/0.10°半宽方形ROI；D65辐射与视见函数积分均参与筛选。不是主流程2.5°圆锥指标或全角图逐像素精度的独立保证。125像素/Pitch的积分误差虽小，角分布仍未全部通过，因此未采用。
+
+两套4～64Pitch都未通过全部逐波长ROI相对无限周期阵列的严格条件；最差处410nm附近的某些阶次紧贴固定ROI边界，有限峰宽使能量仍在边界内外分配。不得将资源推荐32Pitch称为全面收敛，也不得将64Pitch自比较作为精度证据。需要单色细节、峰形或新的实际n/k数据时应重跑相应基准。当前32Pitch仅用于D65固定ROI方案比较，图峰宽/峰高随物面尺寸变化。
+
+结果位于各项目Output下的RasterConvergence和PitchConvergence，包含CSV、原始MAT、生产交叉验证及图像。Pitch表中原Recommended/BroadbandRecommended对应无限阵列；新增CurrentD65ToleranceRatio/CurrentD65Recommended仅对应本轮最大有限物面64Pitch。最大样本自比较不会被选为较低采样建议。
 
 ### 图片模式下比较 16、32、64 个 Pitch 单元
 
@@ -436,6 +550,32 @@ spotOptions.minSeparationDeg = 0.18
 上述±1°/1201网格的角间距为0.001667°，64组在380 nm的峰中心至第一零点约0.0068°，有约4个间隔；比默认±6°/401的0.03°更适于分辨窄峰。该局部窗口不覆盖全部级次，出现窗口捕获不足98%的提示是预期现象。若保留±6°且要求同样角度分辨率，需要7201点/轴，计算和存储会明显增加。自动像素内细采样可以改善积分，不能使粗像素图显示出窄峰的真实宽度。
 
 收敛比较以逐波长的理论级次方向为固定中心，使用三组完全相同的积分半角；应覆盖64组和16组的峰及足够侧瓣，并保持相邻级次ROI不交叠。将积分半角0.08°与0.10°作敏感性比较；若边缘级次ROI越界则扩大输出窗口或不比较该级次。S1/S2是自动亮斑排序号，不是固定(m,n)编号，不能直接跨组按编号匹配。比较同一角位置的绝对反射率，并观察32→64的变化是否小于所需容差，例如相对1%（弱级次同时设绝对容差）。峰应随尺寸增大而变窄，峰高不必收敛；各组独立自动增强的彩色图不能用来判断效率收敛。先在固定周期数下增加samplesPerPeriod并重新栅格化图片，验证物面采样收敛；再在固定物面下增加outputSize、receiverBinSamples验证输出积分收敛，才能把剩余变化归因于有限周期数。
+
+### 输入单元自动计算平铺次数
+
+Case1、Case2、Case3现在统一使用目标64×64 Pitch、每Pitch 64像素、D65/5 nm、±6°/1201和100 m接收距离；保留plane照明和有限源每轴5点。64 Pitch是目前跑通完整流程的资源折中，不改变128 Pitch宽带效率收敛建议。原始PNG/BMP/JPG文件不修改。
+
+```text
+stack.geometry.repeatToFit = true
+cfg.periods = [64, 64]
+cfg.samplesPerPeriod = 64
+```
+
+已知每Pitch像素数后，输入单元的横纵Pitch数分别为`[图片列数,图片行数]/samplesPerPeriod`；重复次数为`cfg.periods./输入单元Pitch数`，输出像素数为`cfg.periods*samplesPerPeriod`。无需人工填写repeat次数，不从图案外观猜Pitch，也不搜索图片内部的最小数学周期。现有1024×1024图片作为16×16 Pitch单元，横纵各重复4次。
+
+| 输入单元（横×纵） | 每Pitch像素 | 图片列×行 | 目标 | 重复次数（横×纵） |
+|---|---:|---|---|---|
+| 4×4 Pitch | 64 | 256×256 | 64×64 Pitch | 16×16 |
+| 2×2 Pitch | 64 | 128×128 | 64×64 Pitch | 32×32 |
+| 2×4 Pitch | 64 | 128×256 | 64×64 Pitch | 32×16 |
+
+所有真实图层图片必须同尺寸、同原点，包括IJP。默认原图行列须为samplesPerPeriod的整数倍；显式降采样时按下述inputSamplesPerPeriod解释原图；目标Pitch数须可被输入Pitch数整除，不满足时报错。相同边界的材料、缺陷也会一起平铺，因此用户应提供能首尾衔接的完整光学晶胞，不含重复首尾端点。heightMap仍表示完整目标物面，不随图层自动平铺。MAT输入不启用此开关。
+
+默认repeatToFit=false，保留原完整物面输入行为；已有Case1_Pitch64/128完整项目无需开启。运行时打印输入Pitch数和[x,y]重复次数，保存的stackGeometry或公共接口result.layerGeometry中有inputGridSize、inputPeriods、repeatCounts记录。该授权的显式平铺不引入图形生成器，不改变统一膜堆，也不增加相机模式。
+
+2026-11-16验证：42项COE回归通过，包含2/4 Pitch、矩形输入、目标不可整除和图层尺寸不一致；Case1/2/3真实配置均确认输入16×16 Pitch、重复4×4、目标64×64 Pitch。
+
+每Pitch默认推荐**64像素**：50 μm Pitch对应0.78125 μm间距，适合作为当前方案比较的起点；128像素/Pitch对应0.390625 μm，适合细边界和窄间隙复核，但应提供相应真实分辨率原图。把64像素原图插值放大到128并不证明几何收敛。以目标64×64 Pitch为例，两档完整物面分别为4096²和8192²点，128档的物面数组约增加到4倍。每Pitch像素数不是衍射角网格，二者应分别检查。
 
 ### 图片或 MAT 图样输入
 
@@ -514,7 +654,7 @@ stack.layers.CF_B.thickness  = 900e-9;
 - **阳极反射只存在于输入阳极图样范围内**，其裸底反射率默认 100%。
 - 默认示例的BM开口外扩阳极5 μm；正式计算直接采用输入BM图样，开口外为实心BM。
 - **BM 开口中超出阳极图样的外扩环带属于不透明吸光底层，不能按 100% 阳极处理。**
-- R/G/B CF 覆盖各自对应的 BM 开口，其区域大于 BM 开口；各色 CF 区域之间不得交叠。
+- R/G/B CF 覆盖各自对应的 BM 开口，其区域大于 BM 开口；实际项目允许各色CF交叠，并按制作顺序叠膜；同层互斥仅适用于显式采用相同layerLevels的示例。
 - 用户可输入阳极、BM 和 RGB CF 图样，并提供 BM / R CF / G CF / B CF 的 n、k 与厚度。
 
 ### 局部膜堆
@@ -530,7 +670,7 @@ stack.layers.CF_B.thickness  = 900e-9;
 
 输入图样必须有一致的物理尺度、坐标原点和矩阵尺寸。程序只按声明读取并计算各区域；同一层级的区域必须互斥。实际COE图片仍应满足BM开口包含阳极、CF覆盖对应开口等约定。
 
-各位置先按局部平行平面膜堆计算随波长变化的复反射系数，再进入指定频率网格的傅里叶积分传播 / 角域 / CIE 后处理。CF 局部厚度固定，位于 BM 实体上方时叠加在 BM 顶面，在开口内则从裸底平面起算。以各物理层级最大nk厚度之和为共同空气参考面（默认COE即 `IJP厚度+BM厚度+最大CF厚度`），补足各柱体顶面到该平面的往返相位。未包含侧壁或邻近柱体的矢量耦合，不能当作 RCWA/FDTD。
+各位置先按局部平行平面膜堆计算随波长变化的复反射系数，再进入指定频率网格的傅里叶积分传播 / 角域 / CIE 后处理。CF 局部厚度固定，位于 BM 实体上方时叠加在 BM 顶面，在开口内则从裸底平面起算。以各物理层级最大nk厚度之和为共同空气参考面（R→B→G独立层级配置为 `IJP厚度+BM厚度+R厚度+B厚度+G厚度`；同层互斥示例为 `IJP厚度+BM厚度+最大CF厚度`），补足各柱体顶面到该平面的往返相位。未包含侧壁或邻近柱体的矢量耦合，不能当作 RCWA/FDTD。
 
 膜厚传播与干涉相位属于膜层模型，不等同于可选的额外高度图；`heightMap` 默认仍为 0。几何采用 regionMap，局部光谱系数采用实际存在的结构数×波长数的查找表，避免构建庞大的逐像素光谱系数三维数组。
 
@@ -696,6 +836,8 @@ XYZ 采用 D65 白点的 XYZ→线性 sRGB 矩阵转换，再使用同一个曝�
 
 ### 验证
 
+2026-11-16提交前执行完整仓库 `runtests('tests')`：85项通过、0失败、0未完成。覆盖四图样/真实Anode-BM平面波比较、面源卷积、图片平铺与采样、膜堆、色度、能量和独立模块运行。完整结果保存在本地 `Output/CommitValidation/validation_results.mat` 及CSV（输出不提交到Git）。该回归验证数值和程序行为，不等于实拍拟合或产品材料精度验证。
+
 完整仓库的 COEMultilayerTest、COESpectralTest、COESpotsTest 覆盖膜堆解析极限、独立特征矩阵、吸收/守恒、图样与nk读取、色度、角域和光斑；ModuleIsolationTest 的 COE 分支验证独立复制后的主脚本与输出。
 
 在仓库根目录执行：
@@ -718,19 +860,20 @@ assert(all([r.Passed]));
 
 | 前缀 | 文件数 | 用途与示例 |
 |---|---|---|
-| `core` | 15 | 正式仿真的输入、物理计算、色度和指标，例如 `corePrepareLayerStack`、`coreReflectFilmStack`；`coreSynthesizeColor` 保留原始 XYZ 并生成色度显示 |
+| `core` | 17 | 正式仿真的输入、进度、物理计算、色度和指标，例如 `corePrepareLayerStack`、`coreReflectFilmStack`；`coreSynthesizeColor` 保留原始 XYZ 并生成色度显示 |
 | `plot` | 5 | 绘图、样式、标记及 RGB 代理预览，例如 `plotFormatFarFieldAxes`、`plotComposeReflectionRgb` |
-| `bench` | 2 | 可选采样和收敛性对比：`benchSampling`、`benchPeriods`；可重复运行，不代表一次性工具 |
+| `bench` | 6 | 可选采样及结构对比：`benchSampling`、`benchPeriods`、`benchRaster`、`benchInputCell`、`benchPlaneWaveComparison`、`benchFourPatterns`；可重复运行，不代表一次性工具 |
 
-当前 `src/private/` 保留22个函数文件。只在一处使用的简短辅助逻辑直接并入调用处：反射默认值集中在 `coeReflectionDefaults.m`；膜堆默认设置和采样提示在主脚本；图片查找和材料光谱在 `corePrepareLayerStack.m`；两轴傅里叶积分在 `corePropagateReceiver.m`，两轴共用的一维变换保留为局部函数。按主脚本及两个公共接口的静态调用关系检查，没有完全不可达的独立函数；条件分支中的函数并非每次运行都会调用。
+当前 `src/private/` 保留28个函数文件。只在一处使用的简短辅助逻辑直接并入调用处：反射默认值集中在 `coeReflectionDefaults.m`；膜堆默认设置和采样提示在主脚本；图片查找和材料光谱在 `corePrepareLayerStack.m`；两轴傅里叶积分在 `corePropagateReceiver.m`，两轴共用的一维变换保留为局部函数。按主脚本及两个公共接口的静态调用关系检查，没有完全不可达的独立函数；条件分支中的函数并非每次运行都会调用。
 
 | 分类 | 函数 | 触发条件或作用 |
 |---|---|---|
 | 默认配置 | coreLayerDefaults、coreSourceDefaults | 图层模板和光源默认值被多处复用 |
+| 运行进度 | coreCreateProgress | 主脚本 showProgress=true 时创建进度窗，通过回调接收逐波长/源点进度；不参与物理计算 |
 | 文件读取与膜堆构建 | coreLoadProjectConfig、coreLoadSpectrum、corePrepareLayerStack | 按项目配置读取实际图样和材料；图层/光谱方式决定具体分支 |
 | 照明与传播 | coreBuildIllumination、coreSimulateHeightStates、coreSimulateDiffraction、corePropagateReceiver、coreReflectFilmStack | 当前统一计算链；零高度只计算一个高度状态 |
 | 指标 | coreComputeAngularMetrics、coreComputeDiffractionSpots | 角域、光斑和能量评估；采样提示直接在主脚本中给出 |
-| 独立采样基准 | benchSampling、benchPeriods | 主脚本runSamplingBenchmark=true时运行，mode="all"隔离五类因素，mode="periods"评估每轴Pitch数 |
+| 独立采样基准 | benchSampling、benchPeriods、benchRaster | 主脚本runSamplingBenchmark=true时运行，mode="all"隔离五类因素，mode="periods"评估每轴Pitch数，mode="raster"评估物面采样率 |
 | 绘图样式 | plotFormatCumulativeAxes、plotFormatFarFieldAxes、plotMarkDiffractionSpots、plotStyleFigure | 当前图形显示，标记开关只改变显示内容 |
 | 条件色彩处理 | coreSynthesizeColor、plotComposeReflectionRgb | 前者用于D65/custom/monochromatic；后者仅RGB代理模式 |
 | 历史批量接口兼容 | coreCustomPattern、coreNormalIncidenceReflection | 主脚本不调用该旧几何/单界面分支；仅传cfg的历史runCOEReflection接口和兼容测试仍可能使用，当前不能算完全无用函数 |
@@ -809,7 +952,7 @@ disp(r.metrics);
 
 - 改主脚本参数却不生效：当前config会覆盖默认值，请改项目配置，或显式关闭useProjectConfig。
 - 图片找不到或同名多格式：核对项目目录和文件名，重复格式时明确扩展名；所有层须同尺寸同原点。
-- 同层交叠报错：核对layerLevels及invert，RGB CF应在同一层且掩膜互斥。不要为了绕过错误把三色配置成上下三层。
+- 同层交叠报错：核对layerLevels及invert，相同层级表示互斥区域，不能含交叠。对于实际R→B→G叠膜，按本说明设置独立层级并保留掩膜和各层厚度；不要裁掉交叠区。
 - 字段/数值报错：核对config的JSON字面量语法、大小写、数字单位及nk波段覆盖范围。
 
 <a id="history"></a>
@@ -854,3 +997,81 @@ CIE原始CSV、元数据、许可和MD5清单保留在 [Input/Colorimetry/README
 - [ASTM D1003 范围](https://store.astm.org/standards/d1003)、[HunterLab：Measuring Haze](https://support.hunterlab.com/knowledgebase/article/KA-06011/en-us)。
 - [Rhopoint：Reflection Haze](https://www.rhopointinstruments.com/faqs/appearance-measurement/)、[Rhopoint IQ 使用说明](https://www.rhopointinstruments.com/wp-content/uploads/2023/10/rhopoint-iq-manual-english.pdf)。
 - [NIST：Display Reflectance Model Based on the BRDF](https://www.nist.gov/publications/display-reflectance-model-based-brdf)、[Computation of Light Scattered Into Detector](https://www.nist.gov/publications/computation-light-scattered-detector)。
+
+
+### F192实拍、旧孔径示例与当前D65图的差异诊断（2026-11-16）
+
+用户确认：实拍为F192，手机照明光源有效发光面约5mm，到屏幕距离约5cm；可视为正对屏幕，目视效果接近照片。当前F192配置仍为plane、D65/5nm、32Pitch，不能把这张理想角分布直接当作该实验的预测。
+
+本轮只读已有完整F192 MAT结果，没有启动新的传播。消融脚本及图在 `Output/F192_ImageDiagnosis/`：
+
+- `spectral_display_ablation.png`：同一复反射场，A为81波长D65+XYZ+现有对数映射；B为同一D65结果关闭对数映射；C只取620/550/450nm并逐通道归一化，复现旧式RGB显示逻辑；D为550nm单色。四图统一显示±3°，实拍没有角度标定，不能按像素直接配准。C不是D65定量结果，D不是白光结果。
+- `coherent_mean_diagnostic.csv/.png`：对实际区域复系数计算无限周期零级效率。550nm总反射率7.9104%，零级约0.5003%，占反射功率6.324%；人为去掉空间相位差会将零级改成7.3971%。后者仅用于说明相位敏感性，不能作为正式物理解法。实际零级弱需要检查真实n/k、膜厚、连续界面及其相干关系，不能给相位强制清零或人为加中心白点。
+- `region_phase_550.csv`和`diagnostic_summary.json`保留计算依据。旧孔径示例为实数振幅掩膜、三个波长分别归一化和截断；当前为各局部膜堆的复反射系数及完整光谱XYZ积分，两者不等价。旧脚本的输出二次相位与当前省略该项的差异不会改变单独观察面的强度，不能靠补这项消除彩色射线。
+
+光栅的同一非零阶角度随波长变化，因此连续谱叠加会形成径向色散轨迹，三条谱线则主要留下三组离散图样。当前toneStrength=3000、luminanceGamma=0.75又把弱尾部大幅提亮。减弱显示增强会隐藏弱尾部，但不改变实际能量分布。
+
+5mm有效面源在5cm距离的全张角为2*atan(2.5/50)≈5.725°；550nm/59.06μm对应一个Pitch的角间隔约0.534°（完整光学晶胞可能有更细的阶次）。同时1.88992mm物面从中心到边中点的入射球面波光程差约8.929μm，即550nm下16.23个波长，平面波近似不适用。面源按互不相干源点的强度求和，空间亮度分布仍需实验约束。若均匀5mm面源把点阵洗平，这属于模型与实拍条件待校核的结果，不能擅自缩小有效发光面来制造相似图。
+
+代码调整顺序：
+
+1. `coreBuildIllumination.m`已有有限距离point源，输入应记录source.type="point"、distance=0.05、diameter=0.005；plane下distance与diameter不参与该计算。先做小成本单源及面源收敛诊断，不直接运行8000²、81波长、大量源点的暴力组合。默认每轴5点只用于演示，不能证明5mm面源已收敛。需要加速时，可在已验证近轴及移不变条件下，将带球面曲率的单源结果与角向辐亮度分布做逐波长强度积分/卷积，并与显式源点结果核对；不要对RGB增强图做模糊来替代物理源积分。
+2. `coreLoadSpectrum.m`已有custom SPD接口；实拍应使用实际手机闪光灯SPD，而不是默认D65或人为三条谱线。目视与照片接近意味着不能把差异主要推给相机白平衡；照片本身仍不足以反演真实SPD。
+3. 核对接收光路。`corePropagateReceiver.m`当前输出是远场角分布，cfg.propagationDistance只给出角度到接收面坐标与辐照度标定，改成0.05并不会切换到Fresnel近场或眼/镜头成像。只有观察几何确定后，才能决定是否另加有限距离传播或成像模型；“正对”本身不等于远场。
+4. 实际材料CSV/膜厚、IJP所在位置和连续界面需核实。当前nkFile为空，所有n/k均为占位常数；不能把材料名CF_R/G/B等同于实际RGB透过光谱。保留R→B→G交叠及各层膜厚，不因视觉相似度改变几何或去掉相位。
+5. `coreSynthesizeColor.m`继续以原始XYZ作为物理结果，同时查看线性曝光与温和显示映射；旧式RGB三线图只作排查。统一角度范围、曝光与标注后比较，不把显示效果相似当作物理验证。
+
+本轮没有修改正式物理配置或传播算法。下一步应先匹配照明与接收条件，再用实测SPD和材料数据校核；完整大网格计算保持停止。
+
+
+### Anode/BM三波长与非相干面源卷积基线
+
+图样对齐入口为 `projectName="F192_AnodeBM_ConvolutionRGB"`，对照项目为 `F192_AnodeBM_ParaxialRGB`。两者复制F192的原始Anode/BM图片，维持250像素/Pitch和32×32Pitch；只声明Anode、BM，不读取CF/IJP。Anode采用统一反射率1，BM先作为反射率0的理想不透明黑区，厚度0表示有效边界。此处15.75%的总反射率来自阳极面积填充率，不能当作真实器件反射率。原F192/COEB3的膜堆和材料配置不修改。
+
+三波长为620、550、450nm，RGB代理相对权重由共享CIE D65表在三处采样并归一化，约为[0.28404,0.33699,0.37897]。这是图样代理，不是完整D65色度积分；后续仍需恢复实际光谱与材料。
+
+```text
+cfg.source.type = "point"
+cfg.source.distance = 0.05
+cfg.source.diameter = 0.005
+cfg.source.integrationMethod = "angularConvolution"
+cfg.source.wavefront = "plane"
+```
+
+`integrationMethod="direct"`、`wavefront="spherical"`是原有默认：精确球面距离与辐射包络，各源点按强度求和。新增波前选项仅作用于point：
+
+- `plane`：各点产生倾斜平面波，中心源对应光栅固有远场PSF；可表达在角度坐标中光源形状与光栅强度PSF的卷积模型。
+- `paraxial`：保留中心源的二次相位exp(i*pi*r²/(lambda*d))，同时将偏轴源作用表示为倾斜相位。源点物面振幅视为相同，不使用精确距离衰减和beamHalfAngleDeg包络。
+
+`angularConvolution`只允许point及显式plane/paraxial波前，拒绝将精确球面源静默替换为近轴源。均匀圆盘光源在每个波长按相同振幅、互不相干、平移不变假设进行强度线性卷积；核角半径取D/(2d)。5mm/5cm对应约2.865°半径，而不是5mm直接当接收面像素长度。source.samplesPerAxis在该快速方法中不控制源积分，核网格由输出角度步长决定，仍需检查输出角网格的收敛。
+
+实现先将单源传播计算角域向外扩展至少一个源半径，再用归一化圆盘核线性卷积，最后裁切原观察窗。这样保留窗外单源图样卷入窗口的贡献，且没有FFT环绕；只归一化光源概率核，不把裁切后的反射能量补回1。补边后的角域不得超过近轴10°限制。每个波长保留result.sourceConvolution中的pointEnergy、pointClearEnergy、kernel、kernelStepRad、paddingBins、massError和assumption；原有spectralEnergy是卷积后的物理能量数组。
+
+这两个选项是不同的光路近似，不是自动完成了眼睛或镜头的有限距离成像。光源5mm有效尺寸本身不能确定其空间角辐亮度、封装光学和空间相干性。若均匀非相干圆盘洗平点阵，应先核对源模型与实际光路，不能擅自缩小有效发光面来制造相似结果。
+
+验证包括相同近轴假设下的显式源点求和、偏心亮峰附近的观察窗补边、零直径退化及核能量守恒。显式源点与卷积在所选对齐网格上的能量数组绝对差小于1e-11；另通过仅复制模块的公共入口验证真实private解析。此数值一致性不证明精确球面光路与近轴模型等价。
+
+本轮结果写入各项目Output，统一图样比较写入 `Output/F192_AnodeBM_PatternComparison/`。比较图同时保留各图独立曝光（仅看形状）与共同曝光（看相对强弱），颜色标为三波长代理。
+
+
+本轮实算已完成：两组均为8000×8000物面、±6°/1201输出及三个波长，运行含保存分别174.36秒、166.56秒。光源核575×575、角半径2.86479°，单源传播计算先扩展到±8.88°再卷积裁切；卷积质量检查误差不超过1.11e-16。35项COEMultilayerTest及独立复制模块的卷积入口测试通过，相关私有函数静态分析无问题。
+
+结果见[图样独立曝光对比](../Output/F192_AnodeBM_PatternComparison/patterns_shape_comparison.png)、[共同曝光对比](../Output/F192_AnodeBM_PatternComparison/patterns_shared_exposure.png)及[原始指标](../Output/F192_AnodeBM_PatternComparison/pattern_metrics.csv)。独立曝光图只比较形状，不比较绝对亮度。点源远场基线有清晰离散点阵；均匀5mm非相干圆盘卷积将点阵显著洗平，保留入射曲率后同样不能恢复实拍点阵。因此这组简化假设尚未实现实拍图样匹配，后续需约束光源的空间角辐亮度、封装光学及相干性，不能把5mm有效发光直径直接当成已知完整源模型。
+
+
+### 均匀圆盘未复现实拍后的代码调整方向
+
+均匀圆盘卷积结果不能直接否定强度卷积形式；它只能说明当前源模型与观察模型尚未匹配实验。此前数值测试验证的是相同假设下的数学一致性，不是手机闪光灯出射场的物理标定。
+
+只读敏感性脚本 `Output/F192_SourceModelDiagnosis/source_core_halo_scan.py` 使用已保存的Anode/BM点源结果与5mm/5cm圆盘结果，测试有效角分布中“窄角高斯核心+宽角背景”的功率混合；核心sigma=0.03°及功率占比都是假设扫描值，没有拟合实拍，也没有写入正式source配置。各图独立曝光，只看图样，不能比较绝对亮度。窄核只作用于已有±6°数据，展示限制在±3°，留足边界缓冲；没有重新运行传播。
+
+在自由传播、均匀圆盘、源面空间不相干的近轴假设下，van Cittert–Zernike模型给出mu(b)=2*J1(v)/v，v=pi*D*b/(lambda*d)。D=5mm、d=5cm、lambda=550nm时，首个相干零点间隔约6.71μm；在59.06μm间隔处|mu|≈0.00814。该结论属于这个源假设，不是对实际手机闪光灯相干度的测量。封装光学、位置—角度相关性、接收选择和非均匀辐亮度都需要实际约束。
+
+推荐的实现顺序：
+
+1. 将`corePropagateSourceConvolution`中硬编码圆盘核抽离为独立源核构建步骤，支持经标定的二维有效角辐亮度图、角度采样与中心位置。5mm保留为空间出光口径，不能在未知封装光学时把它直接当作完整角分布。窄核心/宽背景仅可作参数敏感性诊断，不能因图样好看就宣布标定完成。
+2. `coreBuildIllumination`逐步支持由实际源和封装光学产生的复场/相干模式，逐模式传播后按功率非相干求和；保持内存中只处理一个模式。独立LED源点不能改成固定相位的相干振幅相加。若有效角核模型足以解释实验，应先保留简单模型，不引入任意相干长度拟合参数。
+3. 在`corePropagateReceiver`旁增加独立有限距离观察支路，按需要包含屏幕到入口瞳的Fresnel传播、有限瞳孔、镜头相位及对焦，再传播到观察面。保留farField为基准。正对屏幕、目视与相机相近，都不能单独确定该支路参数；仅调整z或倍率不保证恢复被源平均抹掉的点阵。
+4. 点阵间距、包络、中心及非零级能量、对比度分别验证。先维持Anode/BM和三个波长，源核与光路匹配后再恢复材料和颜色。可用相同光路下普通镜面的光源反射像约束有效源像/观察响应，并用光源距离变化对比度检查角展宽假设。
+
+本轮未修改生产算法或正式物理参数，只保留上述诊断脚本、原始CSV和对照图。一个未标定的照片不能唯一确定源相干性、有效角核和镜头参数，不能保证任意一组参数可以物理可信地复现实拍。

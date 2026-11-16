@@ -2,6 +2,11 @@
 /topic_*/Output/*
 !/topic_*/Output/.gitkeep
 /topic_coe_reference/src/Physical_Intensity_Data*.mat
+*.bak
+
+# Local learning scratch files; keep them outside the submitted source set.
+/topic_coe_reflection/src/codelearn.m
+/topic_coe_reflection/代码学习
 *.png
 !/topic_*/Input/**/*.png
 !/topic_*/Input/*.png

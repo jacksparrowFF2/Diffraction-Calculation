@@ -25,14 +25,15 @@ stack.layers.CF_B.method = "nk"
 
 # 输入图片（自动匹配本项目的扩展名）
 stack.geometry.source = "images"
+stack.geometry.repeatToFit = true
 stack.geometry.threshold = 0.5
 
-# 物理尺度与采样：1024×1024 像素对应 800×800 μm 完整物面
+# 输入1024×1024=16×16 Pitch单元，显式4×4平铺到4096×4096=64×64 Pitch；不缩放
 cfg.pitch = 50e-6
-cfg.periods = [16, 16]
+cfg.periods = [64, 64]
 cfg.samplesPerPeriod = 64
 cfg.paddingFactor = 2
-cfg.propagationDistance = 10
+cfg.propagationDistance = 100
 cfg.incidentIrradiance = 1
 cfg.receiverBinSamples = 3
 cfg.outputSize = 1201

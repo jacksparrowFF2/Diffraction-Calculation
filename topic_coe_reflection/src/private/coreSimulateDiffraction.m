@@ -1,4 +1,4 @@
-function result = coreSimulateDiffraction(cfg)
+function result = coreSimulateDiffraction(cfg, progressFcn)
 %coreSimulateDiffraction Scalar, normal-incidence reflection or pupil-plane UDC.
 % Reflection uses the aperture module's chirp-convolution Fourier quadrature,
 % including exp(i*k*z)/(i*lambda*z), without receiver quadratic phase.
@@ -8,7 +8,9 @@ function result = coreSimulateDiffraction(cfg)
 % clear pupil. psf is unit-sum shape; kernel retains loss AND finite-window loss.
     arguments
         cfg (1,1) struct
+        progressFcn (1,1) function_handle = @(fraction,message) []
     end
+    progressFcn(0, "初始化传播网格");
     validateConfiguration(cfg);
     [mask, x, y] = buildGeometry(cfg);
     [xx, yy] = meshgrid(x, y);
@@ -44,6 +46,7 @@ function result = coreSimulateDiffraction(cfg)
     receiverSamples = zeros(1, nLambda);
     receiverIrradiance = energy;
     illuminationInfo=cell(1,nLambda);
+    sourceConvolution=cell(1,nLambda);
     incidentIrradianceMap=[];
     phasePasses = 1 + double(cfg.mode == "reflection");
     [outX, outY] = meshgrid(outputCoordinate);
@@ -51,6 +54,8 @@ function result = coreSimulateDiffraction(cfg)
 
     for k = 1:nLambda
         lambda = cfg.wavelengths(k);
+        waveLabel = sprintf('波长 %d/%d：%.1f nm', k, nLambda, lambda*1e9);
+        progressFcn((k-1)/nLambda, string(waveLabel)+"｜准备复系数与照明");
         if cfg.mode=="reflection" && nLambda>20 && max(gridSize)>=2048
             fprintf('反射传播 %d/%d：%.0f nm\n',k,nLambda,lambda*1e9);
         end
@@ -58,10 +63,14 @@ function result = coreSimulateDiffraction(cfg)
         if cfg.mode == "reflection"
             [incidentFields,sourceWeights,illuminationInfo{k}] = coreBuildIllumination(cfg,xx,yy,pupil,lambda);
             sourceAngle=illuminationInfo{k}.maxIncidenceAngleDeg;
+            convolveSource=illuminationInfo{k}.integrationMethod=="angularConvolution";
             assert(deg2rad(cfg.angleHalfRangeDeg)*(1+1/(cfg.outputSize-1))+sind(sourceAngle) ...
                 <= lambda/(2*dx)*(1+1e-12),'COEReflection:IlluminationAliasing', ...
                 '光源入射方向与输出角域超过物面采样带宽，请提高图样采样或缩小角域/光源尺寸。');
             for mode=1:numel(sourceWeights)
+                modeLabel = sprintf('%s｜源点 %d/%d', waveLabel, mode, numel(sourceWeights));
+                if convolveSource, modeLabel=string(waveLabel)+"｜单源传播及面源强度卷积"; end
+                progressFcn((k-1+(mode-1)/numel(sourceWeights))/nLambda, string(modeLabel)+"｜反射传播");
                 incoming=pupil.*incidentFields{mode};
                 field=incoming.*coefficient;
                 if hasExtraHeight
@@ -74,10 +83,17 @@ function result = coreSimulateDiffraction(cfg)
                 throughput(k)=throughput(k)+weight*modeThroughput;
                 parsevalError(k)=parsevalError(k)+weight*abs(sum(nativeEnergy(:))-modeThroughput);
                 incidentArea=incidentEnergy*dx^2;
-                [modeEnergy,intensityRatio,samples]=corePropagateReceiver(field,x,y,outputCoordinate,lambda,cfg,incidentArea);
+                if convolveSource
+                    [modeEnergy,intensityRatio,modeClear,samples,sourceConvolution{k}]= ...
+                        corePropagateSourceConvolution(field,incoming,x,y,outputCoordinate,lambda,cfg,incidentArea);
+                else
+                    [modeEnergy,intensityRatio,samples]=corePropagateReceiver(field,x,y,outputCoordinate,lambda,cfg,incidentArea);
+                    modeClear=corePropagateReceiver(incoming,x,y,outputCoordinate,lambda,cfg,incidentArea);
+                end
                 energy(:,:,k)=energy(:,:,k)+weight*modeEnergy;
                 receiverIrradiance(:,:,k)=receiverIrradiance(:,:,k)+weight*cfg.incidentIrradiance*intensityRatio;
-                clearEnergy(:,:,k)=clearEnergy(:,:,k)+weight*corePropagateReceiver(incoming,x,y,outputCoordinate,lambda,cfg,incidentArea);
+                progressFcn((k-1+(mode-0.5)/numel(sourceWeights))/nLambda, string(modeLabel)+"｜参考孔径传播");
+                clearEnergy(:,:,k)=clearEnergy(:,:,k)+weight*modeClear;
                 receiverSamples(k)=max(receiverSamples(k),samples);
                 if k==ceil(nLambda/2)
                     if mode==1, incidentIrradianceMap=zeros(gridSize); end
@@ -111,6 +127,7 @@ function result = coreSimulateDiffraction(cfg)
             inside = sum(energy(:, :, k).*metricMask, 'all');
             outsideAngle(k) = max(0, 1 - inside/throughput(k));
         end
+        progressFcn(k/nLambda, string(waveLabel)+"｜本波长完成");
     end
     response = cfg.channelResponse.*cfg.spectralWeights(:);
     channelWeight = sum(response, 1);
@@ -154,6 +171,9 @@ function result = coreSimulateDiffraction(cfg)
     if cfg.mode == "reflection"
         result.propagationMethod = "Fraunhofer chirp-convolution Fourier integral";
         result.illumination=[illuminationInfo{:}];
+        if any(~cellfun(@isempty,sourceConvolution))
+            result.sourceConvolution=[sourceConvolution{:}];
+        end
         result.incidentIrradianceMap=incidentIrradianceMap;
         result.incidentMapWavelengthNm=cfg.wavelengths(ceil(nLambda/2))*1e9;
         if max([result.illumination.maxIncidenceAngleDeg])>5
@@ -201,6 +221,7 @@ function result = coreSimulateDiffraction(cfg)
         warning('DisplayDiffraction:CoarsePSF', ...
             'Native PSF spacing exceeds sensorPitch. Increase paddingFactor and check convergence.');
     end
+    progressFcn(1, "逐波长传播完成");
 end
 
 function validateConfiguration(cfg)

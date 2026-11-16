@@ -1,6 +1,116 @@
 classdef ModuleIsolationTest < matlab.unittest.TestCase
     %ModuleIsolationTest Run copied feature folders without sibling dependencies.
     methods (Test)
+        function coeFourPatternsRunFromCopiedModule(testCase)
+            folder=portableModule(testCase,'topic_coe_reflection');
+            index=floor(((0:31)+0.5)*500/32)+1;
+            for name=["case01","case02","case03","case04"]
+                projectDir=fullfile(folder,'Input',name);
+                for stem=["anode","BM"]
+                    imageData=imread(fullfile(projectDir,stem+".png"));
+                    imwrite(imageData(index,index,:),fullfile(projectDir,stem+".png"));
+                end
+                file=fullfile(projectDir,'config.txt'); text=fileread(file);
+                text=strrep(text,'cfg.periods = [8, 8]','cfg.periods = [4, 4]');
+                text=strrep(text,'cfg.samplesPerPeriod = 250','cfg.samplesPerPeriod = 16');
+                text=strrep(text,'stack.geometry.inputSamplesPerPeriod = 250', ...
+                    'stack.geometry.inputSamplesPerPeriod = 16');
+                text=strrep(text,'cfg.outputSize = 1201','cfg.outputSize = 129');
+                text=strrep(text,'cfg.angleHalfRangeDeg = 6','cfg.angleHalfRangeDeg = 3');
+                handle=fopen(file,'w','n','UTF-8'); assert(handle>=0);
+                fprintf(handle,'%s',text); fclose(handle);
+            end
+            visibility=get(groot,'DefaultFigureVisible');
+            testCase.addTeardown(@() set(groot,'DefaultFigureVisible',visibility));
+            initialFigures=findall(groot,'Type','figure');
+            testCase.addTeardown(@() closeNewFigures(initialFigures));
+            set(groot,'DefaultFigureVisible','off');
+            runScriptIsolated(fullfile(folder,'src','COEReflection_main.m'));
+            output=fullfile(folder,'Output','FourPatterns');
+            saved=load(fullfile(output,'four_patterns_results.mat')); report=saved.report;
+            testCase.verifyEqual(report.caseNames,["case01","case02","case03","case04"]);
+            testCase.verifyEqual(height(report.summary),24);
+            testCase.verifyTrue(isfile(fullfile(output,'four_patterns_comparison.png')));
+            for j=1:4
+                testCase.verifyEqual(report.local{j}.cfg.periods,[2,2]);
+                testCase.verifyEqual(report.array{j}.repeatCounts,[2,2]);
+                testCase.verifyEqual(mean(report.patterns{j},'all'), ...
+                    report.local{j}.metrics.Throughput(2),'AbsTol',1e-12);
+                weights=reshape(report.local{j}.cfg.spectralWeights,1,1,3);
+                signal=report.local{j}.spectralEnergy.*weights;
+                expected=(log1p(report.mapping.alpha*min(signal/report.mapping.referenceSignal,1)) ...
+                    /log1p(report.mapping.alpha)).^report.mapping.gamma;
+                file=fullfile(folder,'Output',report.caseNames(j),'local_rgb.png');
+                decoded=double(imread(file))/255;
+                testCase.verifyEqual(decoded,flipud(expected),'AbsTol',0.5/255+eps);
+            end
+        end
+
+        function coePlaneWaveComparisonRunsFromCopiedModule(testCase)
+            folder=portableModule(testCase,'topic_coe_reflection');
+            scriptPath=fullfile(folder,'src','COEReflection_main.m');
+            scriptText=regexprep(fileread(scriptPath),'projectName = "[^"]*";', ...
+                'projectName = "F192_AnodeBM_PlaneRGB";');
+            scriptFile=fopen(scriptPath,'w','n','UTF-8');
+            assert(scriptFile>=0); fprintf(scriptFile,'%s',scriptText); fclose(scriptFile);
+            projectDir=fullfile(folder,'Input','F192_AnodeBM_PlaneRGB');
+            % 临时夹具使用64×64原生图片；生产真实图样不变。
+            index=floor(((0:63)+0.5)*1000/64)+1;
+            for stem=["anode","BM"]
+                imageData=imread(fullfile(projectDir,stem+".png"));
+                imwrite(imageData(index,index,:),fullfile(projectDir,stem+".png"));
+            end
+            file=fullfile(projectDir,'config.txt');
+            text=fileread(file);
+            text=strrep(text,'cfg.periods = [16, 16]','cfg.periods = [8, 8]');
+            text=strrep(text,'cfg.samplesPerPeriod = 250','cfg.samplesPerPeriod = 16');
+            text=strrep(text,'stack.geometry.inputSamplesPerPeriod = 250', ...
+                'stack.geometry.inputSamplesPerPeriod = 16');
+            text=strrep(text,'cfg.outputSize = 1201','cfg.outputSize = 129');
+            text=strrep(text,'cfg.angleHalfRangeDeg = 6','cfg.angleHalfRangeDeg = 3');
+            handle=fopen(file,'w','n','UTF-8');
+            assert(handle>=0); fprintf(handle,'%s',text); fclose(handle);
+            visibility=get(groot,'DefaultFigureVisible');
+            testCase.addTeardown(@() set(groot,'DefaultFigureVisible',visibility));
+            initialFigures=findall(groot,'Type','figure');
+            testCase.addTeardown(@() closeNewFigures(initialFigures));
+            set(groot,'DefaultFigureVisible','off');
+            runScriptIsolated(fullfile(folder,'src','COEReflection_main.m'));
+            output=fullfile(folder,'Output','F192_AnodeBM_PlaneRGB','PlaneWaveComparison');
+            saved=load(fullfile(output,'plane_wave_comparison.mat'));
+            report=saved.report;
+            testCase.verifyEqual(report.local.cfg.periods,[4,4]);
+            testCase.verifyEqual(report.array.cfg.periods,[8,8]);
+            testCase.verifyEqual(report.array.repeatCounts,[2,2]);
+            testCase.verifyEqual(report.local.coordinate,report.array.coordinate);
+            testCase.verifyEqual(report.local.metrics.Throughput, ...
+                report.array.metrics.Throughput,'AbsTol',1e-12);
+            testCase.verifyEqual(report.array.incidentPower/report.local.incidentPower,4,'AbsTol',1e-12);
+            testCase.verifyEqual(mean(abs(report.local.effectiveReflection).^2,'all'), ...
+                report.local.metrics.Throughput(2),'AbsTol',1e-12);
+            expected=(log1p(report.mapping.alpha*min( ...
+                report.array.channelSignal/report.mapping.referenceSignal,1)) ...
+                /log1p(report.mapping.alpha)).^report.mapping.gamma;
+            testCase.verifyEqual(report.array.rgb,expected,'AbsTol',1e-14);
+            testCase.verifySize(report.local.rgb,[129,129,3]);
+            testCase.verifyTrue(isfile(fullfile(output,'plane_wave_comparison.png')));
+            testCase.verifyTrue(isfile(fullfile(output,'geometry_and_profile.png')));
+        end
+
+        function coeSourceConvolutionRunsFromCopiedModule(testCase)
+            folder=portableModule(testCase,'topic_coe_reflection');
+            cfg=portableConfig(coeReflectionDefaults());
+            cfg.complexCoefficient=0.5;
+            cfg.source.type="point";
+            cfg.source.wavefront="plane";
+            cfg.source.integrationMethod="angularConvolution";
+            cfg.source.distance=0.05; cfg.source.diameter=0.2e-3;
+            value=runCOEReflection(cfg);
+            testCase.verifyEqual(value.metrics.Throughput,0.25*ones(3,1),'AbsTol',1e-12);
+            testCase.verifyEqual(value.sourceConvolution(1).kernelMass,1,'AbsTol',1e-14);
+            testCase.verifyEqual(which('runCOEReflection'),fullfile(folder,'src','runCOEReflection.m'));
+        end
+
         function coeMultilayerMainRunsWithOnlyCopiedModule(testCase)
             folder = portableModule(testCase, 'topic_coe_reflection');
             scriptPath = fullfile(folder, 'src', 'COEReflection_main.m');
@@ -11,7 +121,8 @@ classdef ModuleIsolationTest < matlab.unittest.TestCase
             fprintf(file, '%s', text); fclose(file);
             runScriptIsolated(scriptPath);
             saved = load(fullfile(folder, 'Output', 'coe_reflection_results.mat'));
-            testCase.verifyEqual(saved.stack.layerLevels, [1,2,3,4,4,4]);
+            testCase.verifyEqual(saved.stack.layerLevels, [1,2,3,4,5,6]);
+            testCase.verifyEqual(saved.stack.layerNames, ["Anode","IJP","BM","CF_R","CF_B","CF_G"]);
             testCase.verifyEqual(saved.cfg.heightMap, 0);
             testCase.verifyEqual(saved.result.kernel, saved.baseline.kernel, 'AbsTol', 2e-13);
             testCase.verifyGreaterThan(nnz(saved.stackGeometry.layerMasks.CF_R & ~saved.stackGeometry.layerMasks.Anode & ~saved.stackGeometry.layerMasks.BM), 0);

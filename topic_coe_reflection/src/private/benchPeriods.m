@@ -8,6 +8,8 @@ function report = benchPeriods(cfg,stack,inputDir,outputDir,projectConfig)
     if ~isfolder(outputDir), mkdir(outputDir); end
     started=tic;
     originalCfg=cfg;
+    [cfg,~]=benchInputCell(cfg,stack,inputDir);
+    stack.geometry.repeatToFit=false;
     cfg.wavelengths=(380:5:780)*1e-9;
     cfg.spectralWeights=ones(size(cfg.wavelengths));
     cfg.channelResponse=ones(numel(cfg.wavelengths),1);
@@ -15,15 +17,16 @@ function report = benchPeriods(cfg,stack,inputDir,outputDir,projectConfig)
     cfg.propagationDistance=1e4; % 只作角分布参考；效率与该距离无关。
     cfg.angleHalfRangeDeg=6; cfg.outputSize=1201;
     [model,~]=corePrepareLayerStack(cfg,stack,inputDir);
-    q=2*cfg.samplesPerPeriod;
     map=model.regionMap;
-    assert(all(mod(size(map),q)==0) && ...
-        isequal(map,repmat(map(1:q,1:q),size(map)/q)), ...
-        'COEReflection:BenchmarkPeriodicity','图片不是严格2×Pitch周期，不能据此推断无限周期收敛。');
+    q=size(map,1);
+    cellPitch=q/cfg.samplesPerPeriod;
+    assert(size(map,2)==q && mod(q,2)==0, ...
+        'COEReflection:BenchmarkPeriodicity','周期积分要求正方形完整单元且每轴采样点为偶数。');
     assert(deg2rad(6)*(1+1/1200)<=min(cfg.wavelengths)/(2*cfg.pitch/cfg.samplesPerPeriod), ...
         'COEReflection:ReceiverAliasing','±6°超过物面采样带宽。');
-    unit=map(1:q,1:q);
-    counts=[8,16,24,32,48,64,96,128,192,256];
+    unit=map;
+    counts=unique([cellPitch,8,12,16,24,32,48,64,96,128,192,256]);
+    counts=counts(mod(counts,cellPitch)==0 & counts<=min(originalCfg.periods));
     orders=[0,0;1,0;0,1;1,1;2,0;0,2;2,2;4,0;4,4;8,0;12,0];
     halves=[0.08,0.10];
     metricNames="window6";
@@ -39,7 +42,7 @@ function report = benchPeriods(cfg,stack,inputDir,outputDir,projectConfig)
     report.inputDir=string(inputDir); report.nativeRegionMap=map; report.unitRegionMap=unit;
     report.regionTable=model.regionTable; report.materialTable=model.materialTable;
     report.coefficientLookup=model.coefficientLookup;
-    report.countsPitch=counts; report.orders=orders; report.roiHalfAnglesDeg=halves;
+    report.cellPitch=cellPitch; report.countsPitch=counts; report.orders=orders; report.roiHalfAnglesDeg=halves;
     report.wavelengthNm=cfg.wavelengths*1e9; report.metricNames=metricNames;
     report.protocol=struct('sourceType',"plane",'spectrum',"D65",'wavelengthStepNm',5, ...
         'outputHalfAngleDeg',6,'outputSize',1201,'relativeTolerance',0.01, ...
@@ -77,11 +80,15 @@ function report = benchPeriods(cfg,stack,inputDir,outputDir,projectConfig)
                 assert(all(abs(center)+halves(h)<6), ...
                     'COEReflection:BenchmarkRoi','阶次ROI越出±6°。');
                 index=1+(h-1)*size(orders,1)+o;
-                report.infiniteEfficiency(w,index)=power(q/2+1+orders(o,2),q/2+1+orders(o,1));
+                % 完整4Pitch单元的阶次间隔可能小于ROI半宽，须积分ROI内全部阶次。
+                theta=lambda*frequencies;
+                selectX=abs(theta-deg2rad(center(1)))<=deg2rad(halves(h));
+                selectY=abs(theta-deg2rad(center(2)))<=deg2rad(halves(h));
+                report.infiniteEfficiency(w,index)=sum(power(selectY,selectX),'all');
             end
         end
         for n=1:numel(counts)
-            repetitions=counts(n)/2;
+            repetitions=counts(n)/cellPitch;
             area=(counts(n)*cfg.pitch)^2;
             scale=dx^4/area;
             kernel=integralKernel(q,repetitions,dx,deg2rad(6)/lambda,0);
@@ -97,7 +104,7 @@ function report = benchPeriods(cfg,stack,inputDir,outputDir,projectConfig)
             total=real(nyquist.'*correlation*nyquist)*scale;
             report.parsevalError(n,w)=abs(total-report.throughput(w));
         end
-        if mod(w,10)==1, fprintf('Pitch积分：%g nm，8–256 Pitch\n',lambda*1e9); end
+        if mod(w,10)==1, fprintf('Pitch积分：%g nm，%g–%g Pitch\n',lambda*1e9,counts(1),counts(end)); end
     end
     assert(max(report.parsevalError,[],'all')<1e-9,'COEReflection:BenchmarkParseval','周期积分Parseval检查失败。');
     assert(min(report.efficiency,[],'all')>=-1e-10,'COEReflection:BenchmarkPassivity','积分出现负能量。');
@@ -109,6 +116,7 @@ function report = benchPeriods(cfg,stack,inputDir,outputDir,projectConfig)
     report.infiniteRadiant=spectrum.energyWeights.'*report.infiniteEfficiency;
     report.infinitePhotopic=spectrum.photopicWeights.'*report.infiniteEfficiency;
     report.summary=summarizePeriods(report);
+    report.currentReferencePitch=counts(end);
     writetable(report.summary,fullfile(outputDir,'pitch_summary.csv'));
     report.validation=validatePeriodicIntegral(cfg,model,unit,dx);
     writetable(report.validation,fullfile(outputDir,'production_validation.csv'));
@@ -142,14 +150,14 @@ function kernel = integralKernel(q,repetitions,dx,halfWidth,center)
     kernel=kernel.*exp(-2i*pi*(lag-lag(1))*dx*center);
 end
 
-function energy = periodicBins(field,countPitch,dx,lambda,angleDeg)
+function energy = periodicBins(field,countPitch,dx,lambda,angleDeg,cellPitch)
 % 完整输出bin的矩形精确积分，避免大阵列的显式细网格。
     q=size(field,1);
     coordinate=deg2rad(angleDeg);
     step=coordinate(2)-coordinate(1);
-    kernel=integralKernel(q,countPitch/2,dx,step/(2*lambda),coordinate/lambda);
+    kernel=integralKernel(q,countPitch/cellPitch,dx,step/(2*lambda),coordinate/lambda);
     correlation=unitCorrelation(field);
-    energy=real(kernel.'*correlation*kernel)*dx^4/(countPitch*q/2*dx)^2;
+    energy=real(kernel.'*correlation*kernel)*dx^4/(countPitch*q/cellPitch*dx)^2;
 end
 
 function summary = summarizePeriods(report)
@@ -190,6 +198,20 @@ function summary = summarizePeriods(report)
             break
         end
     end
+    % 资源折中另与当前最大有限物面比较；与无限阵列收敛结论严格分开。
+    radiant=abs(report.radiant-report.radiant(end,:))./ ...
+        (report.protocol.absoluteTolerance+report.protocol.relativeTolerance*abs(report.radiant(end,:)));
+    photopic=abs(report.photopic-report.photopic(end,:))./ ...
+        (report.protocol.absoluteTolerance+report.protocol.relativeTolerance*abs(report.photopic(end,:)));
+    summary.CurrentD65ToleranceRatio=max([radiant,photopic],[],2);
+    summary.CurrentD65Passed=summary.CurrentD65ToleranceRatio<=1;
+    summary.CurrentD65Recommended=false(height(summary),1);
+    for n=1:height(summary)-1
+        if all(summary.CurrentD65Passed(n:end))
+            summary.CurrentD65Recommended(n)=true;
+            break
+        end
+    end
 end
 
 function validation = validatePeriodicIntegral(cfg,model,unit,dx)
@@ -201,16 +223,17 @@ function validation = validatePeriodicIntegral(cfg,model,unit,dx)
         [~,index]=min(abs(cfg.wavelengths*1e9-nm));
         values=model.coefficientLookup(:,index);
         field=reshape(values(double(unit)+1),size(unit));
-        for count=[8,16]
+        cellPitch=size(unit,1)/cfg.samplesPerPeriod;
+        for count=cellPitch*[1,2]
             current=cfg; current.wavelengths=nm*1e-9;
             current.spectralWeights=1; current.channelResponse=1;
             current.periods=[count,count]; current.angleHalfRangeDeg=1;
             current.metricAngleDeg=0.8; current.outputSize=201; current.receiverBinSamples=9;
-            current.coeStack=model; current.coeStack.regionMap=repmat(unit,count/2,count/2);
+            current.coeStack=model; current.coeStack.regionMap=repmat(unit,count/cellPitch,count/cellPitch);
             current.coeStack.coefficientLookup=values;
             current.mask=ones(size(current.coeStack.regionMap));
             production=runCOEReflection(current);
-            exact=periodicBins(field,count,dx,nm*1e-9,rad2deg(production.coordinate));
+            exact=periodicBins(field,count,dx,nm*1e-9,rad2deg(production.coordinate),cellPitch);
             difference=sum(abs(exact-production.spectralEnergy),'all');
             relative=difference/sum(exact,'all');
             assert(relative<1e-3,'COEReflection:BenchmarkValidation','周期积分与生产传播不符。');
@@ -226,16 +249,18 @@ function preview = periodPreviews(cfg,model,unit,dx,summary,outputDir)
     if isempty(candidate), candidate=summary.PitchPerAxis(end); end
     broadband=summary.PitchPerAxis(summary.BroadbandRecommended);
     if isempty(broadband), broadband=candidate; end
-    counts=unique([16,64,broadband,candidate]);
+    cellPitch=size(unit,1)/cfg.samplesPerPeriod;
+    counts=unique([summary.PitchPerAxis(1),summary.PitchPerAxis(end),broadband,candidate]);
+    counts=unique([counts,summary.PitchPerAxis(summary.CurrentD65Recommended).']);
     [~,index]=min(abs(cfg.wavelengths*1e9-550));
     values=model.coefficientLookup(:,index);
     field=reshape(values(double(unit)+1),size(unit));
-    angles=linspace(-6,6,1201);
+    angles=linspace(-6,6,401);
     preview=struct('wavelengthNm',550,'pitchPerAxis',counts,'angleDeg',angles, ...
         'energy',{{}},'sourceType',"plane",'referenceDensity',0);
     for count=counts
-        fprintf('Pitch角图：%d Pitch，550 nm，±6°/1201\n',count);
-        preview.energy{end+1}=periodicBins(field,count,dx,550e-9,angles);
+        fprintf('Pitch角图：%d Pitch，550 nm，±6°/401\n',count);
+        preview.energy{end+1}=periodicBins(field,count,dx,550e-9,angles,cellPitch);
     end
     step=deg2rad(angles(2)-angles(1));
     preview.referenceDensity=max(cellfun(@(x) max(x,[],'all'),preview.energy),[],'all')/step^2;
@@ -251,7 +276,7 @@ function preview = periodPreviews(cfg,model,unit,dx,summary,outputDir)
         xlabel(ax,'theta_x / deg'); ylabel(ax,'theta_y / deg');
     end
     cb=colorbar(ax); cb.Layout.Tile='east'; cb.Label.String='Common energy-density reference / dB';
-    title(layout,'550 nm | plane wave | +/-6 deg / 1201 | view +/-1 deg');
+    title(layout,'550 nm | plane wave | +/-6 deg / 401 | view +/-1 deg');
     drawnow;
     exportgraphics(layout,fullfile(outputDir,'pitch_images_550nm.png'),'Resolution',150);
 end

@@ -3,8 +3,8 @@
 这是演示几何，不代表实际产品。三套项目几何相同，仅编码格式不同。
 
 - 主脚本设置 `projectName="Case2"`、`stack.geometry.source="images"`。
-- Pitch：50 μm；periods：[16,16]；samplesPerPeriod：64。
-- 图片尺寸：1024 行 × 1024 列；物面：800 × 800 μm。
+- Pitch：50 μm；目标periods：[64,64]，repeatToFit=true；samplesPerPeriod：64。
+- 原始单元：1024×1024，16×16 Pitch；运行时横纵各平铺4次，完整物面4096×4096、3.2×3.2 mm。
 - anode 白色=阳极；BM 白色=实心 BM（stack.layers.BM.invert=false）；CF_R/G/B 白色=对应膜。
 - 阈值 0.5；图层文件名可不写扩展名，自动匹配本项目格式。
 - 各项目 config.txt 自动提供采样、材料、观察角域和显示参数；不包含像素形状参数。

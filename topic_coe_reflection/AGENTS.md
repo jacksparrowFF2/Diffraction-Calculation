@@ -15,12 +15,12 @@
 
 - 使用说明、输入/配置规则、模型与指标解释、迁移交接统一维护在 `docs/README.md`；不再新增平行功能说明。Input 中的简短项目清单和 CIE 数据署名/许可保留在原位。
 
-- 主脚本统一按stack.layerNames/stack.layerLevels构建膜堆，不再提供simple/multilayer选择。每项method为nk有限膜或reflectance不透明有效边界；RGB CF同层互斥。无基底膜用medium出射介质，COE外部默认absorber终端，不能把悬空膜未反射能量直接称为吸收。
+- 主脚本统一按stack.layerNames/stack.layerLevels构建膜堆，不再提供simple/multilayer选择。每项method为nk有限膜或reflectance不透明有效边界；默认RGB CF按从下到上R→B→G独立层级叠放，制作顺序通过layerNames列表自定义，交叠区保留各层膜厚；同层级仍要求互斥，旧示例可显式使用同层互斥配置。无基底膜用medium出射介质，COE外部默认absorber终端，不能把悬空膜未反射能量直接称为吸收。
 
 - heightMap全零时只运行一次传播、单次色度和角域积分，并使用单状态图表及导出；非零高度保留两状态比较。历史baseline等数组字段可复用作兼容，不得重新计算相同结果。膜厚本身的相位不可因关闭额外heightMap而删除。
 
 - 照明支持plane、有限距离/尺寸point和近轴TEM00 laser；有限源点按强度叠加，勿相干叠加。光谱与空间模型独立，支持D65/自定义SPD/单色谱线，不增加相机预览。入射功率按物面平均辐照度标定。
-- 默认IJP采用全白图片，与其它图层同尺寸同坐标，n=1.5、k=0、厚10μm，在Anode/BM之间。透明不代表无界面反射或无相位。厚膜需报告光谱欠采样风险。常规方案比较暂用5 nm；默认角域±6°、输出1201，有限圆盘源每轴5点；只裁切显示不等于提高计算分辨率。
+- IJP由图片及invert共同定义覆盖；旧示例为全白且invert=false，F192/COEB3为全黑且invert=true，与其它图层同尺寸同坐标，n=1.5、k=0、厚10μm，在Anode/BM之间。透明不代表无界面反射或无相位。厚膜需报告光谱欠采样风险。常规方案比较暂用5 nm；默认角域±6°、输出1201，有限圆盘源每轴5点；只裁切显示不等于提高计算分辨率。
 
 - 当前仿真仅读取用户图样与可选heightMap输入；Diamond/图片/高度演示生成器及旧固定COE入口已存档，不再调用。回归测试应使用统一图层公共接口和临时输入夹具，不依赖archive。`coreCustomPattern` / `coreNormalIncidenceReflection` 暂为历史批量接口兼容保留，不得误认为无引用后直接删除。
 
@@ -43,3 +43,10 @@
 - 文件内局部函数不增加分类前缀，跟随所属文件管理。
 - 仅在一处使用的简短辅助逻辑优先直接并入调用处，不为缩短文件而单独创建函数；有复用价值或需要独立验证的算法保留函数边界。
 - 重命名时同步修改文件名、首函数声明、调用点、测试和说明，并检查打包脚本；完成回归测试及独立复制模块运行验证。
+
+- 用户已授权显式图片单元平铺：stack.geometry.repeatToFit默认false，Case1/2/3设true并以cfg.periods=[64,64]为目标。根据原图列/行数与samplesPerPeriod计算[x,y]输入Pitch和重复数，不猜最小周期；各图层原始尺寸一致、目标必须整除，不缩放/裁切/改写输入。额外heightMap仍覆盖完整目标。记录inputPeriods/repeatCounts，保持默认完整物面行为和MAT入口兼容。
+
+- F192/COEB3原生图片为4×4 Pitch、每Pitch250点；允许显式stack.geometry.inputSamplesPerPeriod=250配合较低cfg.samplesPerPeriod，在内存中按共同像素中心最近邻降采样后平铺，不覆盖输入。默认0沿用计算采样率。先运行raster基准，再独立评估periods；不得用原生参照自比较宣称连续几何收敛。periods基准使用完整原图单元，ROI内无限阶次须全部积分；降低周期数的宽带/逐波长结论及峰形变化分别说明。
+
+- 图样对齐可显式选择F192_AnodeBM_ConvolutionRGB/ParaxialRGB：仅Anode/BM，BM为理想不透明黑区，不读取CF/IJP；三波长按D65采样权重，仅称RGB代理。原F192/COEB3完整膜堆不改写。
+- 面源卷积为source.integrationMethod="angularConvolution"，仅point源并显式选择wavefront="plane"或"paraxial"，假设均匀非相干圆盘及源点相同振幅。球面精确直接积分保留direct/spherical默认，不得静默替换。逐波长在物理强度上做线性卷积，先向外补足源角半径再裁切，核积分为1但不能重标定最终窗口能量。plane对应远场PSF平移模型，paraxial另含中心源二次相位；两者均不是完整相机/目视光路。验证应与相同波前假设下显式源点求和对照。

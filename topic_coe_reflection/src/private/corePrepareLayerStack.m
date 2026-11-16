@@ -21,6 +21,26 @@ function [model, geometry] = corePrepareLayerStack(cfg, stack, inputDir)
     mustBeMember(string(stack.geometry.source), ["images","mat"]);
     validateattributes(stack.geometry.threshold, {'numeric'}, {'scalar','real','>=',0,'<=',1});
     shape = cfg.periods([2,1])*cfg.samplesPerPeriod;
+    repeatToFit=false;
+    if isfield(stack.geometry,'repeatToFit'), repeatToFit=stack.geometry.repeatToFit; end
+    validateattributes(repeatToFit,{'logical'},{'scalar'});
+    inputSamples=cfg.samplesPerPeriod;
+    if isfield(stack.geometry,'inputSamplesPerPeriod')
+        validateattributes(stack.geometry.inputSamplesPerPeriod,{'numeric'}, ...
+            {'scalar','integer','nonnegative','finite'});
+        if stack.geometry.inputSamplesPerPeriod>0, inputSamples=stack.geometry.inputSamplesPerPeriod; end
+    end
+    validateattributes(inputSamples,{'numeric'},{'scalar','integer','positive','finite'});
+    assert(stack.geometry.source=="images" || inputSamples==cfg.samplesPerPeriod, ...
+        'COEReflection:RasterSource','输入采样率重采样仅适用于图片输入。');
+    geometry.inputSamplesPerPeriod=inputSamples;
+    geometry.samplesPerPeriod=cfg.samplesPerPeriod;
+    assert(~repeatToFit || stack.geometry.source=="images", ...
+        'COEReflection:RepeatSource','repeatToFit只用于图片输入。');
+    inputShape=[];
+    geometry.inputPeriods=cfg.periods;
+    geometry.repeatCounts=[1,1];
+    geometry.inputGridSize=shape;
     masks = false([shape, numel(names)]);
     nk = complex(zeros(numel(names), numel(cfg.wavelengths)));
     thickness = zeros(1,numel(names));
@@ -72,6 +92,37 @@ function [model, geometry] = corePrepareLayerStack(cfg, stack, inputDir)
             assert(isfield(data,layer.field), 'COEReflection:StackField', 'MAT 缺少图层字段：%s',layer.field);
             value = data.(layer.field);
             assert(all(value(:)==0 | value(:)==1), 'COEReflection:BinaryMask', '图层必须为二值：%s',names(j));
+        end
+        if coverage=="image"
+            actualShape=size(value);
+            if isempty(inputShape)
+                inputShape=actualShape;
+                geometry.inputGridSize=inputShape;
+                geometry.inputPeriods=inputShape([2,1])/inputSamples;
+            end
+            assert(isequal(actualShape,inputShape),'COEReflection:InputAlignment', ...
+                '所有图层原始图片必须同尺寸、同原点，不能各自采用不同单元。');
+            if inputSamples~=cfg.samplesPerPeriod
+                assert(all(mod(inputShape,inputSamples)==0), ...
+                    'COEReflection:InputPitch','原始图片行列数须为inputSamplesPerPeriod的整数倍。');
+                assert(cfg.samplesPerPeriod<inputSamples,'COEReflection:RasterUpsampling', ...
+                    '只允许显式降低图片计算采样率，不能通过插值宣称提高真实版图分辨率。');
+                sampledShape=inputShape/inputSamples*cfg.samplesPerPeriod;
+                rows=floor(((0:sampledShape(1)-1)+0.5)*inputShape(1)/sampledShape(1))+1;
+                cols=floor(((0:sampledShape(2)-1)+0.5)*inputShape(2)/sampledShape(2))+1;
+                value=value(rows,cols); % 共同像素中心最近邻采样，保持二值区域及坐标尺度。
+            end
+            sampledShape=size(value);
+            geometry.sampledInputGridSize=sampledShape;
+            if repeatToFit
+                assert(all(mod(sampledShape,cfg.samplesPerPeriod)==0), ...
+                    'COEReflection:InputPitch','图片行列数须为samplesPerPeriod的整数倍，才能确定输入Pitch数。');
+                assert(all(mod(shape,sampledShape)==0), ...
+                    'COEReflection:RepeatExtent','目标Pitch数须为输入单元Pitch数的整数倍，不缩放或裁切输入。');
+                repeats=shape./sampledShape;
+                geometry.repeatCounts=repeats([2,1]);
+                value=repmat(value,repeats);
+            end
         end
         validateattributes(value, {'numeric','logical'}, {'real','finite','size',shape});
         validateattributes(layer.invert, {'logical'}, {'scalar'});

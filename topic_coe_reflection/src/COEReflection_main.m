@@ -12,7 +12,7 @@ close all;
 %% 1. 文件输入与输出设置
 moduleDir = fileparts(fileparts(mfilename('fullpath')));
 inputRoot = fullfile(moduleDir, 'Input');
-projectName = "Case1_Pitch64"; % 当前完整64 Pitch项目；Case1/2/3为原16 Pitch示例，空字符串使用Input根目录
+projectName = "case04"; % case01~case04四图样对比；F192_AnodeBM_PlaneRGB为真实版图基线
 assert(~any(projectName == [".", ".."]) && ~contains(projectName, ["/", "\", ":"]), ...
     'COEReflection:ProjectName', '项目名称必须是单个文件夹名称，不能包含路径分隔符。');
 useProjectConfig = true;       % 读取 Input/项目名称/config.txt；false 使用下方脚本参数
@@ -21,8 +21,11 @@ outputDir = fullfile(moduleDir, 'Output', projectName); % 各项目结果分开�
 inputFile = "";                  % 可选额外高度/外部复系数 MAT；图样通过 stack.layerNames 声明
 caseName = "coe_reflection";     % 输出文件名前缀；同名结果会覆盖
 saveResults = true;             % 是否保存 MAT、CSV 和 PNG
+showProgress = true;            % 是否显示仿真进度窗口；也可在项目 config.txt 中设置
 runSamplingBenchmark = false;   % true：运行独立采样基准并返回；结果写入 Output/项目/SamplingConvergence
-samplingBenchmarkMode = "all"; % all：五类采样扫描；periods：专门评估每轴Pitch数
+samplingBenchmarkMode = "all"; % all：五类采样扫描；periods：Pitch数；raster：物面采样率收敛
+runPlaneWaveComparison = projectName=="F192_AnodeBM_PlaneRGB"; % 可手动设true：局部单元/阵列共同曝光RGB对比后返回
+runFourPatternComparison = any(projectName==["case01","case02","case03","case04"]); % 四图样共同条件对比
 
 % MAT 文件可包含以下任意字段，读取后覆盖脚本中的对应值：
 % mask：二维 0~1 材料区域图，推荐二值；1 为特征区，0 为背景区。
@@ -72,9 +75,9 @@ cfg.source = coreSourceDefaults();
 stack.incidentN = 1;
 stack.exitN = 1; % 无基底有限膜：空气/膜堆/空气
 stack.backgroundMode = "absorber"; % COE 阳极外匹配吸收底；悬空膜用 medium
-stack.layerNames = ["Anode", "IJP", "BM", "CF_R", "CF_G", "CF_B"];
-stack.layerLevels = [1, 2, 3, 4, 4, 4];
-stack.geometry = struct('source', "images", 'matFile', "layers.mat", 'threshold', 0.5);
+stack.layerNames = ["Anode", "IJP", "BM", "CF_R", "CF_B", "CF_G"];
+stack.layerLevels = [1, 2, 3, 4, 5, 6]; % RGB从下到上R→B→G；重排名称列表可自定义
+stack.geometry = struct('source', "images", 'matFile', "layers.mat", 'threshold', 0.5, 'repeatToFit', false, 'inputSamplesPerPeriod', 0);
 for name = stack.layerNames
     stack.layers.(name) = coreLayerDefaults(name);
 end
@@ -88,7 +91,8 @@ stack.layers.CF_R.n = 1.65; stack.layers.CF_R.k = 0.03; stack.layers.CF_R.thickn
 stack.layers.CF_G.n = 1.60; stack.layers.CF_G.k = 0.04; stack.layers.CF_G.thickness = 1e-6;
 stack.layers.CF_B.n = 1.55; stack.layers.CF_B.k = 0.05; stack.layers.CF_B.thickness = 0.9e-6;
 % stack.layerNames 声明图片/材料名称；stack.layerLevels 声明物理层级。
-% 默认 Anode / IJP / BM / [CF_R,CF_G,CF_B]；IJP为整面n=1.5、k=0、厚10μm。
+% 默认 Anode / IJP / BM / CF_R / CF_B / CF_G；交叠处保留各膜厚。
+% IJP为整面n=1.5、k=0、厚10μm；黑色材料图请在项目配置设invert=true。
 % 每个 stack.layers.名称.method 可选 nk 或 reflectance，具体参数在项目 config.txt。
 % 单个悬空膜同样声明为一项，backgroundMode="medium"、exitN=1 即空气/膜/空气。
 % 图片白色=材料，若白色=开口则该项 invert=true；不自动调整输入几何。
@@ -149,6 +153,7 @@ if useProjectConfig
     settings.inputFile = inputFile;
     settings.caseName = caseName;
     settings.saveResults = saveResults;
+    settings.showProgress = showProgress;
     settings.observation = observation;
     settings.spotOptions = spotOptions;
     settings.displayFloorDb = displayFloorDb;
@@ -168,6 +173,7 @@ if useProjectConfig
     inputFile = settings.inputFile;
     caseName = settings.caseName;
     saveResults = settings.saveResults;
+    showProgress = settings.showProgress;
     observation = settings.observation;
     spotOptions = settings.spotOptions;
     displayFloorDb = settings.displayFloorDb;
@@ -178,11 +184,28 @@ if useProjectConfig
     fprintf('读取项目配置：%s（%d 项覆盖）。\n', projectConfig.file, numel(projectConfig.keys));
 end
 cfg.observation = observation;
+if runFourPatternComparison && ~runSamplingBenchmark
+    assert(strlength(inputFile)==0 && spectrumMode=="RGB", ...
+        'COEReflection:ComparisonInput','四图样对比要求RGB模式且无额外MAT输入。');
+    fourPatternComparison = benchFourPatterns(cfg, stack, inputRoot, ...
+        fullfile(moduleDir, 'Output'), rgbOptions);
+    return
+end
+if runPlaneWaveComparison && ~runSamplingBenchmark
+    assert(strlength(inputFile)==0 && spectrumMode=="RGB", ...
+        'COEReflection:ComparisonInput','平面波单元对比要求RGB模式且无额外MAT输入。');
+    planeWaveComparison = benchPlaneWaveComparison(cfg, stack, inputDir, ...
+        fullfile(outputDir, 'PlaneWaveComparison'), rgbOptions, projectConfig);
+    return
+end
 if runSamplingBenchmark
     assert(strlength(inputFile)==0, 'COEReflection:BenchmarkInput', ...
         '采样基准仅使用统一图片膜堆；请清空额外 MAT 输入。');
-    mustBeMember(samplingBenchmarkMode,["all","periods"]);
-    if samplingBenchmarkMode=="periods"
+    mustBeMember(samplingBenchmarkMode,["all","periods","raster"]);
+    if samplingBenchmarkMode=="raster"
+        samplingBenchmark = benchRaster(cfg, stack, inputDir, ...
+            fullfile(outputDir, 'RasterConvergence'), projectConfig);
+    elseif samplingBenchmarkMode=="periods"
         samplingBenchmark = benchPeriods(cfg, stack, inputDir, ...
             fullfile(outputDir, 'PitchConvergence'), projectConfig);
     else
@@ -191,6 +214,10 @@ if runSamplingBenchmark
     end
     return
 end
+% 仅普通仿真显示进度；采样基准沿用独立流程。关闭窗口可隐藏进度，计算继续。
+[updateProgress, closeProgress] = coreCreateProgress(showProgress);
+try
+updateProgress(0, "加载光谱与参数");
 mustBeMember(spectrumMode,["D65","custom","monochromatic","RGB"]);
 isColorimetric = spectrumMode ~= "RGB";
 colorImageSuffix = "_spectral_color.png";
@@ -222,7 +249,7 @@ if isColorimetric
 else
     spectrum.energyWeights=cfg.spectralWeights(:)/sum(cfg.spectralWeights);
     spectrum.photopicWeights=spectrum.energyWeights;
-    spectrumLabel="三波长等权代理";
+    spectrumLabel="三波长光谱权重代理";
     photopicLabel="三波长代理（非标准光度）";
 end
 if cfg.source.type=="laser" && spectrumMode=="D65"
@@ -230,6 +257,7 @@ if cfg.source.type=="laser" && spectrumMode=="D65"
 end
 
 %% 3. 读取设计文件并检查输入尺寸
+updateProgress(0.03, "读取输入文件并检查尺寸");
 gridSize = [cfg.periods(2), cfg.periods(1)]*cfg.samplesPerPeriod;
 if strlength(inputFile) > 0
     inputPath = fullfile(inputDir, inputFile);
@@ -259,8 +287,11 @@ fprintf('计算面采样：%d×%d，采样间距 %.3f μm。\n', gridSize(1), gr
     cfg.pitch/cfg.samplesPerPeriod*1e6);
 
 %% 3.1 建立局部膜层区域与复反射系数（不依赖其它 topic）
+updateProgress(0.06, "读取图层并计算膜堆复反射率");
 assert(isempty(cfg.mask), 'COEReflection:LegacyMask', '请通过 stack.layerNames 声明各层图样，不使用旧 mask 字段。');
 [cfg.coeStack, stackGeometry] = corePrepareLayerStack(cfg, stack, inputDir);
+fprintf('输入单元：%g×%g Pitch；平铺次数 [x,y]=[%d,%d]；目标 [%d,%d] Pitch。\n', ...
+    stackGeometry.inputPeriods,stackGeometry.repeatCounts,cfg.periods);
 cfg.mask = double(stackGeometry.unionMask); % 仅作几何显示；实际反射系数来自局部膜堆查找表
 fprintf('统一膜堆：%d 个图样区域，%d 个物理层级，%d 种局部结构，参考面 %.3f μm。\n', ...
     numel(stack.layerNames), numel(unique(stack.layerLevels)), ...
@@ -293,7 +324,8 @@ if numel(cfg.wavelengths) > 1
 end
 
 %% 4. 反射计算：零高度仅计算一次；非零高度才作两状态比较
-[result, baseline, heightPhaseEnabled] = coreSimulateHeightStates(cfg);
+[result, baseline, heightPhaseEnabled] = coreSimulateHeightStates(cfg, ...
+    @(fraction,message) updateProgress(0.15+0.60*fraction, message));
 stateCount = 1+double(heightPhaseEnabled);
 resultLineStyle = '--';
 if ~heightPhaseEnabled
@@ -309,6 +341,7 @@ if heightPhaseEnabled
 end
 
 %% 5. 原始反射能量的评价与可选高度对比
+updateProgress(0.76, "统计反射指标与累计角能量");
 % Throughput：总反射能量 / 入射能量；CapturedFraction：窗口内能量 / 总反射能量。
 % ZeroOrderFraction：零级能量 / 总反射能量。
 % OutsideAngleFraction：评价圆锥外能量 / 总反射能量，包含窗口外能量。
@@ -383,6 +416,7 @@ disp('观察角域内绝对反射率（分母为入射能量 / 入射明视觉�
 disp(observationMetrics);
 
 %% 5.2 非零级光斑位置与绝对反射率
+updateProgress(0.80, "检测非零级衍射斑并积分能量");
 % S1、S2 等仅是检测到的局部亮斑编号，不自动代表理论 (m,n) 衍射阶数。
 % 全部统计基于未增强的物理数组，分母为入射能量（photopic 组为入射明视觉光通量）。
 diffractionSpots = coreComputeDiffractionSpots(baseline, result, spectrum, spotOptions, heightPhaseEnabled);
@@ -391,6 +425,7 @@ disp('非零级主要衍射斑（宽带明视觉组；RGB 模式为代理权重�
 disp(spotMetrics(spotMetrics.Group == "photopic", :));
 
 %% 6. 展示反射面与各波长的远场结果
+updateProgress(0.84, "绘制输入图层与合成反射颜色");
 geometryFigure = figure('Name', '输入图层与额外高度', 'Color', 'w', 'Position', [60, 80, 1450, 700]);
 showIllumination = cfg.source.type ~= "plane";
 geometryTileCount = numel(stack.layerNames)+double(heightPhaseEnabled)+double(showIllumination);
@@ -453,6 +488,7 @@ else
 end
 diffractionFigure = figure('Name', 'COE 远场反射', 'Color', 'w', ...
     'Units', 'normalized', 'Position', [0.03, 0.07, 0.94, 0.82]);
+updateProgress(0.88, "绘制远场、色彩图与指标曲线");
 previewIndices = zeros(size(previewWavelengthNm));
 for j = 1:numel(previewWavelengthNm)
     [~, previewIndices(j)] = min(abs(cfg.wavelengths*1e9 - previewWavelengthNm(j)));
@@ -594,6 +630,7 @@ for outputFigure = [geometryFigure, diffractionFigure, metricsFigure, angularFig
 end
 
 %% 7. 保存物理数据、参数、指标表和图片
+updateProgress(0.92, "绘制接收面辐照度");
 % 接收面长度坐标图复用角度图的共同归一化 dB 数据，方便直接对照。
 receiverFigure = figure('Name', 'COE 接收面辐照度', 'Color', 'w', ...
     'Position', [100, 80, 1200, 650]);
@@ -616,6 +653,7 @@ for state = 1:stateCount
 end
 plotStyleFigure(receiverFigure, displayStyle);
 if saveResults
+    updateProgress(0.94, "保存原始物理数据与指标表");
     if ~isfolder(outputDir)
         mkdir(outputDir);
     end
@@ -646,6 +684,7 @@ if saveResults
     writetable(cumulativeMetrics, fullfile(outputDir, caseName + "_cumulative_energy.csv"));
     writetable(spotMetrics, fullfile(outputDir, caseName + "_diffraction_spots.csv"), 'Encoding', 'UTF-8');
     if isColorimetric
+        updateProgress(0.96, "导出光谱合成图像");
         exportgraphics(colorFigure, fullfile(outputDir, caseName + colorImageSuffix), 'Resolution', 180);
         if heightPhaseEnabled
             imwrite(colorData.withoutHeight.sRGB, fullfile(outputDir, caseName + "_srgb_linear_without_height_phase.png"));
@@ -667,10 +706,19 @@ if saveResults
         end
     end
     exportgraphics(geometryFigure, fullfile(outputDir, caseName + "_geometry.png"), 'Resolution', 180);
+    updateProgress(0.97, "导出远场与接收面图像");
     exportgraphics(diffractionFigure, fullfile(outputDir, caseName + "_diffraction.png"), 'Resolution', 180);
     exportgraphics(receiverFigure, fullfile(outputDir, caseName + "_receiver_irradiance.png"), 'Resolution', 180);
+    updateProgress(0.99, "导出指标与累计角能量曲线");
     exportgraphics(metricsFigure, fullfile(outputDir, caseName + "_metrics.png"), 'Resolution', 180);
     exportgraphics(angularFigure, fullfile(outputDir, caseName + "_cumulative_energy.png"), 'Resolution', 180);
     fprintf('计算完成，结果已保存到：%s\n', outputDir);
 end
+updateProgress(1, "仿真完成");
+closeProgress();
+catch simulationError
+    closeProgress(); % 读图、计算或保存失败时，及时关闭窗口并保留原始错误。
+    rethrow(simulationError);
+end
+clear updateProgress closeProgress;
 % 运行结束后 cfg、result、baseline 保留在工作区，方便继续查看与分析。

@@ -8,6 +8,120 @@ classdef COEMultilayerTest < matlab.unittest.TestCase
         end
     end
     methods (Test)
+        function sourceConvolutionMatchesDirectParaxialDisk(testCase)
+            [cfg,stack,folder]=sourceConvolutionInput(testCase);
+            direct=runCOEReflection(cfg,stack,folder);
+            cfg.source.integrationMethod="angularConvolution";
+            convolved=runCOEReflection(cfg,stack,folder);
+            testCase.verifyEqual(convolved.spectralEnergy,direct.spectralEnergy,'AbsTol',1e-11);
+            testCase.verifyEqual(convolved.clearKernel,direct.clearKernel,'AbsTol',1e-11);
+            testCase.verifyEqual(convolved.metrics.Throughput,direct.metrics.Throughput,'AbsTol',1e-12);
+            testCase.verifyEqual(convolved.sourceConvolution.kernelMass,1,'AbsTol',1e-14);
+            testCase.verifyLessThan(convolved.sourceConvolution.massError,1e-12);
+        end
+
+        function sourceConvolutionMatchesTiltedPlaneDisk(testCase)
+            [cfg,stack,folder]=sourceConvolutionInput(testCase);
+            cfg.source.wavefront="plane";
+            direct=runCOEReflection(cfg,stack,folder);
+            cfg.source.integrationMethod="angularConvolution";
+            convolved=runCOEReflection(cfg,stack,folder);
+            testCase.verifyEqual(convolved.spectralEnergy,direct.spectralEnergy,'AbsTol',1e-11);
+        end
+
+        function sourceConvolutionPadsOutsideObservationWindow(testCase)
+            [cfg,stack,folder]=sourceConvolutionInput(testCase);
+            cfg.source.centerXY=[deg2rad(1.4)*cfg.source.distance,0];
+            direct=runCOEReflection(cfg,stack,folder);
+            cfg.source.integrationMethod="angularConvolution";
+            convolved=runCOEReflection(cfg,stack,folder);
+            testCase.verifyEqual(convolved.spectralEnergy,direct.spectralEnergy,'AbsTol',1e-11);
+            testCase.verifyGreaterThan(convolved.sourceConvolution.paddedHalfAngleDeg,cfg.angleHalfRangeDeg);
+            testCase.verifyLessThan(convolved.metrics.CapturedThroughput,convolved.metrics.Throughput);
+        end
+
+        function zeroDiameterConvolutionReturnsPointSource(testCase)
+            [cfg,stack,folder]=sourceConvolutionInput(testCase);
+            cfg.source.diameter=0;
+            direct=runCOEReflection(cfg,stack,folder);
+            cfg.source.integrationMethod="angularConvolution";
+            convolved=runCOEReflection(cfg,stack,folder);
+            testCase.verifyEqual(convolved.spectralEnergy,direct.spectralEnergy,'AbsTol',1e-11);
+            testCase.verifyEqual(convolved.sourceConvolution.kernel,1);
+        end
+
+        function exactSphericalConvolutionRequiresExplicitApproximation(testCase)
+            [cfg,stack,folder]=sourceConvolutionInput(testCase);
+            cfg.source.integrationMethod="angularConvolution";
+            cfg.source.wavefront="spherical";
+            testCase.verifyError(@()runCOEReflection(cfg,stack,folder),'COEReflection:SourceConvolution');
+        end
+
+        function explicitRasterSamplingKeepsPhysicalExtentAndInputFiles(testCase)
+            [cfg,stack,folder]=layerInput(testCase);
+            original=imread(fullfile(folder,'CF_R.png'));
+            stack.geometry.inputSamplesPerPeriod=16;
+            cfg.samplesPerPeriod=8; cfg.angleHalfRangeDeg=1.5; cfg.metricAngleDeg=1;
+            value=runCOEReflection(cfg,stack,folder);
+            expected=original(2:2:end,2:2:end)>0;
+            testCase.verifyEqual(value.layerGeometry.layerMasks.CF_R,expected);
+            testCase.verifyEqual(value.layerGeometry.inputGridSize,[64,64]);
+            testCase.verifyEqual(value.layerGeometry.sampledInputGridSize,[32,32]);
+            testCase.verifyEqual(value.layerGeometry.inputPeriods,[4,4]);
+            testCase.verifyEqual(value.layerGeometry.gridStep,cfg.pitch/8,'AbsTol',1e-18);
+            testCase.verifyEqual(imread(fullfile(folder,'CF_R.png')),original);
+        end
+
+        function explicitRasterSamplingCanRepeatCompleteCell(testCase)
+            [cfg,stack,folder]=layerInput(testCase);
+            stack.geometry.inputSamplesPerPeriod=16;
+            stack.geometry.repeatToFit=true;
+            cfg.samplesPerPeriod=8; cfg.angleHalfRangeDeg=1.5; cfg.metricAngleDeg=1; cfg.periods=[8,8];
+            value=runCOEReflection(cfg,stack,folder);
+            testCase.verifyEqual(value.layerGeometry.repeatCounts,[2,2]);
+            testCase.verifySize(value.layerGeometry.layerMasks.IJP,[64,64]);
+            testCase.verifyTrue(all(value.layerGeometry.layerMasks.IJP,'all'));
+        end
+
+        function explicitRasterSamplingRejectsUpsampling(testCase)
+            [cfg,stack,folder]=layerInput(testCase);
+            stack.geometry.inputSamplesPerPeriod=16;
+            cfg.samplesPerPeriod=32;
+            testCase.verifyError(@()runCOEReflection(cfg,stack,folder),'COEReflection:RasterUpsampling');
+        end
+
+        function repeatTwoPitchMatchesCompleteImage(testCase)
+            [repeated,complete]=repeatInputPair(testCase,[2,2]);
+            testCase.verifyEqual(repeated.spectralEnergy,complete.spectralEnergy,'AbsTol',1e-12);
+            testCase.verifyEqual(repeated.layerGeometry.repeatCounts,[4,4]);
+            testCase.verifyEqual(repeated.layerGeometry.inputPeriods,[2,2],'AbsTol',1e-12);
+        end
+
+        function repeatFourPitchMatchesCompleteImage(testCase)
+            [repeated,complete]=repeatInputPair(testCase,[4,4]);
+            testCase.verifyEqual(repeated.spectralEnergy,complete.spectralEnergy,'AbsTol',1e-12);
+            testCase.verifyEqual(repeated.layerGeometry.repeatCounts,[2,2]);
+        end
+
+        function rectangularUnitUsesSeparateRepeatCounts(testCase)
+            [repeated,complete]=repeatInputPair(testCase,[2,4]);
+            testCase.verifyEqual(repeated.spectralEnergy,complete.spectralEnergy,'AbsTol',1e-12);
+            testCase.verifyEqual(repeated.layerGeometry.repeatCounts,[4,2]);
+        end
+
+        function nonDivisibleTargetIsRejected(testCase)
+            [cfg,stack,folder]=singleLayerInput(testCase);
+            cfg.periods=[6,6]; stack.geometry.repeatToFit=true;
+            testCase.verifyError(@()runCOEReflection(cfg,stack,folder),'COEReflection:RepeatExtent');
+        end
+
+        function differentLayerUnitSizesAreRejected(testCase)
+            [cfg,stack,folder]=layerInput(testCase);
+            stack.geometry.repeatToFit=true;
+            imwrite(true(32),fullfile(folder,'IJP.png'));
+            testCase.verifyError(@()runCOEReflection(cfg,stack,folder),'COEReflection:InputAlignment');
+        end
+
         function extendedSourceEqualsIncoherentWeightedPointSum(testCase)
             [cfg,stack,folder]=singleLayerInput(testCase);
             cfg.wavelengths=550e-9;cfg.spectralWeights=1;cfg.channelResponse=1;
@@ -83,6 +197,39 @@ classdef COEMultilayerTest < matlab.unittest.TestCase
             stack.layers.IJP.coverage="image";stack.layers.IJP.file="IJP.bmp";
             fromImage=runCOEReflection(cfg,stack,folder);
             testCase.verifyEqual(fromImage.kernel,result.kernel,'AbsTol',1e-12);
+            imwrite(false(64),fullfile(folder,'IJP.bmp'));
+            stack.layers.IJP.invert=true;
+            fromBlack=runCOEReflection(cfg,stack,folder);
+            testCase.verifyTrue(all(fromBlack.layerGeometry.layerMasks.IJP,'all'));
+            testCase.verifyEqual(fromBlack.config.coeStack.coefficientLookup, ...
+                fromImage.config.coeStack.coefficientLookup,'AbsTol',1e-12);
+            testCase.verifyEqual(fromBlack.spectralEnergy,fromImage.spectralEnergy,'AbsTol',1e-12);
+        end
+
+        function overlappingCfKeepsThicknessAndMatchesCharacteristicMatrix(testCase)
+            [cfg,stack,folder]=overlappingCfInput(testCase);
+            result=runCOEReflection(cfg,stack,folder);
+            table=result.config.coeStack.regionTable;
+            expected=overlappingCfReflectance(cfg.wavelengths,table,stack);
+            testCase.verifyEqual(abs(result.config.coeStack.coefficientLookup).^2,expected,'AbsTol',1e-12);
+            testCase.verifyEqual(result.metrics.Throughput, ...
+                (table.AreaFraction.'*expected).','AbsTol',1e-12);
+            testCase.verifyEqual(table.LocalHeightM, ...
+                double(table.CF_R)*100e-9+double(table.CF_B)*130e-9+double(table.CF_G)*170e-9, ...
+                'AbsTol',1e-18);
+            testCase.verifyEqual(result.config.coeStack.referenceHeight,400e-9,'AbsTol',1e-18);
+            testCase.verifyEqual(table.AreaFraction,0.25*ones(4,1),'AbsTol',1e-12);
+        end
+
+        function overlappingCfOrderIsCustomizable(testCase)
+            [cfg,stack,folder]=overlappingCfInput(testCase);
+            rbg=runCOEReflection(cfg,stack,folder);
+            stack.layerNames=["CF_G","CF_B","CF_R"];
+            gbr=runCOEReflection(cfg,stack,folder);
+            table=gbr.config.coeStack.regionTable;
+            expected=overlappingCfReflectance(cfg.wavelengths,table,stack);
+            testCase.verifyEqual(abs(gbr.config.coeStack.coefficientLookup).^2,expected,'AbsTol',1e-12);
+            testCase.verifyGreaterThan(max(abs(rbg.metrics.Throughput-gbr.metrics.Throughput)),1e-3);
         end
 
         function unifiedZeroHeightArrayUsesOnePropagation(testCase)
@@ -254,11 +401,39 @@ classdef COEMultilayerTest < matlab.unittest.TestCase
     end
 end
 
+function [repeated,complete]=repeatInputPair(testCase,inputPeriods)
+    [cfg,stack,folder]=singleLayerInput(testCase);
+    cfg.periods=[8,8]; cfg.outputSize=65;
+    cfg.wavelengths=550e-9; cfg.spectralWeights=1; cfg.channelResponse=1;
+    stack.layers.singlelayer.method="reflectance";
+    stack.layers.singlelayer.reflectance=0.36;
+    shape=inputPeriods([2,1])*cfg.samplesPerPeriod;
+    [xx,yy]=meshgrid(0:shape(2)-1,0:shape(1)-1);
+    unit=mod(floor(xx/3)+floor(yy/5),2)==0;
+    imwrite(unit,fullfile(folder,'singlelayer.bmp'));
+    stack.geometry.repeatToFit=true;
+    repeated=runCOEReflection(cfg,stack,folder);
+    imwrite(repmat(unit,cfg.periods([2,1])./inputPeriods([2,1])),fullfile(folder,'singlelayer.bmp'));
+    stack.geometry.repeatToFit=false;
+    complete=runCOEReflection(cfg,stack,folder);
+end
+
 function cfg = smallConfig()
     cfg = coeReflectionDefaults();
     cfg.periods = [4, 4]; cfg.samplesPerPeriod = 16; cfg.paddingFactor = 2; cfg.outputSize = 129;
     cfg.angleHalfRangeDeg = 3;
     cfg.wavelengths = [450, 550, 650]*1e-9; cfg.spectralWeights = [1, 1, 1]; cfg.channelResponse = eye(3);
+end
+
+function [cfg,stack,folder]=sourceConvolutionInput(testCase)
+    [cfg,stack,folder]=singleLayerInput(testCase);
+    cfg.wavelengths=550e-9; cfg.spectralWeights=1; cfg.channelResponse=1;
+    cfg.outputSize=65; cfg.angleHalfRangeDeg=1.5; cfg.metricAngleDeg=1;
+    stack.layers.singlelayer.method="reflectance";
+    stack.layers.singlelayer.reflectance=0.36;
+    cfg.source.type="point"; cfg.source.wavefront="paraxial";
+    cfg.source.distance=0.05; cfg.source.samplesPerAxis=9;
+    cfg.source.diameter=cfg.source.distance*deg2rad(3/64)*9;
 end
 
 function [cfg,stack,folder]=singleLayerInput(testCase)
@@ -272,6 +447,39 @@ function [cfg,stack,folder]=singleLayerInput(testCase)
         'layerNames',"singlelayer",'layerLevels',1, ...
         'geometry',struct('source',"images",'matFile',"",'threshold',0.5), ...
         'layers',struct('singlelayer',layer));
+end
+
+function [cfg,stack,folder]=overlappingCfInput(testCase)
+    [cfg,stack,folder]=singleLayerInput(testCase);
+    stack.layerNames=["CF_R","CF_B","CF_G"];
+    stack.layerLevels=[1,2,3];
+    indices=[1.5,2.1,1.8];
+    depths=[100,130,170]*1e-9;
+    masks=false(64,64,3);
+    masks(:,1:48,1)=true;
+    masks(:,17:48,2)=true;
+    masks(:,33:64,3)=true;
+    for j=1:3
+        name=stack.layerNames(j);
+        stack.layers.(name)=stack.layers.singlelayer;
+        stack.layers.(name).file=name+".png";
+        stack.layers.(name).n=indices(j);
+        stack.layers.(name).thickness=depths(j);
+        imwrite(masks(:,:,j),fullfile(folder,name+".png"));
+    end
+    stack.layers.CF_B.k=0.05;
+end
+
+function expected=overlappingCfReflectance(wavelengths,regions,stack)
+    expected=zeros(height(regions),numel(wavelengths));
+    for row=1:height(regions)
+        names=fliplr(stack.layerNames); % Independent characteristic matrices use top to bottom.
+        present=logical(regions{row,cellstr(names)});
+        layers=stack.layers;
+        indices=arrayfun(@(name) layers.(name).n+1i*layers.(name).k,names(present));
+        depths=arrayfun(@(name) layers.(name).thickness,names(present));
+        expected(row,:)=independentAirFilmReflectance(wavelengths,indices,depths);
+    end
 end
 
 function reflectance=independentAirFilmReflectance(wavelengths,indices,thickness)

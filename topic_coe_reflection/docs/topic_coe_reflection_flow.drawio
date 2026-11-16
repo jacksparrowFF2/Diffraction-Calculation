@@ -1,0 +1,601 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mxfile host="Electron" agent="Codex" version="24.7.17" type="device">
+  <diagram id="overview" name="01 总览与项目数据流">
+    <mxGraphModel dx="1800" dy="1000" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1840" pageHeight="2130" math="0" shadow="0" background="#FFFFFF">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="&lt;b&gt;topic_coe_reflection｜计算与数据流总览&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:23px&quot;&gt;依据当前工作区源码 · 2026-11-16 · 实线=执行/计算依赖，绿色虚线=数据输入/输出；右下角页签继续查看细节&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#173555;strokeColor=#173555;strokeWidth=1.5;fontColor=#FFFFFF;fontFamily=Microsoft YaHei;fontSize=25;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="25" width="1760" height="66" as="geometry" />
+        </mxCell>
+        <mxCell id="li" value="&lt;b&gt;输入 / 配置&lt;/b&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#F2F5F9;strokeColor=#D7E0EA;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=18;align=left;verticalAlign=middle;spacing=15;shadow=0;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="40" y="115" width="540" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="lc" value="&lt;b&gt;正式主流程&lt;/b&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#F2F5F9;strokeColor=#D7E0EA;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=18;align=left;verticalAlign=middle;spacing=15;shadow=0;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="650" y="115" width="540" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="lo" value="&lt;b&gt;中间数据 / 结果&lt;/b&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#F2F5F9;strokeColor=#D7E0EA;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=18;align=left;verticalAlign=middle;spacing=15;shadow=0;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="1260" y="115" width="540" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="entry" value="&lt;b&gt;1 运行 COEReflection_main.m&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;初始化；选择 projectName / inputDir / outputDir&lt;br&gt;默认项目：Case1_Pitch64&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="650" y="190" width="540" height="105" as="geometry" />
+        </mxCell>
+        <mxCell id="defaults" value="&lt;b&gt;脚本默认值 + coeReflectionDefaults&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;几何、光谱、光源、膜堆、观察角域、显示参数&lt;br&gt;长度 m；角度 Deg 为 °；波长文件为 nm&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#E6F5F0;strokeColor=#3A8E77;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="190" width="540" height="125" as="geometry" />
+        </mxCell>
+        <mxCell id="config" value="&lt;b&gt;Input/&amp;lt;项目&amp;gt;/config.txt&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;coreLoadProjectConfig：按白名单解析 key=value&lt;br&gt;覆盖脚本参数；未知/重复/类型错误即报错&lt;br&gt;不执行 MATLAB 表达式&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#E6F5F0;strokeColor=#3A8E77;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="365" width="540" height="135" as="geometry" />
+        </mxCell>
+        <mxCell id="load" value="&lt;b&gt;2 应用项目配置&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;useProjectConfig=true 时读取配置&lt;br&gt;在光谱和几何计算前生效&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="650" y="365" width="540" height="125" as="geometry" />
+        </mxCell>
+        <mxCell id="bench" value="&lt;b&gt;可选：runSamplingBenchmark=true&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;benchSampling（all）或 benchPeriods（periods）&lt;br&gt;写入 SamplingConvergence / PitchConvergence&lt;br&gt;随后 return，跳过下方正式仿真&lt;/span&gt;" style="shape=note;size=18;whiteSpace=wrap;html=1;fillColor=#FFF4E8;strokeColor=#C58B45;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="1260" y="365" width="540" height="145" as="geometry" />
+        </mxCell>
+        <mxCell id="spectrum" value="&lt;b&gt;3 构造光谱 [详见第 4 页权重]&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;D65 / custom / monochromatic → coreLoadSpectrum&lt;br&gt;RGB → 三波长代理；光谱与空间光源独立&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="650" y="560" width="540" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="cie" value="&lt;b&gt;共享 CIE 数据 + 可选 SPD CSV&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;Input/Colorimetry：D65、CIE 1931 2° CMF&lt;br&gt;custom CSV：波长 nm、相对谱功率&lt;br&gt;连续谱含梯形积分端点权重&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#E6F5F0;strokeColor=#3A8E77;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="560" width="540" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="weights" value="&lt;b&gt;spectrum + cfg 波长参数&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;wavelengths [1×L]；spectralWeights [1×L]&lt;br&gt;energyWeights / photopicWeights [L×1]&lt;br&gt;xyzWeights [L×3]&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#E6F5F0;strokeColor=#3A8E77;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="1260" y="560" width="540" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="mat" value="&lt;b&gt;可选 Input/&amp;lt;项目&amp;gt;/&amp;lt;inputFile&amp;gt;.mat&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;加载 heightMap / complexCoefficient 等覆盖值&lt;br&gt;二维输入覆盖完整目标物面，行=y、列=x&lt;br&gt;正式主脚本禁止非空旧 mask&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#E6F5F0;strokeColor=#3A8E77;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="760" width="540" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="input" value="&lt;b&gt;4 读取额外 MAT 并校验尺寸&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;Nx=periods(1)×samplesPerPeriod&lt;br&gt;Ny=periods(2)×samplesPerPeriod&lt;br&gt;heightMap：标量或 Ny×Nx&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="650" y="760" width="540" height="125" as="geometry" />
+        </mxCell>
+        <mxCell id="images" value="&lt;b&gt;图层图片 + 材料输入&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;Anode、IJP、BM、CF_R/G/B；可自定义名称&lt;br&gt;白色=材料，threshold / invert 控制二值化&lt;br&gt;n/k 常数、逐波长值或三列 nkFile CSV&lt;br&gt;各层厚度、层级和 nk/reflectance 方法&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#E6F5F0;strokeColor=#3A8E77;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="965" width="540" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="stack" value="&lt;b&gt;5 corePrepareLayerStack [详见第 2 页]&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;对齐图片；显式平铺需 repeatToFit=true&lt;br&gt;相同层级互斥；实际图层组合编码&lt;br&gt;逐区域求相干膜堆复反射系数&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="650" y="965" width="540" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="lookup" value="&lt;b&gt;cfg.coeStack + stackGeometry&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;regionMap [Ny×Nx]：0 起始的区域码&lt;br&gt;coefficientLookup [Q×L]：复系数查找表&lt;br&gt;layerMasks / regionTable / materialTable&lt;br&gt;cfg.mask=unionMask，仅作显示&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#E6F5F0;strokeColor=#3A8E77;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="1260" y="965" width="540" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="height" value="&lt;b&gt;6 coreSimulateHeightStates&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;heightMap 全零？只算一次，baseline=result&lt;br&gt;非零：计算有/无额外高度相位两状态&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="650" y="1190" width="540" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="prop" value="&lt;b&gt;7 coreSimulateDiffraction [详见第 3 页]&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;每个状态 → 每个波长 → 每个非相干源点&lt;br&gt;照明 × 复系数 × 额外相位 → 远场像素积分&lt;br&gt;理想参考孔径独立传播用于 clearEnergy&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="650" y="1370" width="540" height="135" as="geometry" />
+        </mxCell>
+        <mxCell id="physical" value="&lt;b&gt;result / baseline：原始物理数组&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;spectralEnergy [M×M×L]：每像素能量/入射&lt;br&gt;spectralIrradiance [M×M×L]：W/m²&lt;br&gt;metrics、kernel、psf、坐标与照明信息&lt;br&gt;M=outputSize；保留窗口截断损失&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#E6F5F0;strokeColor=#3A8E77;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="1260" y="1370" width="540" height="145" as="geometry" />
+        </mxCell>
+        <mxCell id="post" value="&lt;b&gt;8 统计、色度与显示 [详见第 4 页]&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;coreComputeAngularMetrics / DiffractionSpots&lt;br&gt;coreSynthesizeColor；RGB 则用代理显示&lt;br&gt;heightMap=0 时复用单状态积分和色度&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="650" y="1575" width="540" height="135" as="geometry" />
+        </mxCell>
+        <mxCell id="save" value="&lt;b&gt;9 saveResults 控制导出&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;Output/&amp;lt;项目&amp;gt;/&amp;lt;caseName&amp;gt;_*&lt;br&gt;保存配置、物理数组、指标与图片&lt;br&gt;未保存时结果仍留在 MATLAB 工作区&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="650" y="1780" width="540" height="135" as="geometry" />
+        </mxCell>
+        <mxCell id="exports" value="&lt;b&gt;MAT / CSV / PNG&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;_results.mat；_layer_patterns.mat&lt;br&gt;指标、角域、累计能量、光斑、膜堆、光谱 CSV&lt;br&gt;几何、远场、接收面、颜色和曲线 PNG&lt;br&gt;曝光/对数增强不会回写物理能量&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EEE9FA;strokeColor=#8A70B0;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="1260" y="1780" width="540" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="batch" value="&lt;b&gt;公共批量入口：runCOEReflection&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;cfg, stack, inputDir → result&lt;br&gt;传 stack：先建局部膜堆，再计算高度状态&lt;br&gt;只传 cfg：保留历史参数调用路径&lt;br&gt;不自动读取项目 config.txt，不负责绘图/保存&lt;br&gt;图示正式主线来自 COEReflection_main.m&lt;/span&gt;" style="shape=note;size=18;whiteSpace=wrap;html=1;fillColor=#FFF4E8;strokeColor=#C58B45;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1480" width="540" height="190" as="geometry" />
+        </mxCell>
+        <mxCell id="current" value="&lt;b&gt;当前默认项目实例&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;64×64 Pitch，pitch=50 μm，dx=0.78125 μm&lt;br&gt;4096×4096 物面，3.2×3.2 mm，z=100 m&lt;br&gt;D65 380–780 nm / 5 nm → L=81&lt;br&gt;M=1201，±6°，heightMap=0，plane&lt;/span&gt;" style="shape=note;size=18;whiteSpace=wrap;html=1;fillColor=#FFF4E8;strokeColor=#C58B45;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1780" width="540" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="e0" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="entry" target="load">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="load" target="spectrum">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="spectrum" target="input">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="input" target="stack">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="stack" target="height">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="height" target="prop">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="prop" target="post">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="post" target="save">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#3A8E77;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;dashed=1;dashPattern=5 4;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="defaults" target="load">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#3A8E77;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;dashed=1;dashPattern=5 4;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="config" target="load">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#3A8E77;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;dashed=1;dashPattern=5 4;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="cie" target="spectrum">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e11" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#3A8E77;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;dashed=1;dashPattern=5 4;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="spectrum" target="weights">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e12" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#3A8E77;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;dashed=1;dashPattern=5 4;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="mat" target="input">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e13" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#3A8E77;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;dashed=1;dashPattern=5 4;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="images" target="stack">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e14" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#3A8E77;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;dashed=1;dashPattern=5 4;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="stack" target="lookup">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e15" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#3A8E77;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;dashed=1;dashPattern=5 4;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="prop" target="physical">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e16" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#3A8E77;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;dashed=1;dashPattern=5 4;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="save" target="exports">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e17" value="开启基准" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="load" target="bench">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="footer" value="&lt;b&gt;阅读提示&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:13px&quot;&gt;Q=实际出现的局部膜堆种类，L=波长数；输入错误会中止并关闭进度窗。archive/input_generation 为历史工具，不参与正式流程。&lt;/span&gt;" style="shape=note;size=18;whiteSpace=wrap;html=1;fillColor=#FFF4E8;strokeColor=#C58B45;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=15;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="2030" width="1760" height="65" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="stack" name="02 图层到局部膜堆">
+    <mxGraphModel dx="1800" dy="1000" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1840" pageHeight="2110" math="0" shadow="0" background="#FFFFFF">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="&lt;b&gt;局部膜堆｜从二值图片到复反射系数 r(x,y,λ)&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:23px&quot;&gt;对应 corePrepareLayerStack.m → coreReflectFilmStack.m；所有区域的复系数必须位于同一参考平面&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#173555;strokeColor=#173555;strokeWidth=1.5;fontColor=#FFFFFF;fontFamily=Microsoft YaHei;fontSize=25;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="25" width="1760" height="66" as="geometry" />
+        </mxCell>
+        <mxCell id="l1" value="&lt;b&gt;A 几何与区域编码&lt;/b&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#F2F5F9;strokeColor=#D7E0EA;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=18;align=left;verticalAlign=middle;spacing=15;shadow=0;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="40" y="115" width="540" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="l2" value="&lt;b&gt;B 每个区域的膜堆计算&lt;/b&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#F2F5F9;strokeColor=#D7E0EA;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=18;align=left;verticalAlign=middle;spacing=15;shadow=0;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="650" y="115" width="540" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="l3" value="&lt;b&gt;C 核心公式与输出契约&lt;/b&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#F2F5F9;strokeColor=#D7E0EA;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=18;align=left;verticalAlign=middle;spacing=15;shadow=0;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="1260" y="115" width="540" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="read" value="&lt;b&gt;1 读取 stack.layerNames / layerLevels&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;层级按从下到上排列；组内材料互斥&lt;br&gt;images：imread，RGB 通道均值，整数归一化&lt;br&gt;mat：按 layer.field 取二值图；full：整面覆盖&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="190" width="540" height="145" as="geometry" />
+        </mxCell>
+        <mxCell id="binary" value="&lt;b&gt;2 二值化与方向&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;mask_j = xor(value &amp;gt; threshold, invert)&lt;br&gt;MAT 输入要求原值为 0/1&lt;br&gt;所有图片尺寸、原点一致&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="390" width="540" height="130" as="geometry" />
+        </mxCell>
+        <mxCell id="repeat" value="&lt;b&gt;3 决定目标网格与显式平铺&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;shape=[periods_y, periods_x]×samplesPerPeriod&lt;br&gt;repeatToFit=false：图片必须等于目标尺寸&lt;br&gt;true：原尺寸为整 Pitch，目标能被原尺寸整除&lt;br&gt;仅 repmat，不缩放、不裁切、不改写输入&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="580" width="540" height="155" as="geometry" />
+        </mxCell>
+        <mxCell id="check" value="&lt;b&gt;4 校验层级与计算公共参考高度&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;同层每点 sum(mask_j) ≤ 1&lt;br&gt;H_ref = Σ每层级 max(d_j)&lt;br&gt;reflectance 的 d=0；nk 膜厚允许为 0&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="795" width="540" height="135" as="geometry" />
+        </mxCell>
+        <mxCell id="encode" value="&lt;b&gt;5 合并实际出现的图层组合&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;masks [Ny×Nx×J] → [NyNx×J]&lt;br&gt;unique(..., rows) 得 patterns [Q×J]&lt;br&gt;regionMap=reshape(regionIndex−1)&lt;br&gt;不枚举全部 2^J 个理论组合&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="990" width="540" height="155" as="geometry" />
+        </mxCell>
+        <mxCell id="areas" value="&lt;b&gt;6 每个局部区域的几何统计&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;AreaFraction = 区域像素数 / (NyNx)&lt;br&gt;LocalHeightM = patterns × thickness&lt;br&gt;unionMask=any(masks,3)，只作几何展示&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#E6F5F0;strokeColor=#3A8E77;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1205" width="540" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="material" value="&lt;b&gt;7 每层材料参数 → 波长网格&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;nk：N_j(λ)=n_j+iκ_j；d_j 固定&lt;br&gt;nkFile 非空优先，线性插值；必须覆盖全波段&lt;br&gt;reflectance：r_b=√R·exp(i·phaseDeg·π/180)&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="650" y="190" width="540" height="145" as="geometry" />
+        </mxCell>
+        <mxCell id="terminal" value="&lt;b&gt;8 每个区域选取底部终端&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;存在不透明 reflectance：取最上方反射边界&lt;br&gt;遮蔽其下方膜；记录底部高度 h_base&lt;br&gt;无该边界：medium 用 (n0−n_exit)/(n0+n_exit)&lt;br&gt;absorber 则用 r_b=0，进入终端的能量不返回&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="650" y="390" width="540" height="165" as="geometry" />
+        </mxCell>
+        <mxCell id="order" value="&lt;b&gt;9 按从入射侧到下方排列有限膜&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;只保留终端上方实际存在的 nk 膜&lt;br&gt;films=fliplr(present(~direct))&lt;br&gt;传给 coreReflectFilmStack 的高度 H=H_ref−h_base&lt;br&gt;从底层向入射侧递推；跳过 d=0 的膜&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="650" y="615" width="540" height="145" as="geometry" />
+        </mxCell>
+        <mxCell id="impedance" value="&lt;b&gt;10 将裸底反射系数变换到最底膜内&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;N_b 为最底膜复折射率，n0 为入射介质&lt;br&gt;r = [(N_b−n0)+(N_b+n0)r_b]&lt;br&gt;      / [(N_b+n0)+(N_b−n0)r_b]&lt;br&gt;没有有效有限膜时 r=r_b&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="650" y="820" width="540" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="recurse" value="&lt;b&gt;11 对每层 j 从底向上递推&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;r_int=(N_prev−N_j)/(N_prev+N_j)&lt;br&gt;q=r·exp(4πi N_j d_j/λ)&lt;br&gt;r ← (r_int+q)/(1+r_int·q)&lt;br&gt;N=n+iκ：传播相位与吸收同时计入&lt;br&gt;最上层的 N_prev=n0&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="650" y="1040" width="540" height="185" as="geometry" />
+        </mxCell>
+        <mxCell id="reference" value="&lt;b&gt;12 补足共同参考平面的往返相位&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;g=max(0, H−Σ有效膜厚)&lt;br&gt;r_ref = r·exp(4πi n0 g/λ)&lt;br&gt;不同局部柱体必须保留相对相位&lt;br&gt;校验有限值及 |r_ref|≤1+容差&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="650" y="1290" width="540" height="150" as="geometry" />
+        </mxCell>
+        <mxCell id="lookup" value="&lt;b&gt;13 写入模型查找表&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;coefficientLookup(q,k)=r_ref(q,λ_k)&lt;br&gt;遍历 Q 个区域、全部 L 个波长&lt;br&gt;regionMap 为 uint32，区域码从 0 开始&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#E6F5F0;strokeColor=#3A8E77;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="650" y="1505" width="540" height="140" as="geometry" />
+        </mxCell>
+        <mxCell id="masks" value="&lt;b&gt;数据形状与常用结构&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;J=图层数；Q=实际区域数；L=波长数&lt;br&gt;layerMasks.(name) [Ny×Nx]，logical&lt;br&gt;patterns [Q×J]，nk [J×L]，thickness [1×J]&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#E6F5F0;strokeColor=#3A8E77;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="1260" y="190" width="540" height="145" as="geometry" />
+        </mxCell>
+        <mxCell id="example" value="&lt;b&gt;默认层序实例：从上方入射&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;空气 n0&lt;br&gt;CF_R / CF_G / CF_B：同一层级、互斥&lt;br&gt;BM：吸收型有限膜&lt;br&gt;IJP：n=1.5、κ=0、d=10 μm，整面覆盖&lt;br&gt;Anode：R=1、phase=180° → r_b=−1&lt;/span&gt;" style="shape=note;size=18;whiteSpace=wrap;html=1;fillColor=#FFF4E8;strokeColor=#C58B45;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="1260" y="390" width="540" height="190" as="geometry" />
+        </mxCell>
+        <mxCell id="phase" value="&lt;b&gt;三种相位的职责&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;① exp(4πi N_j d_j/λ)：有限膜往返相位&lt;br&gt;② exp(4πi n0 g/λ)：共同参考平面补偿&lt;br&gt;③ exp(4πi Δn·heightMap/λ)：传播阶段额外相位&lt;br&gt;heightMap=0 只关闭③，①②仍存在&lt;/span&gt;" style="shape=note;size=18;whiteSpace=wrap;html=1;fillColor=#FFF4E8;strokeColor=#C58B45;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="1260" y="650" width="540" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="physics" value="&lt;b&gt;边界的物理含义&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;reflectance 是不透明有效边界，不能由 R 猜 t&lt;br&gt;absorber 的裸底 r=0；上覆膜界面仍可反射&lt;br&gt;透明 IJP 的 κ=0，仍有界面反射和干涉&lt;br&gt;medium 悬空膜未反射能量可向下透射&lt;br&gt;本模块主流程输出反射，不分解完整 R/T/A&lt;/span&gt;" style="shape=note;size=18;whiteSpace=wrap;html=1;fillColor=#FFF4E8;strokeColor=#C58B45;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="1260" y="890" width="540" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="tables" value="&lt;b&gt;导出的可核对中间量&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;regionTable：RegionCode、AreaFraction、&lt;br&gt;LocalHeightM、各图层存在标志&lt;br&gt;materialTable：材料/层级/方法/λ/n/κ/d/R/phase&lt;br&gt;geometry：inputPeriods、repeatCounts、gridStep&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#E6F5F0;strokeColor=#3A8E77;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="1260" y="1140" width="540" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="map" value="&lt;b&gt;14 逐波长映射回复反射面&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;values=coefficientLookup(:,k)&lt;br&gt;r(x,y,λ_k)=values(regionMap+1)&lt;br&gt;结果 [Ny×Nx]，由光场相乘用于传播&lt;br&gt;外部 cfg.complexCoefficient 非空时优先覆盖&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EEE9FA;strokeColor=#8A70B0;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="1260" y="1505" width="540" height="155" as="geometry" />
+        </mxCell>
+        <mxCell id="convergence" value="&lt;b&gt;采样警告：厚膜光谱干涉&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;估计 Δφ=4π·光学厚度·max|Δ(1/λ)|&lt;br&gt;超过 π/2 时提示光谱可能欠采样&lt;br&gt;IJP=10 μm 时需检查波长步长收敛&lt;br&gt;不为消除警告改变真实膜厚&lt;/span&gt;" style="shape=note;size=18;whiteSpace=wrap;html=1;fillColor=#FFF4E8;strokeColor=#C58B45;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1505" width="540" height="155" as="geometry" />
+        </mxCell>
+        <mxCell id="e0" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="read" target="binary">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="binary" target="repeat">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="repeat" target="check">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="check" target="encode">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="encode" target="areas">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="material" target="terminal">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="terminal" target="order">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="order" target="impedance">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="impedance" target="recurse">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="recurse" target="reference">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="reference" target="lookup">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e11" value="patterns / present" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#3A8E77;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;dashed=1;dashPattern=5 4;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="encode" target="terminal">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="620" y="1065" />
+              <mxPoint x="620" y="470" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e12" value="H_ref" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#3A8E77;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;dashed=1;dashPattern=5 4;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="check" target="order">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="605" y="860" />
+              <mxPoint x="605" y="685" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e13" value="[Q×L] + regionMap" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#3A8E77;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;dashed=1;dashPattern=5 4;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="lookup" target="map">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="footer" value="&lt;b&gt;阅读提示&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:13px&quot;&gt;主入口先构造所有局部膜堆系数，再进入高度状态和逐波长传播。材料数组给出的 κ 对应源码中的 k，图中写 κ 以免与波长索引 k 混淆。&lt;/span&gt;" style="shape=note;size=18;whiteSpace=wrap;html=1;fillColor=#FFF4E8;strokeColor=#C58B45;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=15;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="2010" width="1760" height="65" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="propagation" name="03 照明与远场传播">
+    <mxGraphModel dx="1800" dy="1000" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1840" pageHeight="2260" math="0" shadow="0" background="#FFFFFF">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="&lt;b&gt;照明与传播｜复振幅 → 接收面每像素能量&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:23px&quot;&gt;coreSimulateHeightStates → coreSimulateDiffraction → coreBuildIllumination / corePropagateReceiver&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#173555;strokeColor=#173555;strokeWidth=1.5;fontColor=#FFFFFF;fontFamily=Microsoft YaHei;fontSize=25;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="25" width="1760" height="66" as="geometry" />
+        </mxCell>
+        <mxCell id="l1" value="&lt;b&gt;A 状态 / 网格 / 光源&lt;/b&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#F2F5F9;strokeColor=#D7E0EA;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=18;align=left;verticalAlign=middle;spacing=15;shadow=0;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="40" y="115" width="540" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="l2" value="&lt;b&gt;B 每波长、每源点的复场传播&lt;/b&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#F2F5F9;strokeColor=#D7E0EA;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=18;align=left;verticalAlign=middle;spacing=15;shadow=0;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="650" y="115" width="540" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="l3" value="&lt;b&gt;C 能量标定 / 非相干累加 / 诊断&lt;/b&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#F2F5F9;strokeColor=#D7E0EA;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=18;align=left;verticalAlign=middle;spacing=15;shadow=0;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="1260" y="115" width="540" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="state" value="&lt;b&gt;1 确定高度状态 S&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;heightMap=0：S=1，baseline=result，复用结果&lt;br&gt;非零：S=2，先传播实际 heightMap&lt;br&gt;再将 heightMap=0 传播作为 baseline&lt;br&gt;膜堆复系数本身的相位始终不变&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="190" width="540" height="145" as="geometry" />
+        </mxCell>
+        <mxCell id="grid" value="&lt;b&gt;2 构建物面、光瞳和输出角度网格&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;dx=pitch/samplesPerPeriod；x,y 以 0 为中心&lt;br&gt;P(x,y)=1{x²+y²≤pupilRadius²}&lt;br&gt;N_P=ΣP²；A_inc=N_P·dx²&lt;br&gt;θ=linspace(−halfRange,+halfRange,M)，单位 rad&lt;br&gt;I_inc=cfg.incidentIrradiance；P_inc=I_inc·A_inc&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="395" width="540" height="165" as="geometry" />
+        </mxCell>
+        <mxCell id="source" value="&lt;b&gt;3 每波长生成空间照明模式&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;plane：一个均匀复场&lt;br&gt;point：球面路径差 + 距离/角度振幅衰减&lt;br&gt;有限圆盘：在圆内离散源点，等权重 w_s&lt;br&gt;laser：近轴 TEM00，高斯振幅 + 曲率相位&lt;br&gt;束腰或发散角二选一，随 λ 计算束参数&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="625" width="540" height="175" as="geometry" />
+        </mxCell>
+        <mxCell id="pointformula" value="&lt;b&gt;point 模式的具体场&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;ρ=物面点到源点投影的横向距离&lt;br&gt;R=√(z_s²+ρ²)，path=ρ²/(R+z_s)&lt;br&gt;a=(z_s/R)^(3/2)·exp[−ln2·(α/β)²/2]&lt;br&gt;E_s=a·exp(2πi·path/λ)，α=atan(ρ/z_s)&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="860" width="540" height="160" as="geometry" />
+        </mxCell>
+        <mxCell id="normalize" value="&lt;b&gt;4 按物面平均辐照度统一标定&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;c=√[N_P / Σ_s w_s Σ|P E_s|²]&lt;br&gt;E_s ← c E_s，Σw_s=1&lt;br&gt;Σ_s w_s Σ|P E_s|²=N_P&lt;br&gt;未知 LED 总功率不参与推测或换算&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1080" width="540" height="155" as="geometry" />
+        </mxCell>
+        <mxCell id="valid" value="&lt;b&gt;模型与采样检查&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;输出像素边界 + 入射倾角 ≤ λ/(2dx)&lt;br&gt;输出半角 ≤10°；laser 发散半角 ≤5°&lt;br&gt;局部入射 &amp;gt;5°：警告膜堆仍用法向系数&lt;br&gt;D²/(λ_min z)&amp;gt;0.5：提示夫琅禾费条件不足&lt;br&gt;观察窗口截断不会被强行归一化抹去&lt;/span&gt;" style="shape=note;size=18;whiteSpace=wrap;html=1;fillColor=#FFF4E8;strokeColor=#C58B45;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1300" width="540" height="180" as="geometry" />
+        </mxCell>
+        <mxCell id="loops" value="&lt;b&gt;5 循环：状态 → λ_k → 源点 s&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;λ 内的每个源点分别生成场、传播和取强度&lt;br&gt;同一个源点在物面上保持空间相干&lt;br&gt;不同源点间、不同波长间不叠加复振幅&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="650" y="190" width="540" height="145" as="geometry" />
+        </mxCell>
+        <mxCell id="field" value="&lt;b&gt;6 构造反射物面复振幅&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;r_k：由区域查表，或外部 complexCoefficient&lt;br&gt;E_in=P·E_s&lt;br&gt;φ_h=4π·Δn·heightMap/λ_k&lt;br&gt;E_ref=E_in·r_k·exp(iφ_h)&lt;br&gt;heightMap 全零时跳过额外相位乘法&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="650" y="395" width="540" height="165" as="geometry" />
+        </mxCell>
+        <mxCell id="bins" value="&lt;b&gt;7 自适应细分接收像素&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;Δθ=相邻输出角中心间隔；D=最大物面宽度&lt;br&gt;q=max(receiverBinSamples, ceil(4DΔθ/λ))&lt;br&gt;q 调整为奇数；每像素 q×q 中点积分&lt;br&gt;细角网格覆盖每个输出像素完整边界&lt;br&gt;f_x,f_y=θ_fine/λ&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="650" y="625" width="540" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="fourier" value="&lt;b&gt;8 二次相位卷积加速傅里叶积分&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;F(fx,fy)=Σ_y Σ_x E_ref(x,y)&lt;br&gt;                    ·exp[−2πi(fx x+fy y)]·dx·dy&lt;br&gt;transformColumns：先 x 再 y&lt;br&gt;chirp → FFT 卷积 → 相位修正&lt;br&gt;直接计算指定输出网格，不先粗 FFT 再插值&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="650" y="855" width="540" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="receiver" value="&lt;b&gt;9 夫琅禾费场与像素平均强度&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;U=exp(2πiz/λ)/(iλz)·F&lt;br&gt;细网格强度比 = |U|²&lt;br&gt;B_s=mean_{q×q}(|U|²)&lt;br&gt;接收坐标 X=zθ_x，Y=zθ_y；无接收面二次相位&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="650" y="1090" width="540" height="155" as="geometry" />
+        </mxCell>
+        <mxCell id="clear" value="&lt;b&gt;10 参考孔径并行数据支路&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;以 E_in 替换 E_ref，再走步骤 7–9&lt;br&gt;等价于理想 r=1、额外高度相位=0&lt;br&gt;得到 clearEnergy / clearKernel / clearPsf&lt;br&gt;用于参考，不把反射结果除以窗口捕获率&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="650" y="1310" width="540" height="155" as="geometry" />
+        </mxCell>
+        <mxCell id="next" value="&lt;b&gt;11 源点 → 波长 → 状态循环完成&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;每源点贡献按右侧公式加到本波长数组&lt;br&gt;本波长完成后计算 T、C、零级和锥外占比&lt;br&gt;完成所有波长，再做通道和色度积分&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="650" y="1525" width="540" height="135" as="geometry" />
+        </mxCell>
+        <mxCell id="power" value="&lt;b&gt;主归一化约定&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;每个 λ 独立按相同 I_inc [W/m²] 标定&lt;br&gt;Pin=I_inc·A_inc&lt;br&gt;energy 是能量/功率比，无量纲&lt;br&gt;宽带真实谱形由归一化光谱权重在后续加入&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#E6F5F0;strokeColor=#3A8E77;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="1260" y="190" width="540" height="145" as="geometry" />
+        </mxCell>
+        <mxCell id="throughput" value="&lt;b&gt;总反射与独立 Parseval 校验&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;T_k=Σ_s w_s Σ|E_ref|² / N_P&lt;br&gt;独立 FFT：e_fft=|FFT(E_ref)|²/(N_FFT² N_P)&lt;br&gt;误差=Σ_s w_s |Σe_fft−T_s|&lt;br&gt;反射模式 N_FFT=max(Nx,Ny)&lt;br&gt;该 FFT 只验能量，不生成接收面输出网格&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#E6F5F0;strokeColor=#3A8E77;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="1260" y="395" width="540" height="165" as="geometry" />
+        </mxCell>
+        <mxCell id="sum" value="&lt;b&gt;接收能量与源点强度累加&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;A_bin=(zΔθ)²&lt;br&gt;e_s=B_s·A_bin/A_inc&lt;br&gt;energy(:,:,k) += w_s·e_s&lt;br&gt;spectralIrradiance(:,:,k) += w_s·I_inc·B_s&lt;br&gt;clearEnergy 同样按 w_s 累加&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#E6F5F0;strokeColor=#3A8E77;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="1260" y="1090" width="540" height="155" as="geometry" />
+        </mxCell>
+        <mxCell id="metric" value="&lt;b&gt;逐波长输出与窗口捕获&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;spectralEnergy=energy [M×M×L]&lt;br&gt;C_k=Σ像素 energy(:,:,k)&lt;br&gt;CapturedFraction=C_k/T_k&lt;br&gt;I_pixel=energy·P_inc/A_bin，单位 W/m²&lt;br&gt;无源反射损失与窗口外能量均保留&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="1260" y="1310" width="540" height="155" as="geometry" />
+        </mxCell>
+        <mxCell id="channels" value="&lt;b&gt;通道积分和形状归一化&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;W_kc = spectralWeights_k·channelResponse_kc&lt;br&gt;response_kc=W_kc/Σ_k W_kc&lt;br&gt;kernel(:,:,c)=Σ_k energy(:,:,k)·response_kc&lt;br&gt;psf=kernel/Σ像素kernel（仅形状，丢失总量）&lt;br&gt;channelSignal=kernel·Σ_k W_kc&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EEE9FA;strokeColor=#8A70B0;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="1260" y="1525" width="540" height="155" as="geometry" />
+        </mxCell>
+        <mxCell id="notes" value="&lt;b&gt;防止误读&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;paddingFactor 不控制正式反射输出采样&lt;br&gt;M 和 angleHalfRange 决定显示网格&lt;br&gt;q 控制每像素内部积分，保留窄峰能量&lt;br&gt;仅放大/裁切显示不会提高计算分辨率&lt;/span&gt;" style="shape=note;size=18;whiteSpace=wrap;html=1;fillColor=#FFF4E8;strokeColor=#C58B45;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1610" width="540" height="155" as="geometry" />
+        </mxCell>
+        <mxCell id="handoff" value="&lt;b&gt;送往第 4 页：每个状态的 result&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;spectralEnergy / spectralIrradiance / metrics / kernel / psf / clearKernel / clearPsf&lt;br&gt;coordinate：近轴 rad；receiverCoordinate=z·coordinate：m&lt;br&gt;incidentArea / incidentPower / receiverPixelArea / receiverSamplesPerBin / illumination&lt;br&gt;若 S=1：后处理复用 baseline 对应字段，不重复传播、角积分或色度合成&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EEE9FA;strokeColor=#8A70B0;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="650" y="1820" width="1150" height="175" as="geometry" />
+        </mxCell>
+        <mxCell id="e0" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="state" target="grid">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="grid" target="source">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="source" target="pointformula">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="pointformula" target="normalize">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="loops" target="field">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="field" target="bins">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="bins" target="fourier">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="fourier" target="receiver">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="receiver" target="clear">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="clear" target="next">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" value="E_s, w_s" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#3A8E77;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;dashed=1;dashPattern=5 4;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="normalize" target="field">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="615" y="1150" />
+              <mxPoint x="615" y="475" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e11" value="E_ref" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#3A8E77;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;dashed=1;dashPattern=5 4;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="field" target="throughput">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e12" value="B_s" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#3A8E77;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;dashed=1;dashPattern=5 4;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="receiver" target="sum">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e13" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="sum" target="metric">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e14" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="metric" target="channels">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e15" value="clearEnergy" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#3A8E77;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;dashed=1;dashPattern=5 4;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="clear" target="metric">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e16" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#3A8E77;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;dashed=1;dashPattern=5 4;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="channels" target="handoff">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e17" value="结果汇集" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="next" target="handoff">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="footer" value="&lt;b&gt;阅读提示&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:13px&quot;&gt;圆盘源多个点按 Σ w_s |U_s|² 累加。膜堆只采用法向局部系数；传播采用标量近轴远场，尚未计算斜入射膜堆、矢量偏振或近场耦合。&lt;/span&gt;" style="shape=note;size=18;whiteSpace=wrap;html=1;fillColor=#FFF4E8;strokeColor=#C58B45;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=15;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="2160" width="1760" height="65" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="metrics" name="04 指标色度与输出">
+    <mxGraphModel dx="1800" dy="1000" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2100" pageHeight="2180" math="0" shadow="0" background="#FFFFFF">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="&lt;b&gt;后处理｜原始能量 → 指标、颜色与导出文件&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:23px&quot;&gt;所有定量统计使用未经 dB / 曝光 / 对数增强的 spectralEnergy；以下四列是数据分支，不表示必须同时运行&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#173555;strokeColor=#173555;strokeWidth=1.5;fontColor=#FFFFFF;fontFamily=Microsoft YaHei;fontSize=25;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="25" width="2020" height="66" as="geometry" />
+        </mxCell>
+        <mxCell id="l0" value="&lt;b&gt;A 反射总量与能量占比&lt;/b&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#F2F5F9;strokeColor=#D7E0EA;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=18;align=left;verticalAlign=middle;spacing=15;shadow=0;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="40" y="115" width="475" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="l1" value="&lt;b&gt;B 观察角域与累计曲线&lt;/b&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#F2F5F9;strokeColor=#D7E0EA;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=18;align=left;verticalAlign=middle;spacing=15;shadow=0;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="555" y="115" width="475" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="l2" value="&lt;b&gt;C 非零级亮斑与固定 ROI&lt;/b&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#F2F5F9;strokeColor=#D7E0EA;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=18;align=left;verticalAlign=middle;spacing=15;shadow=0;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="115" width="475" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="l3" value="&lt;b&gt;D 光谱权重与颜色显示&lt;/b&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#F2F5F9;strokeColor=#D7E0EA;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=18;align=left;verticalAlign=middle;spacing=15;shadow=0;fontStyle=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="1585" y="115" width="475" height="45" as="geometry" />
+        </mxCell>
+        <mxCell id="physical" value="&lt;b&gt;共同输入：result / baseline&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;e_{p,k}=spectralEnergy(p,k) [像素能量/入射]；T_k=Throughput；C_k=CapturedThroughput&lt;br&gt;zeroOrderRadiusFactor、metricAngleDeg、observation、spotOptions；无额外高度时只统计单状态&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#E6F5F0;strokeColor=#3A8E77;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="185" width="1505" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="weights" value="&lt;b&gt;coreLoadSpectrum：一次构造权重&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;a_k=SPD_k·Δλ_k（梯形端点半权重）&lt;br&gt;wE_k=a_k/Σa；wV_k=a_k·ȳ_k/Σa·ȳ&lt;br&gt;WXYZ_k=a_k·[x̄,ȳ,z̄]/Σa·ȳ&lt;br&gt;单色谱线 Δλ=1；WXYZ 三通道用同一分母&lt;br&gt;RGB 模式使用代理权重，非标准色度&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#E6F5F0;strokeColor=#3A8E77;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="1585" y="185" width="475" height="185" as="geometry" />
+        </mxCell>
+        <mxCell id="ratio" value="&lt;b&gt;1 总反射、窗口捕获与守恒&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;总反射率 T_k=总反射/入射&lt;br&gt;窗口绝对反射率 C_k=Σ_p e_{p,k}&lt;br&gt;窗口捕获比例=C_k/T_k&lt;br&gt;ParsevalAbsoluteError：独立 FFT 校验误差&lt;br&gt;窗口外反射绝对量=T_k−C_k&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="420" width="475" height="155" as="geometry" />
+        </mxCell>
+        <mxCell id="zero" value="&lt;b&gt;2 零级能量与保持率&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;零级 ROI：|θ|≤a0·λ/pitch，a0 默认 0.45&lt;br&gt;ZeroOrderFraction=Σ_ROI e/T_k&lt;br&gt;零级绝对反射率=Σ_ROI e&lt;br&gt;ZeroOrderRetention=有高度占比/基线占比&lt;br&gt;高度全零且分母非零时保持率=1&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="640" width="475" height="155" as="geometry" />
+        </mxCell>
+        <mxCell id="haze" value="&lt;b&gt;3 锥外占比：模型雾度代理&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;评价圆锥 |θ|≤metricAngleDeg&lt;br&gt;OutsideAngleFraction=1−Σ_圆锥 e/T_k&lt;br&gt;包括观察窗口之外的反射能量&lt;br&gt;锥外绝对反射率=T_k·OutsideAngleFraction&lt;br&gt;不是 ASTM D1003 标准透射雾度&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="860" width="475" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="ratioout" value="&lt;b&gt;4 comparisonMetrics 与逐波长表&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;TotalReflectancePercent=100 T_k&lt;br&gt;ZeroOrderPercent=100·零级占比&lt;br&gt;ReflectionHazeProxyPercent=100·锥外占比&lt;br&gt;同时给出以入射为分母的绝对反射率&lt;br&gt;记录半角、全角，避免 2.5°/5° 混用&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EEE9FA;strokeColor=#8A70B0;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1095" width="475" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="roi" value="&lt;b&gt;coreComputeAngularMetrics&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;ρ=距离 observation.centerDeg 的角距离&lt;br&gt;圆锥：ρ≤outer；环带：inner&amp;lt;ρ≤outer&lt;br&gt;ROI 必须完整在输出窗口内&lt;br&gt;以输出 bin 中心判断是否纳入 ROI&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="555" y="420" width="475" height="155" as="geometry" />
+        </mxCell>
+        <mxCell id="integrate" value="&lt;b&gt;先按角域积分，再按光谱加权&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;v_k=Σ_ROI e_{p,k}&lt;br&gt;辐射度绝对反射率 = Σ_k v_k wE_k&lt;br&gt;明视觉绝对反射率 = Σ_k v_k wV_k&lt;br&gt;全反射加权用 T_k，窗口加权用 C_k&lt;br&gt;不能直接平均各波长的相对占比&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="555" y="640" width="475" height="155" as="geometry" />
+        </mxCell>
+        <mxCell id="cumulative" value="&lt;b&gt;累计曲线与观察色坐标&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;按各 bin 到观察中心距离排序并累加&lt;br&gt;R_k(α)=Σ_{ρ≤α} e_{p,k}&lt;br&gt;曲线从中心累计，不减环带内孔&lt;br&gt;保留 inner / outer 的精确边界采样&lt;br&gt;观察 XYZ=vᵀWXYZ，xy=(X,Y)/(X+Y+Z)&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="555" y="860" width="475" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="angularout" value="&lt;b&gt;角域输出&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;observationMetrics：角域/总量/窗口绝对反射率&lt;br&gt;辐射度与明视觉分别给出；可选 xy&lt;br&gt;cumulativeMetrics：半角 α 及累计反射率&lt;br&gt;withoutAngular / withAngular：含逐波长值&lt;br&gt;高度为零时复用一次积分结果&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EEE9FA;strokeColor=#8A70B0;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="555" y="1095" width="475" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="groups" value="&lt;b&gt;coreComputeDiffractionSpots&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;分组：选定波长 + 宽带 radiant + photopic&lt;br&gt;宽带图先用 wE / wV 加权 e&lt;br&gt;对比时 reference=max(两状态能量图)&lt;br&gt;只用于共同定位，最终积分仍各用原图&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="420" width="475" height="155" as="geometry" />
+        </mxCell>
+        <mxCell id="detect" value="&lt;b&gt;候选峰筛选与共同中心&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;8 邻域局部极大且有严格较小邻点&lt;br&gt;避开零级排除圆，积分圆不能越界&lt;br&gt;峰高≥排除区外最强峰×minRelativePeak&lt;br&gt;按候选积分圆能量降序，索引打破同分&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="640" width="475" height="155" as="geometry" />
+        </mxCell>
+        <mxCell id="spotroi" value="&lt;b&gt;固定 ROI 积分与去重&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;按 minSeparation / 2×积分半角选峰&lt;br&gt;最多 maxSpots；同组积分圆不重叠&lt;br&gt;两状态使用同中心、同半角的圆&lt;br&gt;绝对反射率%=100·Σ_ROI e_group&lt;br&gt;共享边界 bin 只归前一个 ROI&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="860" width="475" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="spotsout" value="&lt;b&gt;spotMetrics + 标记&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;导出中心、峰位置、半角、状态、反射率%&lt;br&gt;S1/S2… 是检测编号，不等同理论 (m,n) 阶次&lt;br&gt;不同光谱组不能将反射率重复相加&lt;br&gt;标记开关只影响图形，不改变 CSV/积分&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EEE9FA;strokeColor=#8A70B0;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="1070" y="1095" width="475" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="xyz" value="&lt;b&gt;coreSynthesizeColor：标准光谱路径&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;XYZ_p=Σ_k e_{p,k}·WXYZ_k&lt;br&gt;xy=(X,Y)/(X+Y+Z)，无信号处 NaN&lt;br&gt;XYZDensity=XYZ/(Δθ)²&lt;br&gt;线性 sRGBDensity = XYZDensity × 色彩矩阵&lt;br&gt;高度为零时只积分一次 XYZ&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="1585" y="420" width="475" height="155" as="geometry" />
+        </mxCell>
+        <mxCell id="exposure" value="&lt;b&gt;共同曝光：保留物理量&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;g=fixedGain；0 时按两状态共同峰自动曝光&lt;br&gt;g ← g·2^exposureEV&lt;br&gt;原线性曝光 sRGB 保留为 color.sRGB&lt;br&gt;标准编码前裁剪到 sRGB 色域&lt;br&gt;原始 XYZ / xy 与 spectralEnergy 保留&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="1585" y="640" width="475" height="155" as="geometry" />
+        </mxCell>
+        <mxCell id="enhance" value="&lt;b&gt;可选亮度显示增强&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;log 模式按 Y 计算亮度映射系数&lt;br&gt;XYZ/RGB 乘同一系数，再统一压缩高光&lt;br&gt;sRGB 编码 → displaySRGB&lt;br&gt;RGB 模式改用 plotComposeReflectionRgb&lt;br&gt;dB 图：10log10(e/e_ref)，同参考、同下限&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="1585" y="860" width="475" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="colorout" value="&lt;b&gt;显示与物理数组分开保存&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;colorData：XYZ / xy / Density / sRGB / 映射&lt;br&gt;增强 RGB、线性曝光 sRGB、光谱合成图&lt;br&gt;receiver 图复用角度图 dB，X=zθ&lt;br&gt;局部放大仅裁切，不重新计算远场&lt;br&gt;原始 W/m² 存 result.spectralIrradiance&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EEE9FA;strokeColor=#8A70B0;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="1585" y="1095" width="475" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="export" value="&lt;b&gt;saveResults=true → Output/&amp;lt;项目&amp;gt;/&amp;lt;caseName&amp;gt;_*&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;主脚本第 7 节负责保存；同名输出会覆盖&lt;br&gt;高度为零输出单状态文件；非零高度增加 baseline / comparison 与两状态图片&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EAF2FF;strokeColor=#517BB8;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="555" y="1400" width="990" height="135" as="geometry" />
+        </mxCell>
+        <mxCell id="matout" value="&lt;b&gt;MAT：可继续分析的完整物理数据&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;_results.mat（-v7.3）：cfg、result、baseline、stack、&lt;br&gt;stackGeometry、spectrum、projectConfig、角域/光斑/色度结果&lt;br&gt;_layer_patterns.mat：layerMasks、layerNames、layerLevels&lt;br&gt;_config.txt：本次项目配置文本&lt;br&gt;物理数组保留未显示归一化数值&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EEE9FA;strokeColor=#8A70B0;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="1620" width="645" height="195" as="geometry" />
+        </mxCell>
+        <mxCell id="csvout" value="&lt;b&gt;CSV：定量核对与方案比较&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;_metrics；_reflection_metrics（单状态）&lt;br&gt;_baseline_metrics / _comparison_metrics（非零高度）&lt;br&gt;_observation_metrics；_cumulative_energy；_diffraction_spots&lt;br&gt;_stack_regions；_stack_materials&lt;br&gt;_spectrum（标准光谱路径）&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EEE9FA;strokeColor=#8A70B0;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="725" y="1620" width="645" height="195" as="geometry" />
+        </mxCell>
+        <mxCell id="pngout" value="&lt;b&gt;PNG：几何、远场、颜色与指标&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:15px&quot;&gt;_geometry；_diffraction；_receiver_irradiance&lt;br&gt;_metrics；_cumulative_energy；_rgb&lt;br&gt;_d65_color 或 _spectral_color；_srgb_linear&lt;br&gt;非零高度的 RGB / 线性曝光图分别带状态后缀&lt;br&gt;图片是展示载体，定量比较应读取 MAT / CSV&lt;/span&gt;" style="rounded=1;arcSize=9;whiteSpace=wrap;html=1;fillColor=#EEE9FA;strokeColor=#8A70B0;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=17;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="1410" y="1620" width="650" height="195" as="geometry" />
+        </mxCell>
+        <mxCell id="e0" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="ratio" target="zero">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="zero" target="haze">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="haze" target="ratioout">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="roi" target="integrate">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="integrate" target="cumulative">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="cumulative" target="angularout">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="groups" target="detect">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="detect" target="spotroi">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e8" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="spotroi" target="spotsout">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e9" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="weights" target="xyz">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e10" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="xyz" target="exposure">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e11" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="exposure" target="enhance">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e12" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#42698C;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="enhance" target="colorout">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e13" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#3A8E77;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;dashed=1;dashPattern=5 4;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="physical" target="ratio">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e14" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#3A8E77;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;dashed=1;dashPattern=5 4;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="physical" target="roi">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e15" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#3A8E77;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;dashed=1;dashPattern=5 4;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="physical" target="groups">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e16" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#3A8E77;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;dashed=1;dashPattern=5 4;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="ratioout" target="export">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="277" y="1330" />
+              <mxPoint x="1050" y="1330" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e17" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#3A8E77;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;dashed=1;dashPattern=5 4;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="angularout" target="export">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="792" y="1330" />
+              <mxPoint x="1050" y="1330" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e18" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#3A8E77;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;dashed=1;dashPattern=5 4;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="spotsout" target="export">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1307" y="1330" />
+              <mxPoint x="1050" y="1330" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e19" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#3A8E77;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;dashed=1;dashPattern=5 4;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="colorout" target="export">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1822" y="1330" />
+              <mxPoint x="1050" y="1330" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e20" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#3A8E77;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;dashed=1;dashPattern=5 4;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="export" target="matout">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e21" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#3A8E77;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;dashed=1;dashPattern=5 4;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="export" target="csvout">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e22" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=20;html=1;endArrow=block;endFill=1;strokeColor=#3A8E77;strokeWidth=1.7;fontColor=#26435C;fontFamily=Microsoft YaHei;fontSize=13;labelBackgroundColor=#FFFFFF;dashed=1;dashPattern=5 4;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="export" target="pngout">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="footer" value="&lt;b&gt;阅读提示&lt;/b&gt;&lt;br&gt;&lt;span style=&quot;font-size:13px&quot;&gt;分母速查：T、C、观察角域和光斑绝对反射率 → 入射；零级/锥外占比和 CapturedFraction → 总反射。显示增强后的 RGB 不能代替物理能量。&lt;/span&gt;" style="shape=note;size=18;whiteSpace=wrap;html=1;fillColor=#FFF4E8;strokeColor=#C58B45;strokeWidth=1.5;fontColor=#18334C;fontFamily=Microsoft YaHei;fontSize=15;align=left;verticalAlign=middle;spacing=15;shadow=0;" vertex="1" parent="1">
+          <mxGeometry x="40" y="2080" width="2020" height="65" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
