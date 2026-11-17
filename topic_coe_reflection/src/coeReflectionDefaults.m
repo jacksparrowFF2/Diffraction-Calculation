@@ -8,13 +8,33 @@ function cfg = coeReflectionDefaults()
     cfg.radius = 10e-6;
     cfg.aspectRatio = 1;
     cfg.cellAnglesDeg = [30, 0; 0, -30];
-    cfg.periods = [16, 16]; % [Nx, Ny], both multiples of two
+    cfg.periods = [4, 4]; % [Nx, Ny], both multiples of two
     cfg.samplesPerPeriod = 32;
     cfg.paddingFactor = 4;
-    cfg.propagationDistance = 10; % Reflection receiver distance z / m (Fraunhofer).
+    cfg.propagationDistance = 0.25; % Reflection receiver distance z / m (Fraunhofer).
     cfg.incidentIrradiance = 1; % Per-wavelength reference incident irradiance / W m^-2.
     cfg.receiverBinSamples = 3; % Minimum odd midpoint samples per receiver pixel axis.
+    cfg.receiverView.enabled = false; % 复用远场角图，输出多个光栅→接收面距离的毫米坐标。
+    cfg.receiverView.distances = [0.25]; % m；仅远场坐标/辐照度换算，不是近场重算。
     cfg.source = coreSourceDefaults();
+    % 可选几何观察视图；与propagationDistance对应的远场接收面分开。
+    cfg.observer.enabled = false;
+    cfg.observer.model = "geometric"; % geometric / coherentEye：逐源点完整标量成像链。
+    cfg.observer.distance = 0.25; % 眼睛到屏幕的法向距离 b / m。
+    cfg.observer.pupilDiameter = 3e-3; % 人眼入口瞳直径；与屏幕pupilRadius独立。
+    cfg.observer.pupilModel = "geometryOnly"; % geometryOnly / airyIntensity（非相干角图近似）
+    cfg.observer.airyRadiusFactor = 20; % PSF截断半径/第一零点半径；不补回核外功率。
+    cfg.observer.referenceMethod = "quadrature"; % quadrature / fftBins（宽面源比较）
+    cfg.observer.referencePaddingFactor = 1; % FFT能量分箱的零填充倍数，正整数。
+    cfg.observer.angleHalfRangeDeg = 2.5; % 固定的视野半角。
+    cfg.observer.runBenchmark = false;
+    cfg.observer.scanDistances = [0.15,0.20,0.25,0.30,0.35]; % m。
+    cfg.observer.focusMode = "virtualSource"; % virtualSource=a+b / screen=b / distance。
+    cfg.observer.focusDistance = 0.5; % focusMode=distance时生效，m。
+    cfg.observer.retinaDistance = 17e-3; % 理想薄透镜到像面的距离，m；不代表眼睛处方。
+    cfg.observer.pupilSamples = 1537; % 瞳面每轴点数，奇数；需满足复场/输出角域采样。
+    cfg.observer.imageZoomHalfAngleDeg = 0.25;
+    cfg.observer.displayReferenceHalfAngleDeg = 0.25; % 仅成像显示的共同曝光参考ROI；0取完整图。
     cfg.mask = []; % Optional Ny-by-Nx sampled aperture, replaces coreCustomPattern.
     cfg.heightMap = 0; % Scalar or same size as mask; physical height in metres.
     cfg.deltaIndex = 0.20;

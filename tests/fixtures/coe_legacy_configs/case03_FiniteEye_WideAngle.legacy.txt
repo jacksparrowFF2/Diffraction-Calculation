@@ -1,0 +1,68 @@
+# case03_FiniteEye_WideAngle：沿用case03四圆图片，验证点光源几何距离缩放
+# 图样对齐阶段：仅Anode/BM；Anode统一反射，BM理想不透明黑区；不含CF/IJP
+stack.layerNames = ["Anode", "BM"]
+stack.layerLevels = [1, 2]
+stack.backgroundMode = "absorber"
+stack.incidentN = 1
+stack.exitN = 1
+stack.layers.Anode.file = "anode"
+stack.layers.Anode.method = "reflectance"
+stack.layers.Anode.reflectance = 1
+stack.layers.Anode.phaseDeg = 180
+stack.layers.Anode.thickness = 0
+stack.layers.BM.file = "BM"
+stack.layers.BM.invert = true
+stack.layers.BM.method = "reflectance"
+stack.layers.BM.reflectance = 0
+stack.layers.BM.thickness = 0
+stack.geometry.source = "images"
+stack.geometry.threshold = 0.5
+stack.geometry.repeatToFit = true
+stack.geometry.inputSamplesPerPeriod = 250
+cfg.pitch = 59.06e-6
+cfg.periods = [80, 80]
+cfg.samplesPerPeriod = 64
+cfg.heightMap = 0
+cfg.propagationDistance = 100
+cfg.outputSize = 1601
+cfg.angleHalfRangeDeg = 6
+cfg.metricAngleDeg = 2.5
+cfg.receiverBinSamples = 3
+# 三波长相对权重采样自D65；这是RGB图样代理，不是完整D65色度积分
+spectrumMode = "RGB"
+cfg.wavelengths = [6.2e-7, 5.5e-7, 4.5e-7]
+cfg.spectralWeights = [0.284041888541, 0.336988146177, 0.378969965283]
+previewWavelengthNm = [620, 550, 450]
+spotOptions.wavelengthNm = [620, 550, 450]
+# 居中几何点源：distance用于观察视图；原远场保留plane波前参考
+cfg.source.type = "point"
+cfg.source.distance = 0.25
+cfg.source.diameter = 0.005
+cfg.source.integrationMethod = "direct"
+cfg.source.wavefront = "plane"
+observation.centerDeg = [0, 0]
+observation.halfAngleDeg = 2.5
+observation.innerHalfAngleDeg = 0
+observation.curveSamples = 301
+displayStyle.showAnnotations = false
+saveResults = true
+showProgress = true
+caseName = "coe_reflection"
+
+# 物面照明范围：rectangle/circle/none；长度单位m，仅对plane照明生效
+cfg.source.apertureShape = "none"
+cfg.source.rectangleSize = [0.001, 0.001]
+cfg.source.circleDiameter = 0.001
+
+cfg.observer.enabled = true
+cfg.observer.distance = 0.25
+cfg.observer.angleHalfRangeDeg = 4
+cfg.observer.runBenchmark = true
+cfg.observer.scanDistances = [0.25]
+
+cfg.observer.pupilDiameter = 0.003
+cfg.observer.pupilModel = "airyIntensity"
+cfg.observer.airyRadiusFactor = 20
+
+cfg.observer.referenceMethod = "fftBins"
+cfg.observer.referencePaddingFactor = 1

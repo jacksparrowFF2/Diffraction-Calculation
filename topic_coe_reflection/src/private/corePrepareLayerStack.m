@@ -24,6 +24,13 @@ function [model, geometry] = corePrepareLayerStack(cfg, stack, inputDir)
     repeatToFit=false;
     if isfield(stack.geometry,'repeatToFit'), repeatToFit=stack.geometry.repeatToFit; end
     validateattributes(repeatToFit,{'logical'},{'scalar'});
+    cropToFit=false; pixelReplication=false;
+    if isfield(stack.geometry,'cropToFit'), cropToFit=stack.geometry.cropToFit; end
+    if isfield(stack.geometry,'pixelReplication'), pixelReplication=stack.geometry.pixelReplication; end
+    validateattributes(cropToFit,{'logical'},{'scalar'});
+    validateattributes(pixelReplication,{'logical'},{'scalar'});
+    assert((~cropToFit && ~pixelReplication)||stack.geometry.source=="images", ...
+        'COEReflection:RasterSource','显式裁取/像素复制仅适用于图片输入。');
     inputSamples=cfg.samplesPerPeriod;
     if isfield(stack.geometry,'inputSamplesPerPeriod')
         validateattributes(stack.geometry.inputSamplesPerPeriod,{'numeric'}, ...
@@ -41,6 +48,9 @@ function [model, geometry] = corePrepareLayerStack(cfg, stack, inputDir)
     geometry.inputPeriods=cfg.periods;
     geometry.repeatCounts=[1,1];
     geometry.inputGridSize=shape;
+    geometry.cropBoundsPixels=[1,shape(1),1,shape(2)];
+    geometry.selectedPeriods=cfg.periods;
+    geometry.pixelReplicationFactor=1;
     masks = false([shape, numel(names)]);
     nk = complex(zeros(numel(names), numel(cfg.wavelengths)));
     thickness = zeros(1,numel(names));
@@ -105,21 +115,38 @@ function [model, geometry] = corePrepareLayerStack(cfg, stack, inputDir)
             if inputSamples~=cfg.samplesPerPeriod
                 assert(all(mod(inputShape,inputSamples)==0), ...
                     'COEReflection:InputPitch','原始图片行列数须为inputSamplesPerPeriod的整数倍。');
-                assert(cfg.samplesPerPeriod<inputSamples,'COEReflection:RasterUpsampling', ...
-                    '只允许显式降低图片计算采样率，不能通过插值宣称提高真实版图分辨率。');
+                assert(cfg.samplesPerPeriod<inputSamples || ...
+                    (pixelReplication && mod(cfg.samplesPerPeriod,inputSamples)==0),'COEReflection:RasterUpsampling', ...
+                    '默认禁止提高图片采样率；显式pixelReplication仅允许整数倍复制，不增加真实版图细节。');
                 sampledShape=inputShape/inputSamples*cfg.samplesPerPeriod;
                 rows=floor(((0:sampledShape(1)-1)+0.5)*inputShape(1)/sampledShape(1))+1;
                 cols=floor(((0:sampledShape(2)-1)+0.5)*inputShape(2)/sampledShape(2))+1;
                 value=value(rows,cols); % 共同像素中心最近邻采样，保持二值区域及坐标尺度。
+                if cfg.samplesPerPeriod>inputSamples
+                    geometry.pixelReplicationFactor=cfg.samplesPerPeriod/inputSamples;
+                end
             end
             sampledShape=size(value);
             geometry.sampledInputGridSize=sampledShape;
+            selectedShape=sampledShape;
+            if cropToFit
+                selectedShape=min(shape,sampledShape);
+                first=(sampledShape-selectedShape)/2+1;
+                assert(all(mod(first-1,cfg.samplesPerPeriod)==0) && all(mod(selectedShape,cfg.samplesPerPeriod)==0), ...
+                    'COEReflection:CropPitch','中心裁取必须沿完整Pitch边界，不能改变像素尺寸。');
+                last=first+selectedShape-1;
+                value=value(first(1):last(1),first(2):last(2));
+                geometry.cropBoundsPixels=[first(1),last(1),first(2),last(2)];
+            else
+                geometry.cropBoundsPixels=[1,sampledShape(1),1,sampledShape(2)];
+            end
+            geometry.selectedPeriods=selectedShape([2,1])/cfg.samplesPerPeriod;
             if repeatToFit
                 assert(all(mod(sampledShape,cfg.samplesPerPeriod)==0), ...
                     'COEReflection:InputPitch','图片行列数须为samplesPerPeriod的整数倍，才能确定输入Pitch数。');
-                assert(all(mod(shape,sampledShape)==0), ...
+                assert(all(mod(shape,selectedShape)==0), ...
                     'COEReflection:RepeatExtent','目标Pitch数须为输入单元Pitch数的整数倍，不缩放或裁切输入。');
-                repeats=shape./sampledShape;
+                repeats=shape./selectedShape;
                 geometry.repeatCounts=repeats([2,1]);
                 value=repmat(value,repeats);
             end

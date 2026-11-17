@@ -9,6 +9,9 @@ function source = coreSourceDefaults()
     source.distance = 0.1; % 点源到物面法向距离，m
     source.diameter = 0; % 点源发光圆盘直径，0=理想点；m
     source.samplesPerAxis = 5; % 有限圆盘确定性采样；各点互不相干
+    source.quadrature = "cartesian"; % cartesian / polarGauss；后者均匀圆盘面积积分。
+    source.radialNodes = 7;
+    source.azimuthNodes = 32;
     source.integrationMethod = "direct"; % direct逐源强度求和 / angularConvolution近轴面源卷积
     source.wavefront = "spherical"; % spherical精确球面 / paraxial二次相位 / plane倾斜平面
     source.beamHalfAngleDeg = 30; % 点源辐射强度降至轴向一半的半角

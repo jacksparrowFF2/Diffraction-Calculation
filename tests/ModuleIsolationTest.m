@@ -1,11 +1,160 @@
 classdef ModuleIsolationTest < matlab.unittest.TestCase
     %ModuleIsolationTest Run copied feature folders without sibling dependencies.
     methods (Test)
+        function coeCurrentD65PresetRunsFromCopiedModule(testCase)
+            folder=portableModule(testCase,'topic_coe_reflection',false);
+            script=fullfile(folder,'src','COEReflection_main.m');
+            text=regexprep(fileread(script),'projectName = "[^"]*";', ...
+                'projectName = "case03_PlaneWave_Pitch4";');
+            file=fopen(script,'w','n','UTF-8'); fprintf(file,'%s',text); fclose(file);
+            config=fullfile(folder,'Input','case03_PlaneWave_Pitch4','config.txt');
+            text=strrep(fileread(config),'cfg.outputSize = 1801','cfg.outputSize = 257');
+            file=fopen(config,'w','n','UTF-8'); fprintf(file,'%s',text); fclose(file);
+            visibility=get(groot,'DefaultFigureVisible'); initial=findall(groot,'Type','figure');
+            testCase.addTeardown(@()set(groot,'DefaultFigureVisible',visibility));
+            testCase.addTeardown(@()closeNewFigures(initial)); set(groot,'DefaultFigureVisible','off');
+            runScriptIsolated(script);
+            output=fullfile(folder,'Output','case03_PlaneWave_Pitch4');
+            saved=load(fullfile(output,'coe_reflection_results.mat'));
+            testCase.verifyEqual(saved.cfg.wavelengths,(380:10:780)*1e-9,'AbsTol',1e-15);
+            testCase.verifyEqual(saved.cfg.periods,[4,4]);
+            testCase.verifyEqual(saved.cfg.propagationDistance,0.25);
+            testCase.verifyFalse(saved.cfg.observer.enabled);
+            testCase.verifySize(saved.colorData.withHeight.displaySRGB,[257,257,3]);
+            testCase.verifyTrue(all(isfinite(saved.colorData.withHeight.XYZ),'all'));
+            testCase.verifyEqual(saved.displayData.receiverDistanceView.distances,0.25);
+            testCase.verifyTrue(isfile(fullfile(output,'coe_reflection_receiver_rgb_mm.png')));
+        end
+
+        function coeCoherentEyeRunsFromCopiedModule(testCase)
+            folder=portableModule(testCase,'topic_coe_reflection');
+            script=fullfile(folder,'src','COEReflection_main.m');
+            text=regexprep(fileread(script),'projectName = "[^"]*";', ...
+                'projectName = "case03_CoherentEye_Pitch4";');
+            file=fopen(script,'w','n','UTF-8'); assert(file>=0); fprintf(file,'%s',text); fclose(file);
+            config=fullfile(folder,'Input','case03_CoherentEye_Pitch4','config.txt');
+            text=fileread(config);
+            text=strrep(text,'cfg.outputSize = 2401','cfg.outputSize = 201');
+            text=strrep(text,'cfg.observer.angleHalfRangeDeg = 4.5','cfg.observer.angleHalfRangeDeg = 0.15');
+            text=strrep(text,'cfg.observer.pupilSamples = 1537','cfg.observer.pupilSamples = 129');
+            text=strrep(text,'cfg.source.radialNodes = 7','cfg.source.radialNodes = 2');
+            text=strrep(text,'cfg.source.azimuthNodes = 32','cfg.source.azimuthNodes = 8');
+            file=fopen(config,'w','n','UTF-8'); assert(file>=0); fprintf(file,'%s',text); fclose(file);
+            visibility=get(groot,'DefaultFigureVisible'); initial=findall(groot,'Type','figure');
+            testCase.addTeardown(@() set(groot,'DefaultFigureVisible',visibility));
+            testCase.addTeardown(@() closeNewFigures(initial)); set(groot,'DefaultFigureVisible','off');
+            runScriptIsolated(script);
+            output=fullfile(folder,'Output','case03_CoherentEye_Pitch4','CoherentEye');
+            saved=load(fullfile(output,'coherent_eye_results.mat'));
+            testCase.verifyEqual(saved.eyeImage.config.periods,[4,4]);
+            testCase.verifyEqual(saved.eyeImage.focusDistance,0.5,'AbsTol',1e-14);
+            testCase.verifyEqual(numel(saved.eyeImage.sourceWeights),16);
+            testCase.verifyEqual(saved.eyeDisplay.mapping.mode,"legacy");
+            testCase.verifyTrue(isfile(fullfile(output,'coherent_eye_comparison.png')));
+            testCase.verifyGreaterThan(sum(saved.eyeImage.spectralEnergy,'all'),0);
+        end
+
+        function coeSmallSourceUsesBoundedHuePreservingDisplay(testCase)
+            folder=portableModule(testCase,'topic_coe_reflection');
+            script=fullfile(folder,'src','COEReflection_main.m');
+            text=regexprep(fileread(script),'projectName = "[^"]*";', ...
+                'projectName = "case03_FiniteEye_SmallSource";');
+            file=fopen(script,'w','n','UTF-8'); assert(file>=0); fprintf(file,'%s',text); fclose(file);
+            config=fullfile(folder,'Input','case03_FiniteEye_SmallSource','config.txt');
+            text=strrep(fileread(config),'cfg.periods = [16, 16]','cfg.periods = [4, 4]');
+            text=strrep(text,'cfg.outputSize = 1801','cfg.outputSize = 257');
+            file=fopen(config,'w','n','UTF-8'); assert(file>=0); fprintf(file,'%s',text); fclose(file);
+            visibility=get(groot,'DefaultFigureVisible'); initial=findall(groot,'Type','figure');
+            testCase.addTeardown(@() set(groot,'DefaultFigureVisible',visibility));
+            testCase.addTeardown(@() closeNewFigures(initial)); set(groot,'DefaultFigureVisible','off');
+            runScriptIsolated(script);
+            output=fullfile(folder,'Output','case03_FiniteEye_SmallSource','DistanceScaling');
+            saved=load(fullfile(output,'distance_scaling_results.mat')); report=saved.report;
+            view=report.views{report.baselineDisplayIndex};
+            decoded=double(imread(fullfile(output,'observer_baseline_rgb.png')))/255;
+            signal=view.channelSignal/view.binSolidAngle;
+            unit=signal./max(max(signal,[],3),realmin);
+            ratioError=cross(decoded,flipud(unit),3);
+
+            testCase.verifyEqual(report.mapping.mode,"luminance");
+            testCase.verifyEqual(view.sourceDiameter,0.0005,'AbsTol',1e-14);
+            testCase.verifyEqual(view.config.periods,[4,4]);
+            testCase.verifyLessThanOrEqual(max(decoded,[],'all'),0.7+0.5/255);
+            testCase.verifyLessThanOrEqual(max(abs(ratioError),[],'all'),1/255+1e-10);
+            testCase.verifyTrue(all(isfinite(view.spectralEnergy),'all'));
+            testCase.verifyGreaterThan(sum(view.spectralEnergy,'all'),0);
+        end
+
+        function coeFiniteEyeRunsFromCopiedModule(testCase)
+            folder=portableModule(testCase,'topic_coe_reflection');
+            script=fullfile(folder,'src','COEReflection_main.m');
+            text=regexprep(fileread(script),'projectName = "[^"]*";', ...
+                'projectName = "case03_FiniteEye";');
+            file=fopen(script,'w','n','UTF-8'); assert(file>=0); fprintf(file,'%s',text); fclose(file);
+            config=fullfile(folder,'Input','case03_FiniteEye','config.txt');
+            text=fileread(config);
+            text=strrep(text,'cfg.periods = [80, 80]','cfg.periods = [4, 4]');
+            text=strrep(text,'cfg.outputSize = 601','cfg.outputSize = 129');
+            text=strrep(text,'[0.15, 0.20, 0.25, 0.30, 0.35]','[0.20, 0.25, 0.30]');
+            file=fopen(config,'w','n','UTF-8'); assert(file>=0); fprintf(file,'%s',text); fclose(file);
+            visibility=get(groot,'DefaultFigureVisible'); initial=findall(groot,'Type','figure');
+            testCase.addTeardown(@() set(groot,'DefaultFigureVisible',visibility));
+            testCase.addTeardown(@() closeNewFigures(initial)); set(groot,'DefaultFigureVisible','off');
+            runScriptIsolated(script);
+            output=fullfile(folder,'Output','case03_FiniteEye','DistanceScaling');
+            saved=load(fullfile(output,'distance_scaling_results.mat'));
+
+            testCase.verifyEqual(saved.report.baseConfig.source.diameter,5e-3,'AbsTol',1e-14);
+            testCase.verifyEqual(saved.report.baseConfig.observer.pupilDiameter,3e-3,'AbsTol',1e-14);
+            testCase.verifyEqual(saved.report.summary.GeometricDiameterMm([2,5]),[4;4],'AbsTol',1e-12);
+            testCase.verifyTrue(all(isnan(saved.report.summary.MeasuredPeakDeg)));
+            testCase.verifyLessThan(max(saved.report.summary.RayWeightInModel),1);
+            testCase.verifyTrue(isfile(fullfile(output,'observer_participation_regions.png')));
+            testCase.verifyTrue(isfile(fullfile(output,'observer_source_pupil_stages.png')));
+        end
+
+        function coeDistanceBenchmarkRunsFromCopiedModule(testCase)
+            folder=prepareDistanceModule(testCase,true,false);
+            runScriptIsolated(fullfile(folder,'src','COEReflection_main.m'));
+            output=fullfile(folder,'Output','case03_DistanceScaling','DistanceScaling');
+            saved=load(fullfile(output,'distance_scaling_results.mat'));
+
+            testCase.verifyEqual(height(saved.report.summary),6);
+            testCase.verifyEqual(saved.report.summary.AngularScale([2,5]),[0.5;0.5],'AbsTol',1e-14);
+            testCase.verifyTrue(isfile(fullfile(output,'distance_scaling_comparison.png')));
+            testCase.verifyTrue(isfile(fullfile(output,'distance_scaling_peaks.csv')));
+        end
+
+        function coeDistanceRgbViewRunsFromCopiedModule(testCase)
+            folder=prepareDistanceModule(testCase,false,false);
+            runScriptIsolated(fullfile(folder,'src','COEReflection_main.m'));
+            output=fullfile(folder,'Output','case03_DistanceScaling');
+            saved=load(fullfile(output,'coe_reflection_results.mat'),'result','displayData');
+
+            testCase.verifyEqual(saved.result.distanceView.angularScale,0.5,'AbsTol',1e-14);
+            testCase.verifySize(saved.displayData.distanceView.rgb,[129,129,3]);
+            testCase.verifyTrue(isfile(fullfile(output,'coe_reflection_distance_view.png')));
+            testCase.verifyTrue(isfile(fullfile(output,'coe_reflection_receiver_irradiance.png')));
+        end
+
+        function coeDistanceSpectralViewRunsFromCopiedModule(testCase)
+            folder=prepareDistanceModule(testCase,false,true);
+            runScriptIsolated(fullfile(folder,'src','COEReflection_main.m'));
+            output=fullfile(folder,'Output','case03_DistanceScaling');
+            saved=load(fullfile(output,'coe_reflection_results.mat'),'result','displayData');
+
+            testCase.verifySize(saved.result.distanceView.spectralEnergy,[129,129,2]);
+            testCase.verifySize(saved.displayData.distanceView.rgb,[129,129,3]);
+            testCase.verifyTrue(isfile(fullfile(output,'coe_reflection_distance_view.png')));
+        end
+
         function coeFourPatternsRunFromCopiedModule(testCase)
             folder=portableModule(testCase,'topic_coe_reflection');
             scriptPath=fullfile(folder,'src','COEReflection_main.m');
             scriptText=strrep(fileread(scriptPath),'runFourPatternComparison = false;', ...
                 'runFourPatternComparison = true;');
+            scriptText=regexprep(scriptText,'projectName = "[^"]*";', ...
+                'projectName = "case01";');
             scriptFile=fopen(scriptPath,'w','n','UTF-8'); assert(scriptFile>=0);
             fprintf(scriptFile,'%s',scriptText); fclose(scriptFile);
             index=floor(((0:31)+0.5)*500/32)+1;
@@ -385,7 +534,42 @@ classdef ModuleIsolationTest < matlab.unittest.TestCase
     end
 end
 
-function folder = portableModule(testCase, moduleName)
+function folder=prepareDistanceModule(testCase,benchmark,spectral)
+    folder=portableModule(testCase,'topic_coe_reflection');
+    scriptPath=fullfile(folder,'src','COEReflection_main.m');
+    text=regexprep(fileread(scriptPath),'projectName = "[^"]*";', ...
+        'projectName = "case03_DistanceScaling";');
+    file=fopen(scriptPath,'w','n','UTF-8'); assert(file>=0);
+    fprintf(file,'%s',text); fclose(file);
+    project=fullfile(folder,'Input','case03_DistanceScaling');
+    index=floor(((0:31)+0.5)*500/32)+1;
+    for name=["anode","BM"]
+        image=imread(fullfile(project,name+".png"));
+        imwrite(image(index,index,:),fullfile(project,name+".png"));
+    end
+    text=fileread(fullfile(project,'config.txt'));
+    text=strrep(text,'cfg.samplesPerPeriod = 250','cfg.samplesPerPeriod = 16');
+    text=strrep(text,'stack.geometry.inputSamplesPerPeriod = 250', ...
+        'stack.geometry.inputSamplesPerPeriod = 16');
+    text=strrep(text,'cfg.outputSize = 601','cfg.outputSize = 129');
+    text=strrep(text,'cfg.angleHalfRangeDeg = 6','cfg.angleHalfRangeDeg = 3');
+    text=strrep(text,'[0.15, 0.20, 0.25, 0.30, 0.35]','[0.20, 0.25, 0.30]');
+    if ~benchmark, text=strrep(text,'cfg.observer.runBenchmark = true','cfg.observer.runBenchmark = false'); end
+    if spectral
+        text=strrep(text,'spectrumMode = "RGB"','spectrumMode = "D65"');
+        text=[text,newline,'wavelengthRangeNm = [540, 560]',newline,'wavelengthStepNm = 20',newline];
+    end
+    file=fopen(fullfile(project,'config.txt'),'w','n','UTF-8'); assert(file>=0);
+    fprintf(file,'%s',text); fclose(file);
+    visibility=get(groot,'DefaultFigureVisible');
+    testCase.addTeardown(@() set(groot,'DefaultFigureVisible',visibility));
+    initialFigures=findall(groot,'Type','figure');
+    testCase.addTeardown(@() closeNewFigures(initialFigures));
+    set(groot,'DefaultFigureVisible','off');
+end
+
+function folder = portableModule(testCase, moduleName, legacyConfig)
+    if nargin<3, legacyConfig=true; end
     root = fileparts(fileparts(mfilename('fullpath')));
     temporary = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture());
     folder = fullfile(temporary.Folder, moduleName);
@@ -393,6 +577,14 @@ function folder = portableModule(testCase, moduleName)
     % Never copy historical outputs: output checks must observe newly generated files.
     for part = ["Input", "src", "docs", "dist"]
         copyfile(fullfile(root, moduleName, part), fullfile(folder, part));
+    end
+    % Legacy branch tests use frozen parameters, independent of current user presets.
+    if moduleName=="topic_coe_reflection" && legacyConfig
+        fixtures=dir(fullfile(root,'tests','fixtures','coe_legacy_configs','*.legacy.txt'));
+        for j=1:numel(fixtures)
+            project=erase(string(fixtures(j).name),'.legacy.txt');
+            copyfile(fullfile(fixtures(j).folder,fixtures(j).name),fullfile(folder,'Input',project,'config.txt'));
+        end
     end
     mkdir(fullfile(folder, 'Output'));
     testCase.applyFixture(matlab.unittest.fixtures.PathFixture(fullfile(folder, 'src')));

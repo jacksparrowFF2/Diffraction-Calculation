@@ -1,0 +1,31 @@
+# 单图层示例；只需 singlelayer.bmp
+stack.layerNames = ["singlelayer"]
+stack.layerLevels = [1]
+stack.backgroundMode = "medium"
+stack.incidentN = 1
+stack.exitN = 1
+stack.layers.singlelayer.file = "singlelayer.bmp"
+stack.layers.singlelayer.method = "reflectance"
+stack.layers.singlelayer.n = 1.5
+stack.layers.singlelayer.k = 0
+stack.layers.singlelayer.thickness = 0
+stack.layers.singlelayer.reflectance = 0.36
+stack.layers.singlelayer.phaseDeg = 180
+cfg.pitch = 50e-6
+cfg.periods = [4, 4]
+cfg.samplesPerPeriod = 16
+cfg.outputSize = 129
+cfg.angleHalfRangeDeg = 3
+spectrumMode = "D65"
+wavelengthStepNm = 5
+cfg.heightMap = 0
+observation.halfAngleDeg = 2.5
+saveResults = true
+
+# 物面照明范围：rectangle/circle/none；长度单位m，仅对plane照明生效
+cfg.source.apertureShape = "rectangle"
+cfg.source.rectangleSize = [0.001, 0.001]
+cfg.source.circleDiameter = 0.001
+cfg.source.type = "plane"
+cfg.source.integrationMethod = "direct"
+cfg.source.wavefront = "plane"

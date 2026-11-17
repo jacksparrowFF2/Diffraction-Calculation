@@ -1,4 +1,9 @@
-# 单图层示例；只需 singlelayer.bmp
+# 当前统一验证配置：空间相干平面波，各波长非相干强度和。
+# 4×4 Pitch；光栅→接收面0.25m；±5°；D65 380:10:780nm共41波长。
+# 图片/膜堆不改写：大输入显式选中心整周期，小输入完整平铺。
+# pixelReplication仅复制原始像素，不增加实际版图分辨率。
+# 全谱先积分CIE XYZ再转sRGB；色度显示增强强度60、gamma0.72。
+# 原参数冻结在tests/fixtures/coe_legacy_configs，仅供历史回归。
 stack.layerNames = ["singlelayer"]
 stack.layerLevels = [1]
 stack.backgroundMode = "medium"
@@ -12,20 +17,57 @@ stack.layers.singlelayer.thickness = 100e-9
 stack.layers.singlelayer.reflectance = 0.36
 stack.layers.singlelayer.phaseDeg = 180
 cfg.pitch = 50e-6
-cfg.periods = [4, 4]
-cfg.samplesPerPeriod = 16
-cfg.outputSize = 129
-cfg.angleHalfRangeDeg = 3
-spectrumMode = "D65"
-wavelengthStepNm = 5
-cfg.heightMap = 0
-observation.halfAngleDeg = 2.5
 saveResults = true
-
-# 物面照明范围：rectangle/circle/none；长度单位m，仅对plane照明生效
-cfg.source.apertureShape = "rectangle"
 cfg.source.rectangleSize = [0.001, 0.001]
 cfg.source.circleDiameter = 0.001
+
+# 共用计算/光谱/显示参数
+stack.geometry.source = "images"
+stack.geometry.repeatToFit = true
+stack.geometry.cropToFit = true
+stack.geometry.pixelReplication = true
+cfg.periods = [4, 4]
+cfg.samplesPerPeriod = 64
+cfg.propagationDistance = 0.25
+cfg.outputSize = 1801
+cfg.angleHalfRangeDeg = 5
+cfg.metricAngleDeg = 2.5
+cfg.receiverBinSamples = 3
+cfg.heightMap = 0
+cfg.receiverView.enabled = true
+cfg.receiverView.distances = [0.25]
+spectrumMode = "D65"
+wavelengthRangeNm = [380, 780]
+wavelengthStepNm = 10
+sourceSpectrumFile = ""
+previewWavelengthNm = [620, 550, 450]
+spotOptions.wavelengthNm = [620, 550, 450]
 cfg.source.type = "plane"
+cfg.source.distance = 0.25
+cfg.source.diameter = 0
 cfg.source.integrationMethod = "direct"
 cfg.source.wavefront = "plane"
+cfg.source.apertureShape = "none"
+cfg.source.centerXY = [0, 0]
+cfg.observer.enabled = false
+cfg.observer.distance = 0.25
+cfg.observer.pupilDiameter = 0
+cfg.observer.runBenchmark = false
+cfg.observer.model = "geometric"
+cfg.observer.angleHalfRangeDeg = 5
+observation.centerDeg = [0, 0]
+observation.halfAngleDeg = 2.5
+observation.innerHalfAngleDeg = 0
+colorView.centerDeg = [0, 0]
+colorView.halfAngleDeg = 1.5
+rgbOptions.mode = "legacy"
+rgbOptions.clipQuantile = 0.9985
+rgbOptions.alpha = 60
+rgbOptions.gamma = 0.72
+rgbOptions.peakLevel = 1
+colorOptions.toneMapping = "log"
+colorOptions.toneStrength = 60
+colorOptions.luminanceGamma = 0.72
+colorOptions.fixedGain = 0
+colorOptions.exposureEV = 0
+stack.geometry.inputSamplesPerPeriod = 16

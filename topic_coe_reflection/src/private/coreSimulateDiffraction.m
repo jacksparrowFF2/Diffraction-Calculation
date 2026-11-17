@@ -12,6 +12,12 @@ function result = coreSimulateDiffraction(cfg, progressFcn)
     end
     progressFcn(0, "初始化传播网格");
     validateConfiguration(cfg);
+    fftReceiver=isfield(cfg,'receiverMethod') && cfg.receiverMethod=="fftBins";
+    if fftReceiver
+        assert(cfg.mode=="reflection" && cfg.source.type=="plane", ...
+            'COEReflection:FftReceiverSource','FFT能量分箱仅供平面波反射参考使用。');
+        validateattributes(cfg.receiverFftPaddingFactor,{'numeric'},{'scalar','integer','positive','finite'});
+    end
     [mask, x, y] = buildGeometry(cfg);
     [xx, yy] = meshgrid(x, y);
     pupil = double(xx.^2 + yy.^2 <= cfg.pupilRadius^2);
@@ -87,7 +93,18 @@ function result = coreSimulateDiffraction(cfg, progressFcn)
                 throughput(k)=throughput(k)+weight*modeThroughput;
                 parsevalError(k)=parsevalError(k)+weight*abs(sum(nativeEnergy(:))-modeThroughput);
                 incidentArea=incidentEnergy*dx^2;
-                if convolveSource
+                if fftReceiver
+                    nfft=max(gridSize)*cfg.receiverFftPaddingFactor;
+                    modeNative=nativeEnergy;
+                    if nfft~=max(gridSize), modeNative=transformEnergy(field,nfft,incidentEnergy); end
+                    nativeAngle=lambda*(-nfft/2:nfft/2-1)/(nfft*dx);
+                    overlaps=binOverlap(nativeAngle,outputCoordinate,binStep);
+                    modeEnergy=overlaps*modeNative*overlaps.';
+                    clearNative=transformEnergy(incoming,nfft,incidentEnergy);
+                    modeClear=overlaps*clearNative*overlaps.';
+                    intensityRatio=modeEnergy*incidentArea/(cfg.propagationDistance*binStep)^2;
+                    samples=1;
+                elseif convolveSource
                     [modeEnergy,intensityRatio,modeClear,samples,sourceConvolution{k}]= ...
                         corePropagateSourceConvolution(field,incoming,x,y,outputCoordinate,lambda,cfg,incidentArea);
                 else
@@ -122,6 +139,7 @@ function result = coreSimulateDiffraction(cfg, progressFcn)
         nativeCoordinate=lambda*frequency;
         if cfg.mode=="udc", nativeCoordinate=cfg.focalLength*nativeCoordinate; end
         nativeStep(k)=nativeCoordinate(2)-nativeCoordinate(1);
+        if fftReceiver, nativeStep(k)=lambda/(nfft*dx); end
         captured(k) = sum(energy(:, :, k), 'all');
         clearCaptured(k) = sum(clearEnergy(:, :, k), 'all');
         if cfg.mode == "reflection" && throughput(k) > 0
@@ -174,6 +192,7 @@ function result = coreSimulateDiffraction(cfg, progressFcn)
     result.fftSize = fftSize;
     if cfg.mode == "reflection"
         result.propagationMethod = "Fraunhofer chirp-convolution Fourier integral";
+        if fftReceiver, result.propagationMethod="FFT native-bin energy overlap (piecewise-constant density approximation)"; end
         result.illumination=[illuminationInfo{:}];
         result.illuminationAperture=illuminationAperture;
         if any(~cellfun(@isempty,sourceConvolution))

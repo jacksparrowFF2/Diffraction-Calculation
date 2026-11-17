@@ -1,6 +1,7 @@
 %% COE 反射衍射：输入 → 参数 → 计算 → 展示 → 保存
 % 直接运行本脚本；常用参数集中在前两节，具体 FFT 和能量积分算法在 private/ 中。
 % 模型：法向局部相干膜堆 + 标量近轴远场；额外 heightMap 默认 0 nm。
+% 可选距离缩放观察视图theta=a/(a+b)*q，与原有远场接收面分别输出。
 % 默认 Diamond 图片和 BM/CF 的 n/k、厚度为占位示例，不代表实际产品。光谱采用 CIE D65。
 
 %% 0. 初始化运行环境
@@ -12,7 +13,7 @@ close all;
 %% 1. 文件输入与输出设置
 moduleDir = fileparts(fileparts(mfilename('fullpath')));
 inputRoot = fullfile(moduleDir, 'Input');
-projectName = "case01"; % 默认普通单项目；case01~04、F192、COEB3等均可切换
+projectName = "case01"; % 有限光源/人眼选case03_FiniteEye；纯缩放选case03_DistanceScaling
 assert(~any(projectName == [".", ".."]) && ~contains(projectName, ["/", "\", ":"]), ...
     'COEReflection:ProjectName', '项目名称必须是单个文件夹名称，不能包含路径分隔符。');
 useProjectConfig = true;       % 读取 Input/项目名称/config.txt；false 使用下方脚本参数
@@ -38,10 +39,10 @@ cfg = coeReflectionDefaults();   % 补齐底层所需字段；本脚本列出反
 
 % 2.1 几何与采样
 cfg.pitch = 50e-6;              % 像素周期，50 μm
-cfg.periods = [16, 16];         % [x 方向周期数, y 方向周期数]，均为偶数
+cfg.periods = [4, 4];           % [x 方向周期数, y 方向周期数]，均为偶数
 cfg.samplesPerPeriod = 64;      % 每周期采样点数；采样间距 = pitch / samplesPerPeriod
 cfg.paddingFactor = 2;          % 兼容旧配置；当前反射传播的输出采样由 outputSize/角域控制
-cfg.propagationDistance = 10;   % 接收面距离 z，单位 m；须满足夫琅禾费远场条件
+cfg.propagationDistance = 0.25; % 接收面距离 z，单位 m；当前沿用夫琅禾费近似
 cfg.incidentIrradiance = 1;     % 平面波：实际照亮交集内的辐照度，W/m^2；其它源沿用光瞳平均值
 cfg.receiverBinSamples = 3;     % 每像素每轴最少积分点数（奇数），窄峰时自动增加
 cfg.pupilRadius = Inf;          % Inf 表示整个矩形计算面参与反射
@@ -52,7 +53,7 @@ spectrumMode = "D65";          % D65 / custom / monochromatic / RGB
 sourceSpectrumFile = "";        % custom：项目内两列CSV [波长nm, 相对光谱功率]
 wavelengthRangeNm = [380,780]; % 连续光谱计算范围，用户CSV须覆盖该范围
 monochromaticWavelengthNm = 532; % 单色激光谱线，nm
-wavelengthStepNm = 5;          % 光谱步长；可改为 1/2/5/10 nm，越细计算越久
+wavelengthStepNm = 10;         % 380:10:780 nm，共41个波长
 previewWavelengthNm = [620, 550, 450]; % 远场图仅预览这些波长，全部波长均参与积分
 cfg.wavelengths = [620, 550, 450]*1e-9; % RGB 模式下的三个代理波长
 cfg.spectralWeights = [1, 1, 1]; % RGB 模式使用的入射权重
@@ -70,6 +71,14 @@ cfg.source = coreSourceDefaults();
 cfg.source.apertureShape = "rectangle"; % 平面波物面照明形状：rectangle / circle / none
 cfg.source.rectangleSize = [1e-3,1e-3]; % 矩形全宽×全高，m；此例1×1 mm
 cfg.source.circleDiameter = 1e-3; % 圆形照明直径，m；此例1 mm
+cfg.source.distance = 0.25; % 距离缩放模型的光源距离a；普通plane远场仍忽略此值
+cfg.observer.distance = 0.25; % 观察距离b；不等于远场接收距离propagationDistance
+cfg.observer.pupilDiameter = 3e-3; % 人眼入口瞳直径3mm，不修改屏幕cfg.pupilRadius
+% cfg.observer.enabled=true；model=geometric输出几何视图，runBenchmark=true扫描距离。
+% model=coherentEye逐源点复场传播至入瞳/薄透镜/像面；不叠加旧缩放或强度卷积。
+% focusMode=virtualSource对焦镜中光源(a+b)；screen对焦屏幕(b)，distance显式指定物距。
+% 瞳面pupilSamples和像面outputSize均需满足采样；源可用polarGauss圆盘积分。
+% 支持居中point/direct的均匀圆盘源；pupilModel显式选择geometryOnly或airyIntensity。
 % 单波长内部空间相干；不同波长非相干叠加强度。centerXY控制照明中心。
 % type=plane 理想平面波；point 有限距离点源/非相干发光圆盘；laser 基模高斯。
 % 点源 diameter、distance、beamHalfAngleDeg 控制尺寸/距离/半强度半角。
@@ -81,7 +90,8 @@ stack.exitN = 1; % 无基底有限膜：空气/膜堆/空气
 stack.backgroundMode = "absorber"; % COE 阳极外匹配吸收底；悬空膜用 medium
 stack.layerNames = ["Anode", "IJP", "BM", "CF_R", "CF_B", "CF_G"];
 stack.layerLevels = [1, 2, 3, 4, 5, 6]; % RGB从下到上R→B→G；重排名称列表可自定义
-stack.geometry = struct('source', "images", 'matFile', "layers.mat", 'threshold', 0.5, 'repeatToFit', false, 'inputSamplesPerPeriod', 0);
+stack.geometry = struct('source', "images", 'matFile', "layers.mat", 'threshold', 0.5, ...
+    'repeatToFit', false, 'inputSamplesPerPeriod', 0,'cropToFit',false,'pixelReplication',false);
 for name = stack.layerNames
     stack.layers.(name) = coreLayerDefaults(name);
 end
@@ -103,7 +113,7 @@ stack.layers.CF_B.n = 1.55; stack.layers.CF_B.k = 0.05; stack.layers.CF_B.thickn
 
 % 2.3 观察窗口、评价范围与显示
 cfg.outputSize = 1201;          % 输出角度网格的边长，必须为奇数；±6°对应0.01°间隔
-cfg.angleHalfRangeDeg = 6;      % 观察角度范围 [-6°, 6°]，近轴模型上限为 10°
+cfg.angleHalfRangeDeg = 5;      % 观察角度范围 [-5°, 5°]，近轴模型上限为 10°
 cfg.metricAngleDeg = 2.5;       % 评价圆锥半角 2.5°，对应全角 5°，中心为镜面反射方向
 cfg.zeroOrderRadiusFactor = 0.45; % 零级积分半径 = 此系数 * lambda / pitch，单位 rad
 % 独立于雾度角度的观察角域；中心 [theta_x, theta_y]，圆锥/环带必须完整位于输出窗口内。
@@ -133,6 +143,8 @@ displayStyle.showSpotLabels = true; % S 编号和对应引线
 rgbOptions.clipQuantile = 0.9985; % 参考孔径模块：亮部截断 + 对数压缩 + 伽马增强
 rgbOptions.alpha = 60;
 rgbOptions.gamma = 0.72;
+rgbOptions.mode = "legacy"; % legacy逐通道映射 / luminance保持RGB代理比例的亮度映射
+rgbOptions.peakLevel = 1; % 最终显示最大通道；luminance模式可设0.7压低高光
 colorOptions.fixedGain = 0;    % 0=两状态共同自动曝光；>0=固定 XYZ 密度→线性 RGB 的曝光倍数
 colorOptions.exposureEV = 0;   % 在共同曝光基础上的 EV 调整；+1 表示线性亮度乘 2
 colorOptions.toneMapping = "log"; % "log"：增强弱衍射；"none"：关闭增强，恢复线性曝光图
@@ -188,6 +200,39 @@ if useProjectConfig
     fprintf('读取项目配置：%s（%d 项覆盖）。\n', projectConfig.file, numel(projectConfig.keys));
 end
 cfg.observation = observation;
+% 历史PlaneRGB项目名保留；全光谱项目走普通色度积分，不触发RGB专用基准。
+runPlaneWaveComparison=runPlaneWaveComparison && spectrumMode=="RGB";
+if cfg.observer.enabled && cfg.observer.model=="coherentEye" && ~runSamplingBenchmark ...
+        && ~runFourPatternComparison && ~runPlaneWaveComparison
+    assert(strlength(inputFile)==0 && spectrumMode=="RGB", ...
+        'COEReflection:EyeInput','逐源点完整成像当前要求图片膜堆及RGB模式，无额外MAT覆盖。');
+    eyeResult=runCOEReflection(cfg,stack,inputDir);
+    eyeImage=eyeResult.eyeImage;
+    [eyeFigure,eyeDisplay]=plotEyeImage(eyeImage,rgbOptions);
+    plotLabelProject(eyeFigure,projectName);
+    if saveResults
+        eyeOutputDir=fullfile(outputDir,'CoherentEye');
+        if ~isfolder(eyeOutputDir), mkdir(eyeOutputDir); end
+        save(fullfile(eyeOutputDir,'coherent_eye_results.mat'),'eyeImage','eyeDisplay','projectConfig','-v7.3');
+        exportgraphics(eyeFigure,fullfile(eyeOutputDir,'coherent_eye_comparison.png'),'Resolution',160);
+        imwrite(flipud(eyeDisplay.rgb),fullfile(eyeOutputDir,'coherent_eye_rgb.png'));
+        if isfield(projectConfig,'text')
+            writelines(projectConfig.text,fullfile(eyeOutputDir,'config_snapshot.txt'),'Encoding','UTF-8');
+        end
+    end
+    disp(table(cfg.wavelengths(:)*1e9,eyeImage.reflectedPowerFraction(:), ...
+        eyeImage.pupilPowerFraction(:),eyeImage.windowToPupilFraction(:), ...
+        'VariableNames',{'WavelengthNm','ReflectedFraction','PupilFraction','WindowToPupilFraction'}));
+    return
+end
+if cfg.observer.enabled && cfg.observer.runBenchmark && ~runSamplingBenchmark ...
+        && ~runFourPatternComparison && ~runPlaneWaveComparison
+    assert(strlength(inputFile)==0 && spectrumMode=="RGB", ...
+        'COEReflection:DistanceBenchmarkInput','距离扫描当前要求图片膜堆及RGB模式，无额外MAT覆盖。');
+    distanceScaling = benchDistanceScaling(cfg,stack,inputDir, ...
+        fullfile(outputDir,'DistanceScaling'),rgbOptions,projectConfig,saveResults);
+    return
+end
 if runFourPatternComparison && ~runSamplingBenchmark
     assert(strlength(inputFile)==0 && spectrumMode=="RGB", ...
         'COEReflection:ComparisonInput','四图样对比要求RGB模式且无额外MAT输入。');
@@ -296,6 +341,13 @@ assert(isempty(cfg.mask), 'COEReflection:LegacyMask', '请通过 stack.layerName
 [cfg.coeStack, stackGeometry] = corePrepareLayerStack(cfg, stack, inputDir);
 fprintf('输入单元：%g×%g Pitch；平铺次数 [x,y]=[%d,%d]；目标 [%d,%d] Pitch。\n', ...
     stackGeometry.inputPeriods,stackGeometry.repeatCounts,cfg.periods);
+if any(stackGeometry.inputPeriods>stackGeometry.selectedPeriods)
+    fprintf('显式中心选择：原[%g,%g] Pitch → [%g,%g] Pitch；采样图像素范围[%d,%d,%d,%d]。\n', ...
+        stackGeometry.inputPeriods,stackGeometry.selectedPeriods,stackGeometry.cropBoundsPixels);
+end
+if stackGeometry.pixelReplicationFactor>1
+    fprintf('原始像素块复制%d倍以提高积分采样；未增加版图细节。\n',stackGeometry.pixelReplicationFactor);
+end
 cfg.mask = double(stackGeometry.unionMask); % 仅作几何显示；实际反射系数来自局部膜堆查找表
 fprintf('统一膜堆：%d 个图样区域，%d 个物理层级，%d 种局部结构，参考面 %.3f μm。\n', ...
     numel(stack.layerNames), numel(unique(stack.layerLevels)), ...
@@ -330,6 +382,10 @@ end
 %% 4. 反射计算：零高度仅计算一次；非零高度才作两状态比较
 [result, baseline, heightPhaseEnabled] = coreSimulateHeightStates(cfg, ...
     @(fraction,message) updateProgress(0.15+0.60*fraction, message));
+if cfg.observer.enabled
+    updateProgress(0.75,"计算独立的距离缩放观察视图");
+    result.distanceView=coreDistanceView(cfg);
+end
 stateCount = 1+double(heightPhaseEnabled);
 resultLineStyle = '--';
 if ~heightPhaseEnabled
@@ -656,6 +712,19 @@ for state = 1:stateCount
     end
 end
 plotStyleFigure(receiverFigure, displayStyle);
+if cfg.receiverView.enabled && hasRGB
+    [receiverDistanceFigure,receiverRgbFigure,displayData.receiverDistanceView]= ...
+        plotReceiverDistanceViews(result,displayData.withHeightRGB,cfg.receiverView.distances);
+end
+if cfg.observer.enabled
+    [distanceFigure,displayData.distanceView]=plotDistanceView(result.distanceView, ...
+        spectrum,colorOptions,rgbOptions,isColorimetric);
+    plotStyleFigure(distanceFigure,displayStyle);
+end
+projectFigures=[geometryFigure,diffractionFigure,metricsFigure,angularFigure,colorFigure,receiverFigure];
+if cfg.receiverView.enabled && hasRGB, projectFigures=[projectFigures,receiverDistanceFigure,receiverRgbFigure]; end
+if cfg.observer.enabled, projectFigures=[projectFigures,distanceFigure]; end
+for projectFigure=projectFigures, plotLabelProject(projectFigure,projectName); end
 if saveResults
     updateProgress(0.94, "保存原始物理数据与指标表");
     if ~isfolder(outputDir)
@@ -663,6 +732,15 @@ if saveResults
     end
     if useProjectConfig
         writelines(projectConfig.text, fullfile(outputDir, caseName + "_config.txt"), 'Encoding', 'UTF-8');
+    end
+    if cfg.observer.enabled
+        exportgraphics(distanceFigure,fullfile(outputDir,caseName+"_distance_view.png"),'Resolution',180);
+    end
+    if cfg.receiverView.enabled && hasRGB
+        exportgraphics(receiverDistanceFigure,fullfile(outputDir,caseName+"_receiver_distance_scaling.png"),'Resolution',160);
+        exportgraphics(receiverRgbFigure,fullfile(outputDir,caseName+"_receiver_rgb_mm.png"),'Resolution',160);
+        writetable(displayData.receiverDistanceView.summary, ...
+            fullfile(outputDir,caseName+"_receiver_distance_scaling.csv"));
     end
     % MAT 保留未经显示归一化的数组；cfg 记录本次实际计算参数。
     save(fullfile(outputDir, caseName + "_results.mat"), 'cfg', 'result', 'baseline', ...

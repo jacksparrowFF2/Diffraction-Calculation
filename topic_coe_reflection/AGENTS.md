@@ -51,3 +51,5 @@
 - 图样对齐可显式选择F192_AnodeBM_ConvolutionRGB/ParaxialRGB：仅Anode/BM，BM为理想不透明黑区，不读取CF/IJP；三波长按D65采样权重，仅称RGB代理。原F192/COEB3完整膜堆不改写。
 - 面源卷积为source.integrationMethod="angularConvolution"，仅point源并显式选择wavefront="plane"或"paraxial"，假设均匀非相干圆盘及源点相同振幅。球面精确直接积分保留direct/spherical默认，不得静默替换。逐波长在物理强度上做线性卷积，先向外补足源角半径再裁切，核积分为1但不能重标定最终窗口能量。plane对应远场PSF平移模型，paraxial另含中心源二次相位；两者均不是完整相机/目视光路。验证应与相同波前假设下显式源点求和对照。
 - plane照明范围由source.apertureShape=none/rectangle/circle、rectangleSize全宽高、circleDiameter全直径和centerXY定义，单位m，不改变反射图样。与物面/几何光瞳取交集，incidentArea及功率分母使用实际照亮交集；照明越界只报告，不自动扩大或平铺输入。API默认none保留兼容，各项目当前显式1×1mm矩形、plane/direct。单波长模式内部仍空间相干，不同波长/独立源模式叠加强度，不得称为完全空间非相干平面波。main默认case01且runFourPatternComparison=false；批量比较需显式开启。
+
+- 用户2026-11-17最新统一要求覆盖旧项目运行参数：全部24个Input config采用4×4 Pitch、接收面25cm、±5°、空间相干plane/direct、无独立人眼入瞳，D65的380:10:780nm共41波长，CIE XYZ→sRGB合成。各项目Pitch及膜堆保留，计算采样64点/Pitch；旧config冻结在tests/fixtures/coe_legacy_configs用于历史回归。用户已明确全部4×4，故对大于4×4的图片可显式cropToFit选中心整周期；pixelReplication只在显式开启且整数倍时复制原始像素块，不能宣称提高真实轮廓分辨率。原图片不改写，记录原周期、选取范围、重复数与复制倍数。两开关默认false，禁止静默裁切或默认上采样。主脚本仍默认case01，不自动启用RGB专用历史基准。

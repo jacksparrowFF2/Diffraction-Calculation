@@ -1,5 +1,7 @@
 # 按项目管理输入
 
+2026-11-17最新统一运行配置：所有24个项目均为**4×4 Pitch、接收距离25cm、角范围±5°、D65 380–780nm每10nm、平面波、无独立入瞳**。各项目的Pitch、原始图片和膜堆保持各自定义；历史项目名称（如Pitch128、FiniteEye、RGB）保留，当前实际参数以config为准。大输入显式选中心4×4，较小完整单元平铺；低分辨率小示例按整像素复制至计算采样64点/Pitch，不增加实际版图细节。原配置冻结于tests/fixtures/coe_legacy_configs，仅用于历史回归。
+
 每个项目使用独立子文件夹，直接放置六张同尺寸、同原点的图层图片：
 
 ```text
@@ -24,6 +26,14 @@ Input/
   case02/       # 理想等面积椭圆，长短半轴比1.15
   case03/       # 理想四圆阵列
   case04/       # 理想四椭圆阵列，不同取向
+  case03_DistanceScaling/ # 点源几何距离缩放，旧8×8 Pitch对照
+  case03_FiniteEye/ # 5mm均匀源、3mm独立人眼入瞳，80×80 Pitch定性比较
+  case03_FiniteEye_WideAngle/ # 25cm基准、±4°宽角域、64点/Pitch
+  case03_FiniteEye_SmallSource/ # 0.5mm源、16×16 Pitch、±4.5°、高光压缩
+  case03_FiniteEye_Source2mm_Pitch48/ # 2mm源、48×48 Pitch、±4.5°，标题标注周期数
+  case03_FiniteEye_Source2mm_Pitch4/ # 2mm源、4×4 Pitch有限阵列对照，沿用legacy显示
+  case03_CoherentEye_Pitch4/ # 逐源点复场经反射/圆瞳/薄透镜，在像面叠加强度；对焦镜中光源
+  case03_PlaneWave_Pitch4/ # 纯平面波、4×4 Pitch、±10°远场；关闭人眼入瞳和观察成像
   Colorimetry/  # 共享 CIE 数据，无需复制到每个项目
 ```
 

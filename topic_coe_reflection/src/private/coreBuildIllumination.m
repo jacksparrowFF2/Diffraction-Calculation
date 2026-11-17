@@ -22,15 +22,23 @@ function [fields, weights, info] = coreBuildIllumination(cfg, xx, yy, pupil, lam
         validateattributes(source.samplesPerAxis,{'numeric'},{'scalar','integer','positive','odd'});
         validateattributes(source.beamHalfAngleDeg,{'numeric'},{'scalar','real','finite','>',0,'<',90});
         positions=[0,0];
+        weights=1;
         if source.diameter>0 && ~convolution
-            assert(source.samplesPerAxis>=3,'COEReflection:SourceSampling', ...
-                '有限尺寸光源需至少3×3采样；请进一步增加采样检查收敛。');
-            axis=((0:source.samplesPerAxis-1)+0.5)/source.samplesPerAxis-0.5;
-            [sx,sy]=meshgrid(axis*source.diameter);
-            inside=hypot(sx,sy)<=source.diameter/2;
-            positions=[sx(inside),sy(inside)];
+            mustBeMember(source.quadrature,["cartesian","polarGauss"]);
+            if source.quadrature=="polarGauss"
+                [positions,weights]=coreDiskSourceQuadrature(source.diameter,source.radialNodes,source.azimuthNodes);
+            else
+                assert(source.samplesPerAxis>=3,'COEReflection:SourceSampling', ...
+                    '有限尺寸光源需至少3×3采样；请进一步增加采样检查收敛。');
+                axis=((0:source.samplesPerAxis-1)+0.5)/source.samplesPerAxis-0.5;
+                [sx,sy]=meshgrid(axis*source.diameter);
+                inside=hypot(sx,sy)<=source.diameter/2;
+                positions=[sx(inside),sy(inside)];
+                weights=ones(1,size(positions,1))/size(positions,1);
+            end
         end
-        weights=ones(1,size(positions,1))/size(positions,1);
+        info.sourcePositionsXY=positions+source.centerXY;
+        info.quadrature=source.quadrature;
         fields=cell(1,numel(weights));
         for j=1:numel(weights)
             radius=hypot(xx-source.centerXY(1)-positions(j,1),yy-source.centerXY(2)-positions(j,2));

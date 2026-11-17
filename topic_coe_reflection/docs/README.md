@@ -1,14 +1,27 @@
 # COE 反射衍射：使用与交接说明
 
-更新日期：2026-11-16。本文件是本模块的统一使用说明，包含项目配置、实际图样输入、物理模型、结果解释与开发交接。文中 `src/`、`Input/`、`Output/` 均相对于 `topic_coe_reflection/`。
+更新日期：2026-11-17。本文件是本模块的统一使用说明，包含项目配置、实际图样输入、物理模型、结果解释与开发交接。文中 `src/`、`Input/`、`Output/` 均相对于 `topic_coe_reflection/`。
 
 正式仿真按图层列表读取用户提供的任意命名图样（默认阳极、BM、RGB CF），不调整像素形状。主入口是 `src/COEReflection_main.m`；选定项目后，自动读取该项目的 `config.txt`，无需反复修改 MATLAB 中的常用参数。额外高度默认 **0 nm**。
+
+**当前统一运行参数（2026-11-17，覆盖下文历史阶段参数）：** 全部24个Input config已统一为4×4 Pitch、光栅→接收面25cm、出射角±5°、D65 380:10:780nm共41波长、平面波入射、无独立人眼入瞳。单波长内部空间相干，不同波长叠加强度；最终用CIE 1931 2° XYZ积分转sRGB。各项目原始图片、Pitch、层序、n/k、厚度及反射系数保留；当前验证继续运行case03_PlaneWave_Pitch4，通用主入口默认case01。下文中的旧周期数、RGB三波长和观察模型是历史对照记录，不代表现行config。
+
+统一计算采样为64点/Pitch，角网格1801×1801。若原图片覆盖大于4×4 Pitch，config显式开启 `stack.geometry.cropToFit=true`，在降采样后的整Pitch边界上选中心区域；若原单元小于4×4，继续完整平铺。`inputSamplesPerPeriod`记录原生采样，保持物理Pitch；少数原生16点/Pitch的示例显式开启 `pixelReplication=true`，只进行整数倍像素块复制。两选项在代码默认均false，原图片文件不改写。`layerGeometry`记录inputPeriods、selectedPeriods、cropBoundsPixels、repeatCounts和pixelReplicationFactor。全24项目配置与图层几何已检查，74个输入图像哈希未改变；配置审计表在 `Output/ConfigAudit_380_780_10nm/config_audit.csv`。
+
+全光谱不再把620/550/450nm直接指定为三个RGB通道；使用D65功率谱、10nm梯形积分权重（两端半权重）及CIE配色函数合成XYZ，再转sRGB。保留线性曝光sRGB与增强显示sRGB，增强仅按亮度Y统一缩放，参数toneStrength=60、luminanceGamma=0.72；旧legacy三通道显示参数只用于历史RGB模式。接收面毫米坐标由X=zθ得到；z=25cm、±5°对应X/Y范围约±21.8166mm、窗口全宽43.6332mm。仍沿用当前夫琅禾费近轴模型；380nm短波端的常用远场尺度约0.2937m，高于指定0.25m，程序如实报告此近似条件，不自动更改用户距离。
+
+旧配置已冻结为 `tests/fixtures/coe_legacy_configs/*.legacy.txt`，旧分支的独立复制回归使用这些固定参数，避免随着当前用户preset更新而悄然改变测试含义；新增当前preset回归直接读取全部现行config。历史结果和历史参数不批量改写。
+
+当前case03全谱结果已实际完成41个波长、1801×1801网格计算，最大Parseval误差约2.50×10⁻¹⁶。所有带坐标图的总标题通过 `plotLabelProject` 添加项目名称，原波长/周期/距离标题保留；无坐标RGB数据图保持干净像素。输出根目录的 `d65_rgb_receiver_mm_titled.png` 为带项目名及参数的接收面图，`d65_rgb_angle_titled.png` 为角度图，`d65_rgb_linear.png` 为线性曝光sRGB。配置/数值/历史分支独立运行共113项检查通过，加入项目标题后另通过当前全谱独立运行检查；记录在 `Output/ConfigAudit_380_780_10nm/final_regression.mat`。
 
 可编辑的详细流程图：[topic_coe_reflection_flow.drawio](topic_coe_reflection_flow.drawio)。用 draw.io 打开后，依次查看底部四个页签：总览与项目数据流、图层到局部膜堆、照明与远场传播、指标色度与输出。图中标注实际函数名、主要公式、数组尺寸、能量归一化分母和当前默认 `Case1_Pitch64` 参数实例；内容依据 2026-11-16 工作区源码整理。
 
 ## 目录
 
 - [快速开始与项目切换](#quick-start)
+- [距离缩放观察视图](#distance-scaling)
+- [有限光源与人眼入瞳](#finite-eye)
+- [逐源点复场与薄透镜像面](#coherent-eye)
 - [收敛性结论、当前选型与验证记录](#convergence-decisions)
 - [项目配置 config.txt](#project-config)
 - [图样、物理尺寸与材料输入](#inputs)
@@ -64,7 +77,224 @@ Case1/2/3原始图片均为 **1024×1024**，Pitch=50 μm，输入单元为16×1
 
 默认使用 D65 380–780 nm、5 nm 步长（81波长），输出1201×1201、角域±6°、接收距离10 m。有限圆盘光源默认每轴5点，光源类型仍由项目选择，默认plane。当前反射分支采用指定频率网格的二次相位卷积傅里叶积分；`paddingFactor` 保留兼容，不再控制反射输出采样。`cfg.heightMap=0`；只计算和展示一组反射结果，膜层自身的相位始终保留。两个单图层校验项目保留小尺寸输出，光谱同样使用5 nm。
 
+<a id="distance-scaling"></a>
+
+## 距离缩放观察视图
+
+本支路用于验证有限距离点光源的**几何缩放假设**，不是完整人眼/相机仿真，也不是对实拍符合性的证明。光源距离为 `cfg.source.distance=a`，观察距离为 `cfg.observer.distance=b`，均为到屏幕的法向距离（m）。近轴、居中条件下，内禀衍射角q映射为观察角theta=s*q，s=a/(a+b)；屏幕投影位置为x=b*theta，故标称周期p的第m级角位置为s*m*lambda/p。
+
+### 运行距离对比
+
+在 `src/COEReflection_main.m` 选择 `projectName="case03_DistanceScaling"` 后运行。默认普通项目仍为case01。新项目只复制case03原始四圆Anode/BM图样，没有改变用户原项目；按已有显式平铺规则计算8×8 Pitch，保留250点/Pitch。配置为620/550/450nm三波长RGB代理、601×601输出、固定观察角域±1.5°，光源和观察距离基准均25cm。
+
+```text
+cfg.source.type = "point"
+cfg.source.distance = 0.25
+cfg.source.diameter = 0
+cfg.source.integrationMethod = "direct"
+cfg.observer.enabled = true
+cfg.observer.distance = 0.25
+cfg.observer.angleHalfRangeDeg = 1.5
+cfg.observer.runBenchmark = true
+cfg.observer.scanDistances = [0.15, 0.20, 0.25, 0.30, 0.35]
+```
+
+扫描先固定b、改变a，再固定a、改变b；输出位于 `Output/case03_DistanceScaling/DistanceScaling/`：
+
+- `distance_scaling_comparison.png`：两排图分别移动光源和观察者，全部采用相同观察角坐标和一次共同曝光；不会分别放大图片抵消距离差异。
+- `distance_scaling_peak_validation.png`、`distance_scaling_peaks.csv`：550nm标称Pitch第一阶候选峰的理论位置与能量图读数。候选区为预测位置的0.7至1.3倍；仅适用于输入确有该级次的情况，不根据文件名或图像猜测最小晶胞，不代表任意图样都有该峰。
+- `distance_scaling_results.mat`、`config_snapshot.txt`：各距离的原始逐波长参考能量、角坐标、缩放系数、图样/材料及配置记录。
+
+`runBenchmark=false` 时执行普通单项目计算，并在原有远场结果之外增加独立观察视图；输出为 `*_distance_view.png`，原始数组保存于结果MAT的 `result.distanceView`。批量API同样支持：
+
+```matlab
+cfg = coeReflectionDefaults();
+cfg.source.type = "point";
+cfg.source.distance = 0.25;
+cfg.observer.enabled = true;
+cfg.observer.distance = 0.25;
+result = runCOEReflection(cfg); % 也可传入原有stack和inputDir
+view = result.distanceView;
+```
+
+### 数值与物理边界
+
+`coreDistanceView` 用相同图样、复反射系数和明确的plane照明足迹，重新计算平面波参考在q=theta/s处的傅里叶积分，再将坐标映射到观察角。它在每个波长的原始能量上运算，不缩放已增强的RGB图，不重复叠加球面入射相位。`cfg.source.wavefront` 用于原有远场支路，不改变这个几何参考；照明足迹由source.apertureShape/rectangleSize/circleDiameter定义，须在距离比较中保持固定，且不模拟点源照明衰减。
+
+对应角像素的能量不变；角密度满足J_view(theta)=J_ref(theta/s)/s²，`view.spectralAngularDensity` 已使用映射后的角像素面积。固定观察窗截断能量时不重新归一化。`capturedReferenceFraction`和`referenceThroughput`都是平面波参考量；本支路不输出眼睛接收功率或W/m²。`screenCoordinate=b*coordinate`是视线投影到屏幕平面的坐标，不是远场接收面光斑位置。
+
+`cfg.propagationDistance`仍是原有夫琅禾费接收面的数值距离，与眼睛距离分开，不能把它改成25cm来替代此模型。原有远场能量、雾度代理指标及辐照度不会被几何视图覆盖。几何支路要求居中point及direct，已支持下节的有限圆盘源和独立人眼入瞳近似；偏轴和激光仍拒绝。包含卷积补边后的参考半角必须不超过10°并通过物面Nyquist检查。尚未包含完整相干眼内成像、像差、离焦、光源封装光学和实际屏幕边缘对视野的裁切。
+
+解析相位斜坡测试通过公共API定位实际峰值，验证不同a/b的角位置、屏幕投影位置、密度Jacobian、窗口截断不补能量、原远场结果不变及独立复制解析。测试以数值积分与独立解析峰位比较；距离模型符合实拍的程度仍需测量。
+
+2026-11-16原生四圆示例实算：550nm、p=59.06μm、观察角网格0.005°。固定b=25cm，a=15→35cm时，候选峰读数0.200→0.310°；固定a=25cm，b=15→35cm时，读数0.330→0.220°。十组理论/读数最大绝对差0.003482°，小于一个观察角网格间距；有限阵列包络也可能使局部峰偏离无限周期级次。±1.5°固定窗口捕获约91.66%至95.22%的550nm参考反射能量，未将截断能量补回。对比图及原始CSV位于上述输出目录。
+
+本轮全仓库104项MATLAB测试全部通过，其中新增12项公共API数值/输入/复制检查，以及3项独立复制模块的距离扫描、RGB主脚本和光谱主脚本检查。完整日志保存在上述输出目录的 `regression_tests.log` 和 `regression_tests.mat`。
+
+<a id="finite-eye"></a>
+
+## 有限光源与人眼入瞳
+
+在主脚本选择 `projectName="case03_FiniteEye"`，运行同一入口即可比较光源距离和观察距离各15、20、25、30、35cm的结果。光源发光直径固定5mm，人眼入瞳直径固定3mm。以下参数在该项目config中独立保存：
+
+```text
+cfg.source.diameter = 0.005
+cfg.source.distance = 0.25
+cfg.observer.pupilDiameter = 0.003
+cfg.observer.distance = 0.25
+cfg.observer.pupilModel = "airyIntensity"
+cfg.observer.airyRadiusFactor = 20
+cfg.observer.referenceMethod = "fftBins"
+cfg.observer.referencePaddingFactor = 1
+```
+
+`observer.pupilDiameter`是眼睛的有效入瞳全直径，不修改屏幕计算面上的 `cfg.pupilRadius`。`pupilModel="geometryOnly"`仅统计几何贡献区域；`"airyIntensity"`额外对逐波长角图使用理想圆形入瞳的非相干强度PSF。默认geometryOnly保留此前点源角图；人眼入瞳默认3mm。直径0表示此前点观察者的数学极限，并非物理上零孔径仍可接收光。
+
+### 图样计算与适用范围
+
+先计算theta=a/(a+b)*q的点源参考，再按均匀非相干圆盘源进行逐波长强度平均。源的观察角全直径为Ds/(a+b)，不是Ds/a；源角核积分为1。独立源点的强度叠加与相干场求和需要区分，参见[Ansys非相干线源示例](https://optics.ansys.com/hc/en-us/articles/42661828176147-Simulation-of-Young-s-interference-experiment-via-geometric-ray-tracing-in-OpticStudio)。
+
+本观察视图的源积分采用角网格上的圆盘概率核，`source.samplesPerAxis`不控制这一步；它仍用于原有direct远场支路的离散源点求和。此视图应通过观察角网格、参考FFT分箱和角核采样检查精度。
+
+理想圆孔的强度PSF正比于[2J1(v)/v]²，v=pi*Dp*theta/lambda，第一零点半角约1.21967*lambda/Dp。3mm入瞳在550nm时约0.0128°。此处**显式采用移不变、非相干角图强度PSF近似**；它不是一般部分相干光的完整眼内传播，不把瞳孔内各点视作独立发光源，也未模拟调焦和像差。一般相干成像需要保留复振幅传播，参见[Ansys相干/部分相干成像说明](https://ansyshelp.ansys.com/public/views/secured/zemax/v26103/en/opticstudio_user_guide/OpticStudio_Help/topics/Partially_Coherent_Image_Analysis.html)。该近似是否符合实拍仍需测量。
+
+卷积先按源核与入瞳核总支撑半径向外补边，在逐波长参考能量上做FFT线性卷积，最后裁切固定观察角窗口；不对RGB增强图做模糊，不补回窗口外能量。圆盘源核使用子像素面积采样；Airy核按第一零点的20倍截断，离散积分校准到解析包围能量1-J0(v_edge)²-J1(v_edge)²，约0.992，而不是将截尾核归一为1。核外约0.8%功率保留为明确的截尾损失。`view.kernels`保存角核、第一零点、核积分及补边尺寸，`convolutionMassError`检查完整线性卷积的功率记账。此分支输出仍是参考能量分布，不是眼睛实际接收瓦数或视网膜辐照度。
+
+`observer.referenceMethod="quadrature"`保留原来的指定频率傅里叶积分，仍是旧点源缩放项目的默认算法。新大计算面项目显式选择`"fftBins"`：按FFT原生角像素的面积重叠分配能量，再执行宽面源卷积；原生角像素内部采用常密度近似。`referencePaddingFactor`为FFT零填充整数倍，可用1/2做数值敏感性检查。该近似适合当前宽面源定性图样，不用于替代原有精细点源峰形验证；未经检查不能把零填充当作真实图样采样细化。两种算法保留独立记录，原有远场支路默认不变。
+
+### 几何贡献区域
+
+居中、近轴平面镜模型下，源点u、入瞳点v对应的屏幕反射点为x=(b*u+a*v)/(a+b)。对两个圆盘进行投影后，光线对位置分布是两个圆盘的卷积；支撑区域直径为：
+
+```text
+L = (b*Ds + a*Dp)/(a+b)
+N_nominal = L / cfg.pitch
+```
+
+`view.participation`独立保存源投影直径、入瞳投影直径、支撑直径、面积、标称Pitch数以及401×401诊断网格上的光线对密度。`rayWeightInModel`为几何光线对落在当前计算面与照明足迹交集内的比例；`modeledArea`为该交集的诊断网格面积近似。**该区域只描述镜面零级，不是所有衍射级次的统一硬孔径；标称Pitch数不是相干周期数。** 程序不据此裁切反射场，也不将它当作衍射能量归一化分母。
+
+两距离均25cm时L=4mm，面积约12.57mm²，跨越约67.73个59.06μm标称Pitch。固定观察距离25cm，光源距离15→35cm时L从4.25缩至3.833mm；固定光源25cm，观察距离15→35cm时L从3.75增至4.167mm。图样的角尺度与这个屏幕区域宽度是不同量。
+
+### 新示例和输出
+
+`case03_FiniteEye`原样复制case03的两张500×500图片，不改写旧项目。为覆盖最大约4.25mm的几何区域，config显式平铺到80×80 Pitch，即4.7248×4.7248mm；显式用inputSamplesPerPeriod=250、samplesPerPeriod=32做共同像素中心最近邻降采样，计算网格2560×2560。参考照明apertureShape=none表示该完整计算面参与计算。此采样用于当前距离和有限源平均的定性比较，不宣称原生轮廓精度收敛；源核与眼PSF也不反过来改变用户图片或自动扩展任何其它项目。
+
+在 `Output/case03_FiniteEye/DistanceScaling/` 查看：
+
+- `distance_scaling_comparison.png`：距离扫描的最终RGB角图，全图共同曝光和固定坐标。
+- `observer_source_pupil_stages.png`：25cm基准下点源、5mm源、3mm入瞳近似三阶段的共同曝光RGB和550nm截线。
+- `observer_participation_regions.png`：镜面几何区域及实际输入边界，两排分别扫描光源和观察距离。
+- `observer_geometry_summary.csv`：区域直径、面积、标称Pitch数、计算面覆盖比例、源角宽度和候选峰读数；MAT保留全部逐波长数组及核。
+
+有限源角宽度达到预测级次间距的0.8倍时，`PeakComparable=false`，最终图的 `MeasuredPeakDeg`/`PeakErrorDeg`写NaN；这个保守可比较性判据不是通用分辨率标准。点源参考峰另存 `PointReferencePeakDeg`。不能从源平均后的混合亮区强行指认原来的单级峰；源导致点阵被洗平也不能用减小源直径或逐图曝光来掩盖。
+
+2026-11-17实算：10组均为几何区域完全落入4.7248mm计算面的情况，rayWeightInModel=1。5mm均匀源明显将点源点阵展宽、叠合；基准观察角全直径0.57296°，而550nm第一阶间距约0.26679°，因此最终图的单级峰均标记为不可直接比较。3mm入瞳的第一零点半角0.01281°，在当前近似下进一步平滑的影响小于源尺寸平均。该结果尚未匹配实拍清晰点阵，也不能由此唯一判定实拍的光源相干性或封装光学。
+
+同一32点/Pitch几何、相同角核和固定观察窗口下，FFT原生分箱与原指定频率积分的10组×3波长最终能量图，最大相对L1差异1.08145%，最大窗口积分能量相对差0.002287%。对照数据为项目Output中的 `quadrature_reference.mat`、`fft_vs_quadrature.mat` 和 `fft_vs_quadrature_relative_L1.csv`。这只验证分箱近似的影响，不是对32点/Pitch轮廓精度或实拍模型的验证。
+
+本轮全仓库117项MATLAB测试全部通过；包含公共接口下的独立卷积对照、源角核二阶矩、观察窗外峰卷入、源/入瞳区域公式及光线对密度积分、Airy解析包围能量、零尺寸退化、入瞳与屏幕孔径独立、FFT分箱近似、复制模块运行，以及原有COE/UDC等分支回归。日志为本项目DistanceScaling输出目录的 `regression_tests.log`、`regression_tests.mat`。
+
+### 更宽的观察角域
+
+选择 `projectName="case03_FiniteEye_WideAngle"` 可运行光源/观察距离均25cm的宽角基准，仍为5mm均匀源及3mm入瞳。每轴观察半角扩大到4°，总宽8°；1601×1601输出保留0.005°角步长。物面采样显式提高为64点/Pitch（5120×5120），以容纳卷积补边后的±9.16°参考角域，并保留原80×80 Pitch和4.7248mm物理尺寸。图样图片未改写，旧±1.5°项目和结果保留。
+
+`Output/case03_FiniteEye_WideAngle/wide_angle_fov_comparison.png`对同一次±4°计算裁切显示±1.5°、±3°、±4°，使用相同曝光和角度步长；它展示更多外围角域，不把中心图样拉伸。`wide_angle_4deg_rgb.png`为完整宽角图，`wide_angle_summary.csv`记录各窗口的参考捕获能量。绘图脚本在该输出目录的 `render_wide_angle_views.m`，数值结果和配置快照在 `DistanceScaling/`。直接运行主脚本会生成标准宽角结果图；三视场对照由该绘图脚本读取同一MAT结果生成。
+
+本宽角项目只扫描[0.25]基准距离。若恢复15至35cm全距离扫描，最小a/(a+b)下的补边参考角域会更大；当前参数建议观察半角最多3°，继续遵守10°参考角与物面Nyquist约束，不能静默解除限制。宽角结果仍沿用非相干角图/理想入瞳近似，未验证实际屏幕边界接收或完整人眼成像。
+
+### 小光源、减少周期与高光压缩
+
+选择 `projectName="case03_FiniteEye_SmallSource"`：光源直径从5mm改为0.5mm，计算阵列从80×80减为16×16 Pitch；入瞳保持3mm，光源和观察距离均25cm。64点/Pitch、1024×1024计算网格对应0.94496mm物面。观察角域扩为每轴±4.5°，1801×1801输出，仍为0.005°角步长。显式FFT零填充倍数提高到4以检查较少周期下的峰形。输入图片直接复制，单元形状不调整。
+
+这里减少的是实际建模的阵列范围，不是将相干周期数指定为16。镜面几何支撑直径为1.75mm（约29.63个标称Pitch），大于0.94496mm计算面；程序如实报告交集面积和落入计算面的光线对比例，不自动补齐被用户刻意缩减的区域。
+
+RGB代理新增可选显示模式，旧项目默认仍为legacy：
+
+```text
+rgbOptions.mode = "luminance"
+rgbOptions.clipQuantile = 1
+rgbOptions.alpha = 10000
+rgbOptions.gamma = 0.8
+rgbOptions.peakLevel = 0.7
+```
+
+新模式用0.2126R+0.7152G+0.0722B作为RGB代理的显示亮度，以同一参考值做单调对数映射，每个像素的三个通道共用缩放，再对RGB向量整体压缩以满足最大通道0.7。它提高弱信号相对于高光的可见度，保留代理通道比例，不按中心坐标设置暗斑或遮罩；不宣称三波长代理具有严格CIE色度。原始spectralEnergy、光斑位置、积分能量均不修改，连续光谱的XYZ流程不受此RGB显示选项影响。
+
+标准增强图保存为 `Output/case03_FiniteEye_SmallSource/DistanceScaling/observer_baseline_rgb.png`；同一目录保存原始能量和显示参数。输出根目录的 `small_source_contrast_comparison.png`、`small_source_legacy.png`、`small_source_enhanced.png`由同一份新物理结果比较两种显示曲线，不把显示差异解释为物理能量变化。绘图脚本为同目录的 `render_contrast_comparison.m`。
+
+本项目采样检查：相对于4倍FFT零填充，不填充的全角图相对L1差异约20%至23%，因此最终配置使用4倍。中心±1°以相同0.005°网格与指定频率直接积分比较，三波长最大相对L1差异小于0.6%；此检查不等于对全角域、连续轮廓或实拍模型的精度保证。记录为 `sampling_check.mat`。显示增强与旧项目RGB/光谱流程共11项相关检查通过，包括独立复制主脚本运行、0.7通道上限、RGB向量比例在PNG量化误差内保持；记录为 `display_tests.log`、`display_tests.mat`。本轮未重复无关物理分支的全仓库测试。
+
+### 2mm光源与48×48周期
+
+选择 `projectName="case03_FiniteEye_Source2mm_Pitch48"`：光源直径2mm，计算阵列48×48 Pitch，观察角域每轴±4.5°；入瞳3mm、光源和观察距离均25cm。64点/Pitch，3072×3072计算网格，物面2.83488×2.83488mm。使用2倍FFT零填充，当前显示采用早期case03的legacy模式。卷积补边后的参考半角约9.81°，仍在10°限制内。
+
+所有正式观察角图、阶段图和峰位图的标题自动读取cfg.periods，标注实际计算周期数，例如“48×48 Pitch”。几何区域图另外标注其支撑直径折合的Pitch数：本组为2.5mm、约42.33个标称Pitch；该值与实际输入的48×48计算阵列区分。
+
+标准结果在 `Output/case03_FiniteEye_Source2mm_Pitch48/DistanceScaling/`，带参数和周期标题的单张增强图为输出根目录的 `source2mm_pitch48_titled.png`，无坐标原图为 `source2mm_pitch48_rgb.png`；绘图脚本为 `render_titled_view.m`，参数表为 `parameters.csv`。
+
+本组最初执行检查确认光源2mm、周期[48,48]、半角4.5°及标题文本一致，旧图使用0.7高光上限。中心±0.75°与同角网格的指定频率直接积分比较，三波长最大相对L1差异约0.25%；局部检查记录于 `sampling_check.mat`，不代表全角域、轮廓采样或实拍模型均已验证。
+
+对照实拍后，本项目曾比较温和显示 `alpha=300, gamma=1, peakLevel=1, mode="luminance", clipQuantile=1`。旧设置10000/0.8/0.7同时大幅提升弱信号、限制中心高光，使中心与外围的亮度差过小；温和配置减弱对数增强、取消额外伽马提亮并恢复高光上限。该选择仅用于定性比较亮暗层次，未经相机曝光或响应标定；仍不能靠显示曲线校正光斑尺寸、位置或三波长代理颜色。
+
+温和显示直接复用同一份原始能量结果，不重算传播、不改写历史MAT及其mapping记录。对应图为输出根目录的 `source2mm_pitch48_mild_titled.png` 与 `source2mm_pitch48_mild_rgb.png`，脚本为 `render_mild_view.m`；独立的 `mild_display.mat` 记录显示参数、引用数据路径和检查结果。`milder_mapping_comparison.png` 比较alpha=10000/1000/300/100，上排完整±4.5°，下排裁看±1.5°，裁看不提高计算分辨率。历史标准图及 `render_titled_view.m` 保留原强压缩版本。2°至4°环带的显示平均亮度由约0.091降至0.00784，中心最大通道由0.7恢复到1；这些是显示量，不能解释为能量变化。
+
+按用户选择，当前项目最终切换为早期case03的 `mode="legacy", clipQuantile=0.9985, alpha=60, gamma=0.72, peakLevel=1`。它对三个通道共用分位数参考值，但分别做截断、对数及伽马映射，因此可出现白色高光，也会改变通道比例，不能用于判断严格色度。光源2mm、48×48 Pitch、入瞳3mm、a=b=25cm和±4.5°等物理设置保持不变。当前重绘文件为 `source2mm_pitch48_legacy_titled.png`、`source2mm_pitch48_legacy_rgb.png`，脚本为 `render_legacy_view.m`，独立显示记录为 `legacy_display.mat`；原始传播MAT及此前显示版本保留。未来主入口运行本项目自动采用config中的legacy设置；当前视图的分位数参考由本视图信号确定，早期四图样对比使用全部图样共同参考，两者不保证相同曝光。
+
 <a id="project-config"></a>
+
+### 4×4 Pitch有限阵列与强度卷积对照
+
+选择 `projectName="case03_FiniteEye_Source2mm_Pitch4"`：在2mm光源项目基础上，将 `cfg.periods` 改为[4,4]。Pitch59.06μm，物面边长0.23624mm，每Pitch64点，256×256网格；观察±4.5°，1801×1801输出。光源直径2mm、入瞳3mm、a=b=25cm、legacy的0.9985/60/0.72显示参数保持一致。FFT参考零填充16倍以细化小阵列宽峰的能量分箱；补边规则、能量归一约定沿用距离模型。48×48项目保留，主脚本默认仍为case01。
+
+基本物理计算顺序是：对每个独立源点计算相干复场传播，再将各源点产生的强度按权重相加。只有源点变化可近似为同一强度图的角度平移、照明足迹和反射响应不随源点改变时，才可把该积分简化成角域强度卷积。本距离视图继续采用这一近轴平移近似；核直径为Ds/(a+b)，本组约0.22918°。这不是对复振幅卷积，也不意味着物面各点互不相干。入瞳Airy强度卷积是另加的非相干角图近似，并非完整相干眼成像。
+
+扩展光源的源点强度平均本身已经包含其造成的条纹可见度降低，不能再把由同一光源推导的相干长度作为独立模糊核重复施加。本次4×4只作为用户指定的有限计算孔径敏感性对照，没有额外施加相干包络，也没有实现“大面积屏幕由4×4互不相干小块组成”的统计模型。若将4×4解释成真实有效相干范围，应另建立互强度或相干模态模型并校核，不能由本图直接断言。
+
+镜面零级几何贡献区域仍为2.5mm跨径，明显大于0.23624mm计算面；相交面积和光线对权重由几何诊断独立报告。有限阵列图仅比较角分布形状，不代表整块屏幕亮度或接收功率。输出在 `Output/case03_FiniteEye_Source2mm_Pitch4/DistanceScaling/`，逐波长保留点源参考、光源平均和入瞳处理后的数组，可判断各阶段对渐变边缘的影响。
+
+带标题的完整观察图为输出根目录 `source2mm_pitch4_titled.png`，三阶段形状图为 `pitch4_source_pupil_shapes.png`，由 `render_pitch4_views.m` 绘制。三阶段图各自使用legacy分位数参考，仅比较形状，不比较绝对亮度。光源平均后仍可见比48周期版本更平缓的亮斑边缘，入瞳阶段变化较小。中心±0.75°用同角度分箱的直接积分交叉检查：点源参考三波长最大相对L1差约1.25%，带补边执行光源与入瞳卷积后的最大差约0.059%；不代表全角域或真实模型精度。记录和复现脚本为 `sampling_check.mat`、`check_pitch4_sampling.m`。主计算卷积质量误差小于1e-15，几何光线对落入当前计算面的比例约0.0328，观察窗口捕获比例约0.9727（550nm）。
+
+<a id="coherent-eye"></a>
+
+### 逐源点复场、圆瞳与薄透镜像面
+
+选择 `projectName="case03_CoherentEye_Pitch4"`，并使用 `cfg.observer.model="coherentEye"`。该分支从图片膜堆构建复反射系数，对每个非相干源点逐波长执行：有限距离入射复场 → 反射复场 → 距离b的Fresnel复场传播 → 瞳面乘圆孔及薄透镜相位 → 像面复场传播 → 模平方 → 按源权重求和。不同波长在取强度后合成三通道RGB代理。不会额外施加旧a/(a+b)缩放、光源强度卷积或Airy强度卷积，旧项目仍使用geometric默认分支。
+
+当前输入保持2mm均匀圆盘源、3mm入瞳、a=b=25cm、4×4 Pitch、64点/Pitch和legacy显示。用户选择对焦镜中光源，`focusMode="virtualSource"`令对焦物距为a+b=50cm；另支持 `screen`（b）和 `distance`（显式focusDistance）。理想透镜到像面距离由 `retinaDistance=0.017` m定义，焦距满足1/f=1/v+1/L；此像距是模型坐标标定，不是对眼睛处方的测量。输出横纵坐标为像面位置/v的近轴角，不直接把衍射出射角当成人眼看到的像位置。
+
+Fresnel复傅里叶积分保留dx*dy、1/(iλb)和相位；透镜相位与像面传播相位可解析合并为瞳面上的exp[-iπ|p|²/(λL)]，像面角强度密度等于该瞳面复场傅里叶积分的模平方除λ²。按像素中心及角面积Δθ²求积，不将输出窗口归一化为1；记录原反射功率、进入瞳孔的功率与像面窗口捕获功率。所有功率比例相对于有限受照计算面的入射参考功率，跨项目窗口大小不同时不能据此比较整屏绝对亮度。
+
+为满足最短450nm波长的采样，完整±4.5°像面使用2401×2401点（0.00375°步长），圆瞳每轴1537点。程序分别检查瞳面复场/输出角域Nyquist和像面强度带宽；不足时明确报错，不静默产生周期复制图。输出的局部裁看使用相同图像和曝光，不提高真实分辨率。源采用 `source.quadrature="polarGauss"`：t=r²/R²上的7点Gauss与32个方位角，合计224个互不相干源点；面积权重总和1，不添加随机相位或额外相干包络。旧项目默认cartesian取样不变。
+
+输出在 `Output/case03_CoherentEye_Pitch4/CoherentEye/`：`coherent_eye_results.mat`保留逐波长像面能量、源坐标及权重、瞳面辐照度、功率比例、对焦/透镜参数及显示映射；`coherent_eye_comparison.png`同时显示±4.5°与±0.25°裁看；`coherent_eye_rgb.png`为无坐标原图。额外高度全零时只算一个状态；非零时在单源复反射场上添加高度相位并分别计算两状态，不提前取模平方。
+
+完整视野绝大部分为空时，全图0.9985分位数会把中心过曝。此项目用 `displayReferenceHalfAngleDeg=0.25`指定共同曝光参考ROI；只用该区域确定一个全图共用的参考值，不设置空间亮度遮罩，不更改能量。legacy的60/0.72与0.9985参数不变。`eyeDisplay.mapping`记录参考值及ROI，0表示完整图参考。首次全图曝光的图像另保留为 `coherent_eye_full_frame_exposure.png`，供区分曝光差异与物理差异。
+
+本次完整计算每波长224个源点、零额外高度，用时约405秒。620/550/450nm进入瞳孔的功率/有限物面参考入射功率分别约0.03885/0.04291/0.05628；像面±4.5°窗口/瞳内功率分别约0.99989/0.99983/0.99984。4×4有限面下主要呈现中心小角域亮区，没有复现旧角图的大范围彩色点阵。这是应继续检验的几何范围假设，不能靠显示曲线修补。
+
+这仍是法向局部反射、标量近轴、无像差薄透镜模型，不是矢量电磁仿真或完整人眼生理模型。尤其4×4 Pitch物面只有0.23624mm宽，会限制能够进入眼睛的衍射路径；不能把它理解成保留大屏幕几何范围、只把相干长度设为4个周期。若要模拟大屏幕上的部分相干，应保留相应物面范围并通过同一源积分或互强度模型处理，不能根据旧图外观再施加独立模糊。
+
+源积分检查在450nm、4×4原图片、±0.3°和257点瞳面下对比7×32与9×48的圆盘积分，差异小于0.01%；记录在输出根目录 `validation.mat`。在相同像面角网格上，257/513点瞳面相对1537点参照的蓝光±0.3°图样相对L1差分别约0.19%/0.058%；复现脚本为 `check_pupil_sampling.m`。新增12项测试检验复傅里叶积分的相位、Cartesian及非等权Gauss源强度和、相位/反射率缩放、对焦位置与像反转符号、额外高度、圆盘积分矩、采样拒绝、固定曝光参考、黑反射面与旧API兼容；另1项独立复制模块运行main验证private解析和项目配置读取。既有距离/膜堆/光谱/基础衍射93项回归均通过，记录在 `regression_tests.mat`。新增核心文件Code Analyzer无提示。采样检查范围及精度不能代替真实光路校准。
+
+### 退回纯平面波、取消人眼入瞳
+
+当前对照项目 `case03_PlaneWave_Pitch4` 按用户要求采用 `source.type="plane", diameter=0, wavefront="plane"`，并设置 `observer.enabled=false, observer.pupilDiameter=0`。此处取消的是独立人眼入瞳和观察成像分支；屏幕计算面沿用默认 `cfg.pupilRadius=Inf`，仅保留用户指定的4×4 Pitch有限反射范围。config不将Inf写成非JSON字面量，也不用极大的有限数代替，因为有限光瞳须完整落在物面范围内。
+
+用户已确认后续以本项目作为计算基准：平面波、4×4 Pitch、±10°、无独立入瞳及人眼成像、legacy显示；暂不继续圆盘源显示。日后讨论距离或相干性时，先与这个固定基准作对照，不自动恢复旧圆盘/几何缩放/入瞳分支。主脚本的通用默认case01仍保留；运行本基准时显式选择本项目。
+
+当前图是远场角分布，不计算实际观察者位置：source.distance对plane不生效，observer.distance在observer.enabled=false时不生效；已有a/(a+b)模型也已关闭。cfg.propagationDistance=100m是本项目的远场接收面换算距离，不是25cm人眼观察距离。相同角度网格下，改变此接收距离不会改变归一化角分布；接收面线性坐标X≈zθ及光斑长度随z增大，像面每单位面积辐照度按1/z²变化。这些结论属于本模型的理想远场，不等于实际屏幕观察的距离效应已经被验证。
+
+按用户要求，当前基准另开启 `cfg.receiverView.enabled=true`，用 `cfg.receiverView.distances=[0.25,0.5,1]` m输出25/50/100cm接收面的毫米尺寸。该列表中的z明确表示光栅→接收面，复用同一远场角分布，不重新传播、不更改光源→光栅距离a；原100m计算结果只是辐照度换算的参照。毫米坐标X=zθ；每个角像素在接收面的面积为(zΔθ)²，辐照度由参考结果乘(z_ref/z)²，角窗口内接收功率不变。本对照是远场假设下的坐标换算，不是对25cm处Fresnel近场分布的验证。
+
+新增输出 `coe_reflection_receiver_rgb_mm.png` 显示列表中首个距离（默认25cm）的毫米坐标RGB图；`coe_reflection_receiver_distance_scaling.png` 在统一毫米坐标上下限上比较多个距离，避免各面板自动缩放掩盖尺寸变化。RGB图采用相同归一显示以比较尺寸，实际1/z²亮度变化另记录在 `coe_reflection_receiver_distance_scaling.csv`；MAT的 `displayData.receiverDistanceView` 保留毫米坐标、像素面积、辐照度缩放及汇总表。550nm标称一级位置x≈zλ/p在25/50/100cm分别为2.328/4.656/9.313mm；有限阵列的真实峰位可能受单元包络影响，此列是标称值。
+
+每个620/550/450nm波长使用一个跨整个计算面的相干平面波，不同波长按强度求和。时间相干性降低应通过实际光谱及波长积分处理；给全场添加共同随机相位不会改变其衍射强度。空间相干性降低需要多个入射模式或互强度模型：若不同周期互不相干，跨周期干涉项消失，不能沿用当前完整阵列的场求和，也不能只把RGB显示做模糊。严格单方向、单频率理想平面波是空间相干的，需将其与宽带准直光或互不相干平面波模式的集合区分。
+
+用户已明确“非相干平面波”指时间不相干、空间相干。后续按此含义处理：每个波长保留全物面的空间相位关系，不同波长叠加强度；不额外给各周期添加独立随机相位。真实时间相干程度由光谱宽度决定；当前三离散波长仅是颜色/光谱代理，不等价于已完成连续白光积分。严格平面波入射条件不变且接收面固定时，仅改变光源距离a不能产生X=zθ缩放；若要研究a的影响，需要有限距离照明波前或相应反射几何，单点球面/抛物波即可研究，不必引入圆盘源。
+
+Pitch59.06μm，4×4阵列边长0.23624mm；每Pitch64点，256×256物面。按用户最新要求，输出由±4.5°扩为±10°，保留1801×1801角网格，角步长约0.01111°；450nm的λ/D尺度约0.10914°，仍有约9.8个显示间隔，像素内继续用3×3积分。物面最短波长Nyquist半角约13.97°，覆盖当前像素边界。此模型仍使用近轴角坐标，10°是当前实现的范围上限。入射为每个波长一份相干平面波，620/550/450nm以原D65相对权重按强度合成RGB代理。保留legacy的clipQuantile=0.9985、alpha=60、gamma=0.72。无圆盘源平均、源强度卷积、Airy强度卷积、瞳面/透镜成像或几何距离缩放。输出横纵坐标为光栅远场出射角，不能与上一项目的像面位置/像距坐标直接等同。source.distance对plane不生效，propagationDistance仅用于远场接收面坐标与辐照度换算。
+
+标准结果位于 `Output/case03_PlaneWave_Pitch4/`；带参数标题的单张图为 `plane_wave_pitch4_titled.png`。旧圆盘源和人眼成像项目保留以供后续定位差异，主脚本默认case01保持不变。
 
 ### case01~case04 四图样平面波对比
 
