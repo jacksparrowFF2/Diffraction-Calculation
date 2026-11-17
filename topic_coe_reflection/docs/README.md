@@ -4,7 +4,11 @@
 
 正式仿真按图层列表读取用户提供的任意命名图样（默认阳极、BM、RGB CF），不调整像素形状。主入口是 `src/COEReflection_main.m`；选定项目后，自动读取该项目的 `config.txt`，无需反复修改 MATLAB 中的常用参数。额外高度默认 **0 nm**。
 
-**当前统一运行参数（2026-11-17，覆盖下文历史阶段参数）：** 全部24个Input config已统一为4×4 Pitch、光栅→接收面25cm、出射角±5°、D65 380:10:780nm共41波长、平面波入射、无独立人眼入瞳。单波长内部空间相干，不同波长叠加强度；最终用CIE 1931 2° XYZ积分转sRGB。各项目原始图片、Pitch、层序、n/k、厚度及反射系数保留；当前验证继续运行case03_PlaneWave_Pitch4，通用主入口默认case01。下文中的旧周期数、RGB三波长和观察模型是历史对照记录，不代表现行config。
+新增 `Input/F192Base/` 后，当前共25个项目，F192Base沿用下述统一运行参数；下文24项目/74图像的审计记录指新增前的快照。F192Base包含独立六层PNG、config与Materials，对应CAD为 `Input/Cad/F192/(20261103)F192Base.dwg`；同时更新COEB3的DWG，CAD备份与锁文件不纳入版本。
+
+F192、COEB3及F192Base的Materials已保存新版BM/CF_R/CF_G/CF_B波长相关n/k CSV；F192/Materials同时保留四份原始TXT供追溯。数据格式为波长nm、n、k，CSV不含表头。三个项目当前 `nkFile=""`，运行时仍使用config中的n/k常数；归档CSV不会自动启用材料谱，启用路径和膜厚说明见下文材料章节。此处仅记录文件来源，不将未经核实的数据标注为实测。
+
+**当前统一运行参数（2026-11-17，覆盖下文历史阶段参数）：** 全部25个Input config（含新增F192Base）已统一为4×4 Pitch、光栅→接收面25cm、出射角±5°、D65 380:10:780nm共41波长、平面波入射、无独立人眼入瞳。单波长内部空间相干，不同波长叠加强度；最终用CIE 1931 2° XYZ积分转sRGB。各项目原始图片、Pitch、层序、n/k、厚度及反射系数保留；当前验证继续运行case03_PlaneWave_Pitch4，通用主入口默认case01。下文中的旧周期数、RGB三波长和观察模型是历史对照记录，不代表现行config。
 
 统一计算采样为64点/Pitch，角网格1801×1801。若原图片覆盖大于4×4 Pitch，config显式开启 `stack.geometry.cropToFit=true`，在降采样后的整Pitch边界上选中心区域；若原单元小于4×4，继续完整平铺。`inputSamplesPerPeriod`记录原生采样，保持物理Pitch；少数原生16点/Pitch的示例显式开启 `pixelReplication=true`，只进行整数倍像素块复制。两选项在代码默认均false，原图片文件不改写。`layerGeometry`记录inputPeriods、selectedPeriods、cropBoundsPixels、repeatCounts和pixelReplicationFactor。全24项目配置与图层几何已检查，74个输入图像哈希未改变；配置审计表在 `Output/ConfigAudit_380_780_10nm/config_audit.csv`。
 

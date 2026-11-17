@@ -11,7 +11,7 @@ classdef COEUnifiedConfigTest < matlab.unittest.TestCase
             root=fileparts(fileparts(mfilename('fullpath')));
             inputRoot=fullfile(root,'topic_coe_reflection','Input');
             files=dir(fullfile(inputRoot,'*','config.txt'));
-            testCase.verifyEqual(numel(files),24);
+            testCase.verifyEqual(numel(files),25);
             for j=1:numel(files)
                 settings=projectSettings();
                 [settings,~]=coreLoadProjectConfig(fullfile(files(j).folder,files(j).name),settings);
