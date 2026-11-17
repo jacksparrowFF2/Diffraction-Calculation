@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>从 MATLAB 重新上手到读懂 F192 反射衍射仿真</title>
+<style>
+:root{--ink:#183044;--muted:#526778;--paper:#fff;--accent:#087d83;--line:#d6e2e7}*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:24px}body{margin:0;color:var(--ink);background:#f3f6f8;font:17px/1.85 "Microsoft YaHei","Segoe UI",sans-serif}a{color:#006c87;text-underline-offset:3px}nav{position:fixed;inset:0 auto 0 0;width:275px;overflow:auto;background:#153449;color:white;padding:24px 20px}nav a{display:block;color:#d6edf1;padding:5px 0;font-size:14px;line-height:1.65}nav strong{font-size:20px}main{max-width:1200px;margin:0 auto 0 275px;padding:38px 5vw 80px}header,section{background:var(--paper);padding:32px 38px;margin-bottom:24px;border:1px solid var(--line);border-radius:12px}header{border-top:7px solid var(--accent)}h1{font-size:36px;line-height:1.4;margin:12px 0 22px}h2{font-size:27px;line-height:1.5;border-bottom:2px solid #d9ecee;padding-bottom:12px}h3{font-size:20px;margin-top:28px}p{margin:12px 0}code{font:14px/1.65 Consolas,monospace;background:#eef4f6;padding:2px 4px;overflow-wrap:anywhere}pre{background:#102c40;color:#e5f2f6;padding:20px;overflow:auto;border-radius:8px;line-height:1.65;tab-size:4}pre code{background:none;color:inherit;padding:0;white-space:pre;overflow-wrap:normal}table{width:100%;border-collapse:collapse;font-size:15px;margin:18px 0;display:block;overflow:auto}td,th{padding:10px 13px;border:1px solid var(--line);vertical-align:top}th{background:#eaf4f5;text-align:left}.note,.warn,.formula{padding:16px 20px;margin:20px 0;border-left:4px solid var(--accent);background:#edf8f7}.warn{border-color:#bc7721;background:#fff6e8}.formula{font-family:"Cambria Math","Microsoft YaHei",serif;font-size:18px;overflow:auto;background:#f0f4f9;border-color:#658aa9}.tag{font-size:13px;color:var(--accent);font-weight:bold;letter-spacing:1px}figure{margin:22px 0}img{width:100%;height:auto;border:1px solid var(--line);border-radius:6px}figcaption{font-size:14px;color:var(--muted)}details{border:1px solid var(--line);border-radius:6px;padding:12px 16px;margin:14px 0}summary{cursor:pointer;font-weight:bold}.flow{display:flex;flex-wrap:wrap;gap:9px;align-items:center}.flow span{border:1px solid #9dbfc7;background:#eff8f9;border-radius:6px;padding:10px;font-size:15px}.flow b{color:var(--accent)}button{border:1px solid #91aeb8;background:#fff;border-radius:5px;padding:5px 10px;color:#214357;cursor:pointer}.tools{text-align:right;font-size:13px}.muted{color:var(--muted)}li{margin:7px 0}@media(max-width:950px){nav{position:static;width:auto;max-height:360px}main{margin:0;padding:16px}header,section{padding:24px}h1{font-size:29px}}@media print{nav,.tools,button{display:none}main{margin:0;max-width:none;padding:0}body{font-size:11pt;background:white}header,section{border:0;padding:12px 0;break-before:auto}pre{white-space:pre-wrap;background:#edf2f5;color:#111}pre code{white-space:pre-wrap}h2,h3{break-after:avoid}img{max-height:650px;object-fit:contain}details{display:block}a{color:inherit}}
+</style></head><body>
+<nav aria-label="章节导航"><strong>F192 学习手册</strong><p>从操作到物理，再到结果</p>
+<a href="#start">阅读路线与真实案例</a><a href="#matlab">01 · MATLAB 从哪里开始</a><a href="#arrays">02 · 变量、数组与索引</a><a href="#files">03 · 项目文件与覆盖顺序</a><a href="#geometry">04 · 六张图怎样变成物面</a><a href="#stack">05 · 膜堆与复反射系数</a><a href="#source">06 · 照明、相干与归一化</a><a href="#propagation">07 · 傅里叶传播与角网格</a><a href="#limits">08 · 守恒、采样与模型边界</a><a href="#spectrum">09 · D65 到 XYZ</a><a href="#display">10 · XYZ 到显示图</a><a href="#metrics">11 · 指标的分子和分母</a><a href="#read">12 · 读取 CSV、MAT、PNG</a><a href="#pixel">13 · 追踪一个像素的光谱</a><a href="#sourcecode">14 · 跟着源码走一遍</a><a href="#rerun">15 · 安全手动复现</a><a href="#trouble">16 · 排错与自检</a><a href="#references">资料、验证与词汇索引</a>
+</nav><main>
+<header id="start"><div class="tag">中文离线教学 · 2026-11-17 · 基于当前本地 F192 工作区</div><h1>从 MATLAB 重新上手<br>到读懂 F192 反射衍射仿真</h1>
+<p>这份手册适合“很久没有操作 MATLAB，但希望每一步都明白”的读者。目标是让你能独立找到输入、读懂数组、解释一次计算、核对结果，并知道一张彩色图究竟表达了什么。</p>
+<p>本手册解释这次实例的学习过程；配置规则、功能定义和模型约定仍以 <a href="README.md">README</a> 为准。源码、当前 config 与这次运行快照可能处在不同修改阶段，复盘本次运行时优先查看保存的快照。</p>
+<div class="note"><strong>先学习，后运行：</strong>建议第一次只阅读第 1—4 章，然后打开 <a href="f192_tutorial_lab.m">配套 MATLAB 练习</a>逐节运行。该练习只读 CSV、处理小数组，不重跑传播，不加载大型物理数组，不写入任何仿真结果。手册中的“教学例子”均明确标注，不能当作正式结果。</div>
+<table><tr><th>学习轮次</th><th>建议顺序</th><th>完成标志</th></tr><tr><td>第一轮：会操作</td><td>1—4、12、配套练习第 1—2 节</td><td>能读出 F192 总反射率，知道行列和波长维</td></tr><tr><td>第二轮：会解释</td><td>5—11、13</td><td>能区分振幅/强度、总反射/窗口、XYZ/PNG</td></tr><tr><td>第三轮：会复现</td><td>14—16、回看 README</td><td>能说明配置来源、调用关系和模型限制</td></tr></table>
+<div class="flow" aria-label="总体数据流"><span>六层 PNG + 材料 CSV + config</span><b>→</b><span>256×256×41 复反射系数</span><b>→</b><span>每波长传播后取模平方</span><b>→</b><span>1801×1801×41 bin 能量</span><b>→</b><span>D65/CIE 积分 → XYZ</span><b>→</b><span>曝光与增强 → PNG</span></div>
+<p>正式结果在 <a href="../Output/MaterialSpectra_20261117_nkEnabled/">Output/MaterialSpectra_20261117_nkEnabled</a>。本次 F192：Pitch 59.06 μm、每轴 4 Pitch、64 点/Pitch；D65 380:10:780 nm 共 41 点；接收距离 0.25 m、角域 ±5°、1801×1801 输出。plane/direct 空间相干平面波，无独立入瞳或有限发光圆盘，Iinc=1 W/m²，heightMap=0。</p>
+<figure><img loading="lazy" src="../Output/MaterialSpectra_20261117_nkEnabled/F192/rgb_angle_enhanced_shared.png" alt="F192 正式结果：共同曝光、亮度增强的角域色彩图"><figcaption>真实 F192 结果。增强图帮助看清弱衍射结构；图上颜色与亮度经过显示映射，不是反射率刻度，也不是相机或人眼成像。</figcaption></figure>
+</header>
+<section id="matlab"><h2>01 · 先恢复 MATLAB 的操作感</h2>
+<h3>这一步解决什么问题</h3><p>MATLAB 同时有“文件”和“当前内存”。磁盘上的脚本并不等于已经运行；工作区里的变量也不一定来自刚打开的脚本。先分清两者，能避免拿旧变量解释新结果。</p>
+<table><tr><th>界面区域</th><th>做什么</th><th>本次怎样使用</th></tr><tr><td>当前文件夹 / Current Folder</td><td>查看磁盘文件，决定相对路径起点</td><td>定位 topic_coe_reflection/docs 或 src</td></tr><tr><td>编辑器 / Editor</td><td>编辑并运行 .m 文件</td><td>打开 f192_tutorial_lab.m；先读注释再运行节</td></tr><tr><td>命令窗口 / Command Window</td><td>输入短命令，查看输出与错误</td><td>输入 pwd、whos、size(labA)</td></tr><tr><td>工作区 / Workspace</td><td>查看已存在于内存的变量</td><td>双击 labA 查看 2×3 数组</td></tr><tr><td>图窗 / Figure</td><td>查看绘图</td><td>看图时检查坐标、单位、显示映射</td></tr></table>
+<pre><code>pwd                            % 显示当前文件夹，不修改它
+cd('D:/03 Optical Simulation/Diffraction-Calculation/topic_coe_reflection/docs')
+open('f192_tutorial_lab.m')      % 在编辑器打开练习
+whos                           % 列出变量名、尺寸、类型、占用字节
+help reshape                   % 简短帮助；doc reshape 打开更完整文档</code></pre>
+<p>路径使用引号包围，空格便不会把路径拆成几段。Windows 的 MATLAB 路径中可使用正斜杠。若项目已移动，改成你电脑上的实际目录。</p>
+<p>脚本中的 <code>%%</code> 把文件分为“节”；选中一节后点击编辑器的“运行节”，适合逐步观察。<code>%</code> 后面是注释，不执行。行末 <code>;</code> 只抑制打印，不抑制计算。<code>...</code> 表示语句续到下一行。运行整个文件用编辑器“运行”，通常为 F5；快捷键可能随平台设置变化，按钮更可靠。</p>
+<h3>脚本与函数</h3><p><code>COEReflection_main.m</code> 是脚本，会在当前工作区创建和修改变量。<code>runCOEReflection(cfg,stack,inputDir)</code> 是函数，参数是入口、返回值是出口，内部临时变量通常留在自己的工作区。函数第一行的 <code>function result = ...</code> 表示把计算结果装进 result 返回；<code>arguments</code> 块检查参数类型与尺寸。</p>
+<div class="warn">正式 main 开头有 <code>clearvars; clc; close all;</code>：依次清理当前变量、命令窗口文本和图窗。先保存自己的工作，不要将它当成“只打开文件”。main 还会保存输出，同名结果可能被覆盖。</div>
+<p><strong>检查：</strong>运行练习第 1 节后，工作区应出现 labA、labCube 等变量。若只打开文件而未运行，工作区不会自动出现这些变量。遇到错误先看红字第一条错误和对应文件行号，不要反复点运行。</p>
+</section>
+<section id="arrays"><h2>02 · 每个变量、数组和运算符在做什么</h2>
+<h3>从一个数到一个光谱立方体</h3>
+<pre><code>pitch = 59.06e-6;          % 1×1 double，科学计数法：59.06×10^-6 m
+periods = [4 4];           % 1×2 行向量，[x方向Pitch数, y方向Pitch数]
+lambdaNm = (380:10:780).'; % 41×1 列向量；从380开始，每次加10，到780
+cfg = struct();           % 结构体：带名称的容器
+cfg.pitch = pitch;        % 点号访问字段
+cfg.source.type = "plane"; % 可嵌套字段；双引号表示字符串
+enabled = true;           % logical，逻辑真；false 为逻辑假
+emptyValue = [];          % 空数组，通常表示未提供可选输入</code></pre>
+<p>上面是语法演示，不会自动读取配置。double 是本次主要浮点类型，每个实数通常 8 字节；logical 用来表达覆盖/不覆盖。<code>cfg</code> 结构体把参数按名字组织；<code>table</code> 则适合每行一个波长、每列一种指标的异类数据，例如 <code>T.Throughput</code> 返回一列数。</p>
+<pre><code>% 教学例子，不是 F192 的实际光学数据
+A = [1 2 3; 4 5 6];       % 2行×3列
+A(2,3)                    % 第2行第3列 = 6；MATLAB 索引从1开始
+A(:,2)                    % 所有行、第2列 = [2;5]
+A(1,:)                    % 第1行、所有列 = [1 2 3]
+A(:)                      % 按列展开 = [1;4;2;5;3;6]
+E = reshape(1:24,2,3,4);   % 2×3×4，第三维当作4个波长
+s = squeeze(E(2,3,:));     % 1×1×4 → 4×1：[6;12;18;24]
+w = [0.1;0.2;0.3;0.4];    % 4×1
+F = reshape(E,[],4);       % 6×4；每行是一位置，每列是一波长
+imageValue = reshape(F*w,2,3); % (6×4)*(4×1) → 6×1 → 2×3
+imageValue(2,3)            % 6*0.1+12*0.2+18*0.3+24*0.4 = 18</code></pre>
+<p><code>reshape</code> 只重排形状，不增减元素、不插值；<code>[]</code> 让 MATLAB 推算那一维，乘积必须等于元素总数。MATLAB 按列存放，故每个波长页展开顺序一致。<code>squeeze</code> 删除长度为 1 的维度；用于单像素光谱很方便，但一般代码仍要用 <code>size</code> 检查结果形状。<code>size(E,3)</code> 是波长数，<code>numel(E)</code> 是所有元素数。</p>
+<table><tr><th>写法</th><th>意义</th><th>本次用途</th></tr><tr><td><code>A*B</code></td><td>矩阵乘法，内维必须相同</td><td>位置×波长 乘 波长×XYZ</td></tr><tr><td><code>A.*B</code></td><td>对应元素相乘；允许兼容尺寸扩展</td><td>同一物面位置入射场乘局部反射系数</td></tr><tr><td><code>A./B</code>、<code>A.^2</code></td><td>逐元素除法、平方</td><td>每像素归一化、强度计算</td></tr><tr><td><code>A/B</code>、<code>A^2</code></td><td>矩阵除法、矩阵幂；标量情况可与逐元素相同</td><td>不要拿它们代替两个一般矩阵的逐元素运算</td></tr><tr><td><code>A.'</code> / <code>A'</code></td><td>前者仅转置；后者共轭转置</td><td>处理复场时不能随意互换</td></tr><tr><td><code>A&gt;0</code>、<code>&amp;</code>、<code>~</code></td><td>比较、逐元素逻辑与、逻辑取反</td><td>产生材料掩膜或 ROI</td></tr><tr><td><code>=</code> / <code>==</code></td><td>赋值 / 判断相等</td><td><code>cfg.pitch=...</code> 设置；<code>name=="F192"</code> 筛选</td></tr></table>
+<h3>复数与单位</h3><p>复振幅 <code>r = a*exp(1i*phi)</code> 有幅值 a 和相位 φ。<code>1i</code> 是虚数单位，避免变量 i 被循环索引覆盖。<code>abs(r)</code> 是模，<code>angle(r)</code> 是相位（rad），<code>real(r)</code> / <code>imag(r)</code> 取实/虚部。强度反射率 R=|r|²。例如 R=0.25、φ=π 时，r=−0.5，不能用 r=0.25 替代。</p>
+<p>长度运算统一 m：1 μm=10⁻⁶ m，1 nm=10⁻⁹ m；角度内部 rad，<code>deg2rad(5)</code> 将 5° 变为约 0.0872665 rad，<code>rad2deg</code> 反向转换。变量名带 Deg/Nm 是很有用的单位提示。数组里的值本身不会自动带单位。</p>
+<p><strong>自检：</strong>若 E 是 1801×1801×41，则 <code>E(:,:,18)</code> 是 1801×1801 的 550 nm 图；<code>E(901,901,:)</code> 是 1×1×41；<code>reshape(E,[],41)</code> 是 3,243,601×41。不能用 <code>sum(E(:))</code> 冒充 D65 宽带积分，因为波长权重尚未使用。</p>
+</section>
+<section id="files"><h2>03 · 先读哪些文件，参数听谁的</h2>
+<table><tr><th>位置</th><th>角色</th><th>阅读动作</th></tr><tr><td><a href="../Input/F192/">Input/F192</a></td><td>六层 PNG、config.txt、Materials CSV</td><td>读取；学习时不改原图</td></tr><tr><td><a href="../Input/F192/config.txt">Input/F192/config.txt</a></td><td>当前 F192 显式参数</td><td>查 pitch、sampling、nkFile、显示设置</td></tr><tr><td>Input/Cad/F192</td><td>设计参考 CAD；非此次生产传播直接输入</td><td>不要把 DWG 或 .dwl 当成运行需要的掩膜；保留锁文件</td></tr><tr><td>Input/Colorimetry</td><td>共用 D65 和 CIE 数据</td><td>与材料 n/k 表区分</td></tr><tr><td><a href="../src/">src</a></td><td>三个公共入口及 private 内部函数</td><td>先读 main，再跟调用</td></tr><tr><td><a href="../Output/MaterialSpectra_20261117_nkEnabled/F192/">本次 F192 输出</a></td><td>数组、快照、表格和图</td><td>先 CSV，再按需读取 MAT</td></tr></table>
+<h3>实际覆盖顺序</h3><p><code>coeReflectionDefaults()</code> 提供底层默认字段 → main 显式设置脚本参数 → <code>useProjectConfig=true</code> 时由 <code>coreLoadProjectConfig</code> 读取项目 config 覆盖对应字段 → 光谱、几何、膜堆计算 → 可选 MAT 输入再覆盖相应场/高度字段（本次没有另给高度输入）。批处理也构造 settings 后逐项目加载 config。不能只看 defaults 或 main 中某一行就判断这次用了什么。</p>
+<p>例如 main 的 <code>colorOptions.toneStrength=3000</code>、<code>luminanceGamma=0.75</code> 是初始值，本次 config 覆盖为 <strong>60 / 0.72</strong>。当前 main 默认项目仍是 <code>case01</code>，不是 F192。<code>runCOEReflection</code> 这个公共函数本身不自动读取项目 config；只传 cfg，不会神奇地加载 F192 的材料。</p>
+<p>config 是受约束的文本配置，不是可执行 MATLAB 脚本。解析器检查未知键、重复键和类型；不要在里面写 <code>59.06*1e-6</code> 等表达式，使用 <code>59.06e-6</code>。四份 BM/CF 的 <code>nkFile</code> 非空时，CSV 插值后的 n/k 优先于该层常数 n/k；厚度依然取 config 的 thickness，没有从 CSV 或图片推断厚度。</p>
+<p><strong>检查方法：</strong>复盘本次先读 <a href="../Output/MaterialSpectra_20261117_nkEnabled/F192/config_snapshot.txt">config_snapshot.txt</a>，再读 <a href="../Output/MaterialSpectra_20261117_nkEnabled/F192/stack_materials.csv">stack_materials.csv</a>。后者展示实际进入模型的 n、k、厚度和层级，能检验“配置写了”是否真的“计算用了”。材料来源尚未独立核实，本手册不称其为实测。</p>
+</section>
+<section id="geometry"><h2>04 · 六张 PNG 怎样变成 256×256 的物面</h2>
+<h3>输入、阈值与反转</h3><p>六层原图都是 1000×1000，代表同一 4×4 Pitch 物面，每 Pitch 250 点。每张图表示一个层的横向覆盖，不表示高度，不是 RGB 发光强度，也不是照片。所有层必须共用尺寸、坐标原点与方向；分别裁切一张图会破坏对齐。</p>
+<pre><code>% 教学版二值化流程：解释源码步骤，不对输入写回
+raw = uint8([0 127 128 255]);
+gray = double(raw)/255;       % uint8 的0~255转换为0~1
+mask = gray &gt; 0.5;           % [false false true true]，严格大于
+inverted = ~mask;             % [true true false false]
+% 正式源码若读到RGB三通道，用 mean(value,3) 求平均后再阈值化</code></pre>
+<p><code>threshold=0.5</code> 先决定哪一侧是白；每层的 <code>invert</code> 再决定材料覆盖。F192 的 IJP 原图全黑、invert=true，因此最终整面覆盖；BM 也显式 invert=true。不要只凭黑白视觉判断“黑色一定是材料”。查看 sampled_geometry 中 1/白才是最终模型覆盖。</p>
+<h3>尺寸计算，一步不跳</h3><div class="formula">Lx=Ly=4×59.06 μm=236.24 μm<br>Nx=Ny=4×64=256<br>dx=dy=59.06/64 μm=0.9228125 μm<br>原图间距=59.06/250 μm=0.23624 μm<br>Ainc=(236.24×10⁻⁶)²=5.58093376×10⁻⁸ m²</div>
+<p><code>inputSamplesPerPeriod=250</code> 明确原图采样；<code>samplesPerPeriod=64</code> 明确计算采样。源码在内存按共同像素中心最近邻抽样，形成每层 256×256 logical；原图没有改写。最近邻保留二值，不产生灰边；减少采样可能丢失细线或改变面积，因此 64 点/Pitch 是本次工作设置，不是连续几何已收敛的证明。</p>
+<p>第2章已介绍索引，这里可以看实际抽样公式：<code>rows=floor(((0:255)+0.5)*1000/256)+1</code>，列也同样计算。floor 向下取整，最后 +1 转成 MATLAB 下标；最前几个原图下标是 2、6、10、14，最后一个是 999。六层共用同一组 rows/cols，不能分别“寻找最佳对齐”。教学阈值例子中 [0,127,128,255]/255 在严格 <code>&gt;0.5</code> 后为 [0,0,1,1]；invert=true 再变成 [1,1,0,0]。</p>
+<p>repeatToFit/cropToFit/pixelReplication 是显式几何规则，不应理解为“任意图片自动变成高精度”。本次原图和目标都代表每轴 4 Pitch，关键变化是 250→64 的抽样，不需把 4×4 原单元扩成更多周期。像素复制即使放大数组，也没有增加原图几何信息。传播坐标约定以零点居中的采样网格为准；图层抽样保持共同像素中心对应，不要自行给某一层平移半像素。</p>
+<figure><img loading="lazy" src="../Output/MaterialSpectra_20261117_nkEnabled/F192/sampled_geometry.png" alt="F192 六层实际内存采样掩膜，包括 Anode、IJP、BM 和三层 CF"><figcaption>真实输入经过阈值、invert 与内存抽样后的六层覆盖图。横纵轴为 μm；这张图比原图的黑白外观更接近实际参与传播的几何。</figcaption></figure>
+<p><strong>检查：</strong>各层 256×256；IJP 应全覆盖；叠图时同一坐标仍对齐；<code>sum(mask(:))/numel(mask)</code> 是该层面积占比。面积相似也不保证边缘位置相同，应结合轮廓检查。正式 <a href="../Output/MaterialSpectra_20261117_nkEnabled/F192/stack_regions.csv">区域表</a>面积分数之和应为 1。</p>
+</section>
+<section id="stack"><h2>05 · 从覆盖图到每个位置的复反射系数</h2>
+<h3>为什么不能把六张图直接相加</h3><p>同一横向像素可能同时有 IJP、BM 与 CF。它是一根从下到上具有多层材料的“局部柱体”，需要先算该柱体的复反射系数 r(x,y,λ)，再用于横向衍射。把材料反射率按面积直接相加会丢失层间干涉和反射相位。</p>
+<table><tr><th>从下到上</th><th>本次光学定义</th><th>厚度</th></tr><tr><td>1 Anode</td><td>reflectance 有效不透明反射边界，R=1、phase=180°，r=−1；不将其当成透明有限膜</td><td>0（有效边界定义）</td></tr><tr><td>2 IJP</td><td>n=1.5，k=0，整面覆盖</td><td>10 μm</td></tr><tr><td>3 BM</td><td>Materials/BM_nk.csv 插值</td><td>1 μm</td></tr><tr><td>4 CF_R</td><td>Materials/CF_R_nk.csv 插值</td><td>1.1 μm</td></tr><tr><td>5 CF_B</td><td>Materials/CF_B_nk.csv 插值</td><td>0.9 μm</td></tr><tr><td>6 CF_G</td><td>Materials/CF_G_nk.csv 插值</td><td>1 μm</td></tr></table>
+<p>以上是独立物理层级，重叠处保留各层膜厚，不强制三色互斥。同一物理层级的材料才要求互斥。光从上方入射，递推算法接收的有限膜列表是从上到下，与 config 的从下到上声明相反；源码 <code>fliplr</code> 完成这个转换。</p>
+<h3>n+i·k 是什么</h3><div class="formula">N=n+iκ，传播因子 exp(i·2πNd/λ)<br>= exp(i·2πnd/λ) × exp(−2πκd/λ)</div>
+<p>这里用 κ 区分消光系数和波数。n 影响相位，κ≥0 导致振幅随传播距离衰减；厚度 d 同时影响相位与衰减。法向界面振幅系数 <code>r_ab=(N_a−N_b)/(N_a+N_b)</code>；多次往返相干叠加形成薄膜干涉。透明 IJP 的 κ=0 只表示体内无此吸收，仍有折射率界面与光程。</p>
+<div class="formula">r_eff = (r_interface + r_below·exp(4πiNd/λ)) / (1 + r_interface·r_below·exp(4πiNd/λ))</div>
+<p>该式把一层膜及下方等效反射合并；指数中的 4π 是往返光程。底层有效边界还需要转换到邻接膜的阻抗参考，源码不是盲目把 r=−1 塞进任意界面。各局部柱体高度不同，程序补齐到共同空气参考平面的往返相位，确保横向相位可以比较。</p>
+<p><strong>教学例子：</strong>IJP 单程光程 n·d=15 μm，550 nm 的往返相位=4π×15/0.55≈342.72 rad。即使 heightMap=0，这个膜厚相位依然存在；膜堆返回的 r 已经包含它。均匀额外高度只乘全局相位，不改强度；空间变化的高度才重新分配衍射。</p>
+<h3>区域查表，避免重复算相同膜堆</h3><p>每位置用六个布尔值表示材料组合，例如正式 RegionCode=10 的 [Anode,IJP,BM,CF_R,CF_B,CF_G]=[1,1,0,0,0,1]，面积分数约 0.05917358，局部厚度 11 μm。只对实际出现的组合求 r(λ)。本次有 13 个区域，<code>regionMap</code> 是 256×256，<code>coefficientLookup</code> 是 13×41。存储区域编码从 0 开始，但 MATLAB 查表索引从 1 开始，需要 code+1；初学者不要把编码直接当数组下标。</p>
+<h3>n+iκ、界面和相干递推各负责什么</h3><p>材料复折射率写成 N=n+iκ，这里的 κ 就是材料 CSV 的 k，别与波数 2π/λ 混淆。n 决定相位传播速度，κ≥0 描述传播衰减。法向两介质界面的复振幅系数为 r_ab=(Na−Nb)/(Na+Nb)。<strong>教学例子：</strong>空气到 n=1.5、κ=0 的介质，r=−0.2，|r|²=0.04。因此透明 IJP 仍有界面反射。</p>
+<div class="formula">pⱼ=exp(4πiNⱼdⱼ/λ)<br>r有效=(r界面+r下方·pⱼ)/(1+r界面·r下方·pⱼ)<br>pⱼ=exp(4πinⱼdⱼ/λ)·exp(−4πκⱼdⱼ/λ)</div>
+<p>d 是膜厚（m），p 是穿过该膜往返一次的复振幅因子。第一个指数贡献往返相位，第二个贡献振幅衰减；强度衰减还要取模平方。分母体现层间多次反射的相干求和。算法从最底端反射边界向上逐层递推；输入膜列表则从入射侧往下排列，故声明的从下到上层序会在准备阶段反转。</p>
+<p>不同柱体顶部不齐时，代码补足到同一个空气参考平面的往返相位 <code>exp(4i*pi*incidentN*airGap/lambda)</code>。若每根柱体各自把顶部相位设为0，会改变柱体间的相对相位与衍射。本次上层透明膜、BM和CF都参与局部复数运算；heightMap=0 不删除这些项。模型输出是每位置每波长 r，概念形状256×256×41；传播中可以从区域表按波长取一页来使用。</p>
+<p>外部背景是 absorber 匹配终端，意味着进入终端的光不返回；覆盖膜仍可能产生界面反射。Anode 不透明边界遮蔽其下方光学堆，不是额外再叠一个 n/k 阳极。只用局部反射数据不能将所有“未返回”无条件解释为材料吸收，尤其切换 medium 出射介质时还可能有透射。</p>
+<p><strong>输出与检查：</strong>r 的概念形状是 256×256×41，但实现可逐波长从区域查表取出二维系数；检查 abs(r)≤1、值有限、材料 CSV 覆盖 380—780 nm、厚度与配置一致。不能把反射相位 angle(r) 当成反射率。</p>
+</section>
+<section id="source"><h2>06 · 照明怎样进入计算，能量如何归一化</h2>
+<p>本次每个波长是一束理想平面波；同一波长物面不同位置的复场先相加再平方，因此存在空间相干干涉。不同波长的快速拍频不保留，按强度加权，不把 41 个波长的复振幅相加。</p>
+<div class="formula">u_ref(x,y,λ)=u_inc(x,y,λ)·r(x,y,λ)<br>I_total=Σλ wλ·|Uλ|²，不能写成 |Σλ√wλ·Uλ|²</div>
+<p><code>source.type="plane"</code>、<code>integrationMethod="direct"</code>、<code>apertureShape="none"</code>，意味着没有额外有限圆盘光源或独立照明孔径来洗平点阵；物面本身仍是有限 236.24 μm 方形。<code>source.samplesPerAxis=5</code> 等字段虽然存在，不能据此断言这次积分了 25 个源点。plane 模型的 source.distance 也不会引入球面曲率。</p>
+<h3>把“相对能量”翻译回功率</h3><div class="formula">Pinc=Iinc·Ainc=1×5.58093376×10⁻⁸ W<br>Eijk = 第 k 波长第 (i,j) 接收 bin 的反射功率 / 该波长参考入射功率<br>Σij Eijk = 该波长 ±5°窗口反射 / 入射</div>
+<p>程序用归一化入射场计算每波长响应，宽带入射分配再由 D65 权重给出。E 是无量纲 bin 积分量，不是 W/m²，也还没有乘 D65。若按某一波长的完整参考入射功率标度恢复该波长响应，<code>Ibin=E*incidentPower/receiverPixelArea</code>；若要求实际 D65 离散波段的功率/辐照度贡献，还要乘对应 EnergyWeight。连续每 nm 的谱密度又是另一种单位，不能混称。</p>
+<p><strong>检查：</strong>incidentArea 应是实际照亮交集面积；本次无额外孔径，等于整个计算方形。若以后只照亮一部分，不能还使用原方形面积作为分母；同样 Iinc 的图像数值变化并不自动表示几何反射率变了。</p>
+</section>
+<section id="propagation"><h2>07 · 为什么要傅里叶积分，FFT 在哪里</h2>
+<h3>从波的叠加到远场</h3><p>每个物面位置都向远处贡献一个波。观察方向改变时，不同位置到观察点的光程差改变，叠加相位也改变。近轴夫琅禾费模型把该光程差写成与 x、y 成线性的相位，因此方向分布就是物面复场的傅里叶积分。</p>
+<div class="formula">F(fx,fy)=∫∫ u_ref(x,y) exp[−2πi(fx·x+fy·y)] dxdy<br>fx=θx/λ，fy=θy/λ<br>U(θx,θy)=exp(2πiz/λ)/(iλz) · F(θx/λ,θy/λ)<br>I/Iinc=|U|²；X≈zθx，Y≈zθy</div>
+<p>这里 θ 用 rad，fx/fy 单位 m⁻¹。离散积分就是所有物面采样点乘相位后求和，再乘 dx·dy；输出复场模平方得到强度。当前函数省略接收面二次相位，因为只需远场强度；这不表示它已经成为保留全部相位的有限距离成像模型。</p>
+<h3>为什么不是随手 fft2 然后画图</h3><p>普通 N 点 FFT 自带离散频率间隔约 1/(N·dx)=1/L，相应角步长 λ/L，会随波长改变。本次要求所有 λ 共用 ±5°、1801 点角网格，不能把各波长原生 FFT 格点直接叠在一起当相同角度。生产函数 <code>corePropagateReceiver</code> 使用 chirp-convolution，在指定均匀频率网格上计算傅里叶求和。</p>
+<div class="formula">离散核中的 n·m = [n²+m²−(m−n)²]/2<br>交叉相位 → 输入二次相位 × 差分二次相位卷积 × 输出二次相位<br>卷积通过 ifft(fft(输入)·fft(卷积核)) 加速</div>
+<p>“chirp”指二次相位序列；这里它是傅里叶计算的代数重写，不是添加一种真实光学元件，也不是换用 Fresnel 传播。源码先沿一轴 transformColumns，再沿另一轴，合起来得到二维积分；乘 step 两次对应 dx·dy。零填充用于避免卷积绕回，并不增加原始版图信息。</p>
+<h3>输出像素是一个 bin，不是数学点</h3><div class="formula">Δθ=10°/1800=0.00555556°≈9.6962736×10⁻⁵ rad<br>ΔΩ≈Δθ²≈9.4017722×10⁻⁹<br>ΔA_receiver=(zΔθ)²≈5.8761076×10⁻¹⁰ m²<br>Ebin=平均(I/Iinc)·ΔA_receiver/Ainc</div>
+<p>函数对每个输出 bin 内再作细分中点积分，cfg.receiverBinSamples=3 是每轴最少点数。为避免窄峰漏积分，细分数还取不小于 <code>ceil(4*extent*Δθ/λ)</code>，并调整为奇数。本次参数下 3 已满足该要求；具体以保存的 receiverSamplesPerBin 为准。输出点数变多不会自动改变物面采样，也不能靠把窗口能量重新归一化为 1 来“补回”窗外能量。</p>
+<h3>角度和毫米如何对照</h3><p>550 nm 时，名义周期衍射间隔 λ/Pitch=0.00931256 rad=0.53357058°；z=0.25 m 时 X≈0.25×0.00931256=0.00232814 m=2.32814087 mm。本次主轴检测亮斑约 ±0.52777778°，受有限孔径、光谱、图样和离散网格影响，不宜把所有检测斑直接命名为理论某级次。</p>
+<figure><img loading="lazy" src="../Output/MaterialSpectra_20261117_nkEnabled/F192/rgb_receiver_mm_enhanced_shared.png" alt="F192 正式结果在 0.25 米接收面上的毫米坐标图"><figcaption>同一角分布换成 X=zθ 的毫米坐标，不是另一次成像仿真。此模型下距离增大使图案物理尺寸增大、单位面积辐照度下降；固定角窗内功率比例不因此改变。</figcaption></figure>
+<p><strong>检查：</strong>中心索引是 (1801+1)/2=901；0.5° 在接收面约 2.18166 mm，计算必须先 deg2rad。使用 z·tanθ 属于另一几何表达，不能只更换坐标却仍声称数值严格等同当前近轴模型。</p>
+</section>
+<section id="limits"><h2>08 · 守恒检查通过，为什么仍要讨论误差</h2>
+<h3>Parseval 检查的是哪件事</h3><p>傅里叶变换前后的总平方模在相应归一化下相等。程序另算原生离散 FFT 全频域能量，比较它与物面 <code>sum(abs(field(:)).^2)/incidentEnergy</code>，导出 ParsevalAbsoluteError。本次 F192 最大误差约 2.18×10⁻¹⁴，说明离散变换的归一化守恒一致。</p>
+<div class="warn">Parseval 很小不能证明材料数据正确、64 点/Pitch 几何足够细、10 nm 光谱足够密、25 cm 严格处于远场。它也不要求 ±5°窗口捕获 100% 的反射光。</div>
+<table><tr><th>误差/限制来源</th><th>本次情况</th><th>应怎样理解或后续验证</th></tr><tr><td>物面抽样</td><td>dx=0.9228125 μm；最短 λ=380 nm 的近轴 Nyquist 角约 λ/(2dx)=0.2059 rad</td><td>±5°通过带宽条件；这不保证二值边界已收敛，需单独 raster 扫描</td></tr><tr><td>有限 4×4 Pitch</td><td>峰有有限宽度；550 nm 中心 FWHM≈0.12103813°</td><td>增加周期数通常使峰更窄；总量和峰高/形状需分别比较</td></tr><tr><td>输出采样/ROI 边界</td><td>1801点，bin 内积分；圆域按 bin 中心选择</td><td>边界小幅偏移可能改变积分；必要时比较输出网格收敛</td></tr><tr><td>厚膜光谱</td><td>10 μm IJP；诊断最大往返相位步进约 18.59 rad</td><td>10 nm 可能漏过快速干涉振荡；本轮没有光谱收敛保证</td></tr><tr><td>远场近似</td><td>用全边长 L 定义的 L²/(λz)，最短波长约 0.5875</td><td>不是远小于1；25 cm 有模型误差风险，不能宣称严格远场已验证</td></tr><tr><td>局部标量膜堆</td><td>法向、逐柱体相干膜堆，再标量近轴传播</td><td>未完整求解横向电磁耦合、边缘散射、粗糙度或偏振角依赖</td></tr><tr><td>颜色与外观</td><td>D65/CIE 色度 + 显示映射</td><td>不是相机曝光、镜头、传感器或完整人眼视觉模型</td></tr></table>
+<p>此处的远场数采用项目诊断的全边长约定；有的教材用半宽，数字会差 4 倍，比较时先统一定义。本手册如实复盘这次参数，不为教学静默换算法、加光源或重跑更大仿真。</p>
+</section>
+<section id="spectrum"><h2>09 · 41 个波长如何变成 XYZ 三个分量</h2>
+<h3>先把光谱权重说清楚</h3><p>D65 是标准照明体的相对光谱功率分布 S(λ)，不是“每波长一样亮”，也不是把三个波长直接设为 R/G/B。CIE 三条配色函数 x̄、ȳ、z̄ 将光谱映射到标准观察者的 XYZ；其中 ȳ 对应本模型使用的明视觉视见加权。只用 ȳ 能得到 Y，不能得到完整颜色。数据定义可参见 <a href="https://cie.co.at/datatable/cie-1931-colour-matching-functions-2-degree-observer">CIE 官方配色函数</a>。</p>
+<p>连续积分用离散梯形求和近似。380:10:780 有 40 个间隔、41 个点：端点积分权重 5 nm，内部 10 nm。这里端点半权重不是把首尾波长的反射率减半，而是数值积分规则。</p>
+<div class="formula">q=[5,10,…,10,5] nm；aₖ=Sₖqₖ<br>wEₖ=aₖ/Σaₖ；wYₖ=aₖȳₖ/Σ(aₖȳₖ)<br>WXYZₖ,:=aₖ[x̄ₖ,ȳₖ,z̄ₖ]/Σ(aₖȳₖ)<br>[Xij,Yij,Zij]=Σₖ Eijₖ·WXYZₖ,:</div>
+<p>wE 和 wY 各自和为 1，前者用于辐射度，后者用于明视觉。XYZ 三列共同使用 Y 的归一化常数，不能每列分别归一化，否则白点和颜色会被改掉。理想单位反射的 Y=1 是所选入射明视觉参考；当前 XYZ 不直接是绝对 cd/m²。</p>
+<pre><code>% 对应 coreSynthesizeColor 中的核心思路
+signals = reshape(E,[],41);       % 3,243,601×41；每行一个输出位置
+xyz = signals*spectrum.xyzWeights;% 3,243,601×3
+XYZ = reshape(xyz,1801,1801,3);   % 第三维依次X、Y、Z
+% 注意：E尚未乘D65；xyzWeights已含D65、梯形权重和配色函数
+% 用xyzWeights以后不要再乘10或再乘D65
+XYZDensity = XYZ/(coordinate(2)-coordinate(1))^2;</code></pre>
+<p>每 bin 的 XYZ 随 bin 面积改变；除 ΔΩ 后的 XYZDensity 便于在不同输出网格间比较角密度。它仍是归一化分布，不能未经实验标定直接称 BRDF。原始 Y 已在 XYZ(:,:,2) 中存在，曝光仅改变显示副本中的倍率。</p>
+<div class="formula">x=X/(X+Y+Z)，y=Y/(X+Y+Z)</div>
+<p>小写 xy 表达色度比例，丢失总量；两个像素若 XYZ 成比例，xy 相同但亮度不同。黑像素分母为 0，代码保存 NaN，表示色度未定义。整个窗口的色度应先把窗口 XYZ 相加再求比例，不能直接平均所有像素的 xy；本次窗口 xy=(0.29474117,0.32040319)。</p>
+<h3>用小数组练会这一过程</h3><p>第 2 章教学例子的 6×4 信号矩阵乘 4×1 只有一个积分通道；改为 4×3 权重矩阵就同时得到三个通道。正式情况只是把 4 改为 41、6 改为 3,243,601，逻辑完全相同。配套练习第 3 节从本次 spectrum_weights.csv 重建真实 41×3 权重，不需要加载 E。</p>
+</section>
+<section id="display"><h2>10 · 从 XYZ 到最终显示：逐步追踪一个像素</h2>
+<p>本章沿用 README 的八步解释，把“物理量”“颜色坐标”“显示数值”分开。请同时查看 <a href="README.md#共同曝光与亮度增强">README 的共同曝光与亮度增强章节</a>（Markdown 查看器若不支持锚点，可在文件中搜索标题）。</p>
+<h3>1. XYZ 密度转未曝光的线性 RGB 密度</h3><div class="formula">[Rd,Gd,Bd]ᵀ=A·[Xd,Yd,Zd]ᵀ<br>A = [ 3.2404542, −1.5371385, −0.4985314;<br>　−0.9692660, 1.8760108, 0.0415560;<br>　0.0556434, −0.2040259, 1.0572252 ]</div>
+<p>对 MATLAB 中每行一个像素的 xyz 矩阵，写作 <code>xyz*A.'</code>。未曝光密度可大于 1，也可有负 RGB 分量；负值通常意味着该色度超出 sRGB 色域，不是光能为负。此时尚未 sRGB 编码。</p>
+<h3>2. 找到跨项目共同峰值，确定唯一曝光 g</h3><table><tr><th>项目</th><th>未曝光全像素、全通道最大线性 RGB 密度</th></tr><tr><td>F192</td><td>1133.9989041892534</td></tr><tr><td>F192Base</td><td>1361.6672281571073</td></tr><tr><td>COEB3</td><td>748.4557541156225</td></tr></table>
+<div class="formula">g₀=0.9/max(三个峰值)=0.0006609544398142476<br>g=g₀·2^EV；本次 EV=0<br>(Xe,Ye,Ze)=g·(Xd,Yd,Zd)</div>
+<p>0.9 是线性 RGB 最大通道的显示目标，不是反射率，不要求 Y 最大值为 0.9。g 对所有项目、所有像素和所有颜色分量相同。<code>fixedGain=0</code> 在普通单项目 config 表示该项目自动曝光，不能保证与本次三项目共同曝光的亮度相同。</p>
+<h3>3. 只用曝光后的 Y 决定增强比例</h3><div class="formula">Yt=[ln(1+60Ye)/ln(61)]^0.72<br>a=Yt/Ye（Ye&gt;0）；Ye=0 时 a=1<br>(X′,Y′,Z′)=a·(Xe,Ye,Ze)</div>
+<p><code>log1p(x)</code> 稳定计算 ln(1+x)。对数压缩强弱差异，0.72 次幂进一步提亮暗部；它不是逐 R/G/B 各自增强，也没有额外中心遮罩。生产代码先算 RGBd 再乘 g·a，与先统一缩放 XYZ 再做线性矩阵变换等价。</p>
+<h3>4. 逐像素高光整体压缩，随后色域裁剪</h3><div class="formula">b=max(1,R′,G′,B′)；(Rc,Gc,Bc)=(R′,G′,B′)/b<br>随后 cclip=min(max(c,0),1)</div>
+<p>b 随像素变化，是高光压缩，不是全图曝光 g。例如 (1.8,0.9,0.45)÷1.8=(1,0.5,0.25)，保持通道比例。负通道仍须裁到 0，色域裁剪可能改变色度。因此不能声称最终 PNG 在所有像素严格保持原始 xy。</p>
+<h3>5. sRGB 编码</h3><div class="formula">cSRGB=12.92c，c≤0.0031308<br>cSRGB=1.055c^(1/2.4)−0.055，c&gt;0.0031308</div>
+<p>例如线性 (1,0.5,0.25) 编码后约 (1,0.735,0.537)。这项显示传递函数与前面的亮度 gamma=0.72 独立。数值增大不代表反射功率增加。toneMapping="none" 跳过亮度增强及增强分支高光整体压缩，仍有裁剪与 sRGB 编码，所以“线性曝光 PNG”并不是线性数组。</p>
+<h3>一个可手算的假设像素</h3><p><strong>以下是教学数值，不是从 F192 提取的像素。</strong>设 XYZd=(120,100,80)，g 如上：XYZe≈(0.07931453,0.06609544,0.05287636)。这里 0.06609544 是 Ye，不是 g。代公式 Yt≈0.507497、a≈7.678248；再转换 RGB、整体压缩与编码，最后约得到 (0.996002,0.648921,0.633914)。精确值可由配套练习第 4 节查看。</p>
+<p>若另一个假设像素是 (60,50,40)，曝光前后仍与前者成一半关系；非线性增强之后不再保持一半的显示亮度关系。它们原始 xy 一样，说明色度和亮度是不同问题。</p>
+<figure><img loading="lazy" src="../Output/MaterialSpectra_20261117_nkEnabled/F192/rgb_angle_linear_shared.png" alt="F192 共同曝光的线性曝光版，仍经过 sRGB 编码"><figcaption>真实线性曝光版。与开篇增强版使用相同物理数据和 g；弱结构更暗，不能据此认为弱结构在物理上消失。</figcaption></figure>
+<p><strong>检查：</strong>显示变亮时原始 spectralEnergy、XYZ/xy 不应被修改。gamutClippedFraction 是需裁剪像素占比，不是吸收或能量损失率。想匹配本次批处理，后续受控重现时可显式选择 <code>fixedGain=0.0006609544398142476</code>、EV=0、60/0.72；此说明不修改当前 config。</p>
+</section>
+<section id="metrics"><h2>11 · 主指标：先写分子、分母，再看百分数</h2>
+<p>定义每波长 Tₖ 为全反射/入射，Wₖ=Σ窗口E 为方窗反射/入射，Cₖ 为半角 2.5° 圆域反射/入射，Zₖ 为零级圆域反射/入射。以下除“峰高”“宽度”“xy”外都是积分量。辐射度权重 wE；明视觉将 wE 换为 wY。</p>
+<table><tr><th>指标</th><th>分子 / 分母及波长规则</th><th>F192 辐射度结果</th></tr><tr><td>总反射率</td><td>ΣwE·Tₖ；分母是总入射，T 来自物面模平方积分</td><td>9.91755947%</td></tr><tr><td>明视觉总反射率</td><td>ΣwY·Tₖ；分母是入射明视觉量</td><td>9.38681925%（明视觉）</td></tr><tr><td>±5°方窗反射率</td><td>ΣwE·Wₖ；分母是入射</td><td>9.03800679%</td></tr><tr><td>窗口捕获/总反射</td><td>(ΣwE·Wₖ)/(ΣwE·Tₖ)，不是简单平均各波长 Wₖ/Tₖ</td><td>91.13135966%</td></tr><tr><td>2.5°锥内</td><td>ΣwE·Cₖ；半角圆域，分母入射</td><td>7.75925300%</td></tr><tr><td>2.5°锥外</td><td>ΣwE·(Tₖ−Cₖ)，包括输出窗口之外的反射</td><td>2.15830647%</td></tr><tr><td>零级反射率</td><td>ΣwE·Zₖ；每波长零级半径 0.45λ/Pitch</td><td>0.53050671%</td></tr><tr><td>零级/总反射</td><td>(ΣwE·Zₖ)/(ΣwE·Tₖ)</td><td>5.34916593%</td></tr><tr><td>固定 ROI</td><td>每波长同一个几何圆域 ΣROI E，再波长加权；分母入射</td><td>0.15°圆：0.47430801%</td></tr></table>
+<h3>CSV 字段不是都以入射为分母</h3><p><code>Throughput=Tₖ</code>，<code>CapturedThroughput=Wₖ</code>，<code>CapturedFraction=Wₖ/Tₖ</code>，<code>ZeroOrderFraction=Zₖ/Tₖ</code>，<code>OutsideAngleFraction=1−Cₖ/Tₖ</code>。因此零级宽带入射反射率应是 <code>dot(T.*ZeroOrderFraction,wE)</code>，不是 <code>dot(ZeroOrderFraction,wE)</code>。百分号只是在最终乘 100，不能再把 CSV 中已有 Percent 的列乘 100。</p>
+<p>ClearCapturedFraction 是理想透明参考孔径在窗口内捕获/入射，用来了解有限窗口，不是 F192 膜堆的总反射率。ZeroOrderRetention 是有/无额外高度时零级比例的比值；本次 heightMap=0，兼容字段可能为 1，不代表零级反射率是 100%。</p>
+<h3>观察圆、检测圆与理论级次</h3><p>零级积分半径随 λ 变；固定 ROI 半径不随 λ 变，两者用途不同。亮斑检测先排除中心 0.30°，候选峰相对阈值 0.08，最小分离 0.35°，每组最多 8 斑；每斑用半径 0.15° 圆积分。diffraction_spots.csv 的 AbsoluteReflectancePercent 以入射为分母；它是局部能量，不是该点峰值。未被检测进前 8 个的斑也仍在物理数组中。</p>
+<p>累计曲线 cumulative_energy.csv 是“以中心为圆心，半径逐渐增加”时圆内反射/入射。曲线应非减，不应把它当作每个环带的能量；环带能量等于两个累计值之差。曲线在半径 5°止步于内接圆，不等于 ±5°方窗，方窗还有四角。</p>
+<h3>总量、峰高与形状必须分别报告</h3><p>把相同能量集中到更小的角域，峰可以更高、FWHM 可以更小，而总反射不变。FWHM 是中心峰过半峰高的左右交点宽度，本次 550 nm 水平截线约 0.12103813°。点阵形状相似也不意味着功率相同。不要用增强 PNG 的最大像素来替代物理总量，也不要用每图各自最大值归一化后比较绝对亮度。</p>
+<p><strong>自检：</strong>9.03800679/9.91755947≈0.91131360；9.91755947−7.75925300≈2.15830647。窗外反射约 0.87955268 个百分点，不是吸收。用配套练习第 2 节可以独立从 CSV 重算并核对。</p>
+</section>
+<section id="read"><h2>12 · 先读 CSV，再按需读 MAT，最后解释 PNG</h2>
+<h3>第一步：无需大内存的结果入口</h3><pre><code>moduleDir = 'D:/03 Optical Simulation/Diffraction-Calculation/topic_coe_reflection';
+rootDir = fullfile(moduleDir,'Output','MaterialSpectra_20261117_nkEnabled');
+f192Dir = fullfile(rootDir,'F192');
+T = readtable(fullfile(f192Dir,'spectral_metrics.csv'));
+W = readtable(fullfile(rootDir,'spectrum_weights.csv'));
+assert(isequal(T.WavelengthNm,W.WavelengthNm)); % 防止波长错位
+total = dot(T.Throughput,W.EnergyWeight);
+window = dot(T.CapturedThroughput,W.EnergyWeight);
+zero = dot(T.Throughput.*T.ZeroOrderFraction,W.EnergyWeight);
+fprintf('总反射 %.8f%%，窗口 %.8f%%，零级 %.8f%%\n', ...
+    total*100,window*100,zero*100);</code></pre>
+<p>fullfile 拼路径，readtable 返回带列名的 table；dot 是两个同长度向量对应乘积之和。assert 在条件不成立时报错，比忽略波长错位更可靠。所有分数原本 0—1，最后打印才乘 100。配套练习同时核对 comparison_summary.csv，检查容差是浮点误差范围，并非对物理准确性的保证。</p>
+<table><tr><th>文件</th><th>用于回答</th></tr><tr><td>comparison_summary.csv</td><td>三项目整体指标、尺度、FWHM、模型诊断</td></tr><tr><td>spectral_metrics.csv</td><td>每波长总反射、窗口、零级/总反射、守恒误差</td></tr><tr><td>spectrum_weights.csv</td><td>41点 D65、梯形权重、辐射/明视觉权重、CIE 函数</td></tr><tr><td>stack_materials / stack_regions.csv</td><td>实际材料、厚度与实际区域覆盖组合</td></tr><tr><td>fixed_roi_comparison / cumulative_energy.csv</td><td>固定圆域及逐半径累计能量</td></tr><tr><td>horizontal_profiles.csv</td><td>物理角密度截线、峰位置、FWHM</td></tr><tr><td>diffraction_spots.csv</td><td>候选斑中心、积分半径与局部反射率</td></tr><tr><td>validation.json / run_metadata.json / source_snapshot</td><td>保存后核验、运行信息和运行时源码存档</td></tr></table>
+<h3>第二步：只查看 MAT 清单</h3><pre><code>whos('-file',fullfile(f192Dir,'physical.mat'))
+whos('-file',fullfile(f192Dir,'color_physical.mat'))
+meta = load(fullfile(f192Dir,'physical.mat'),'cfg','spectrum','storage');
+size(meta.spectrum.xyzWeights)   % 41×3
+disp(meta.storage)</code></pre>
+<p>load 带返回值会把变量装进结构体 meta；不带返回值会直接把文件变量撒进当前工作区，容易覆盖已有名字。这里仅加载小型 cfg、spectrum、storage，不读 physical。physical.mat 磁盘约 1.02 GB，其 spectralEnergy 是 1801×1801×41 double，共 132,987,641 值，单数组内存约 1.064 GB（0.991 GiB）；运算副本会增加峰值内存。</p>
+<div class="warn"><code>matfile</code> 支持许多 v7.3 数组的部分访问，但此文件把巨数组放在标量 struct 的字段中。不能假设 <code>m.physical.spectralEnergy(i,j,:)</code> 会高效地只从磁盘读一条光谱。为了取一个字段而读整个 physical 仍可能占用约 1 GB。本手册的重型步骤会明确标注。</div>
+<h3>第三步：图像文件怎么读</h3><pre><code>png = imread(fullfile(f192Dir,'rgb_angle_linear_shared.png'));
+class(png)                    % 通常uint8；仍以实际文件为准
+figure; image(png); axis image off;
+% imread只读PNG像素，没有把标注图还原成物理数组或角坐标</code></pre>
+<p>带轴 PNG 包含文字、坐标、图框；取某个 PNG 像素并不等于取同索引的 spectralEnergy。无坐标图还要核对保存时 y 方向约定；当前批量图正 θy 朝上，矩阵第 1 行通常对应负 θy。看矩阵时 <code>imagesc(thetaDeg,thetaDeg,map); set(gca,'YDir','normal')</code> 可让正 θy 朝上；PNG 文件可能已用 flipud 排列，不能再机械翻转。</p>
+</section>
+<section id="pixel"><h2>13 · 追踪一个位置：41点光谱 → XYZ → 显示</h2>
+<p>本章是<strong>可选重型读取</strong>，用于你准备好内存时逐步操作；配套入门练习不会自动执行。先完成上一章以建立 moduleDir、rootDir、f192Dir 和 meta。不要在已有完整 physical 变量时再次 load。</p>
+<pre><code>% 仅在内存足够时执行一次；该语句加载完整 physical 结构体
+saved = load(fullfile(f192Dir,'physical.mat'),'physical');
+P = saved.physical;            % 初始可共享内存；后续修改可能触发复制
+clear saved
+thetaDeg = rad2deg(P.coordinate(:)); % 1801×1
+[~,j] = min(abs(thetaDeg-0.53)); % 找最接近theta_x=+0.53°的列
+[~,i] = min(abs(thetaDeg-0));    % 找最接近theta_y=0°的行
+pixelSpectrum = squeeze(P.spectralEnergy(i,j,:)); % 41×1，尚未乘D65
+lambdaNm = meta.spectrum.wavelengthNm(:);
+figure; plot(lambdaNm,pixelSpectrum,'o-');
+xlabel('波长 / nm'); ylabel('bin反射 / 入射'); grid on;
+pixelXYZ = pixelSpectrum.'*meta.spectrum.xyzWeights; % (1×41)*(41×3)
+deltaOmega = (P.coordinate(2)-P.coordinate(1))^2;
+pixelXYZd = pixelXYZ/deltaOmega;
+pixelXY = pixelXYZ(1:2)/sum(pixelXYZ); % 非零像素；黑像素应返回NaN
+disp([thetaDeg(j),thetaDeg(i)]); disp(pixelXYZd); disp(pixelXY);</code></pre>
+<p><code>[~,j]</code> 的 ~ 表示忽略最小距离，只保留索引。i 是 y 行、j 是 x 列，不要调换。这里选择某个固定角位置，扫 λ 时光斑会移动，所以该位置的谱同时受材料反射与衍射方向分布影响，不能将它直接当作某一种材料的 n/k 或总反射谱。保存 P 后不要用 <code>P.spectralEnergy=...</code> 随意修改大数组。</p>
+<h3>核对另存的颜色密度</h3><pre><code>% color_physical.mat 顶层字段名是 xyzDensity、linearSRGBDensity、mapping
+C = load(fullfile(f192Dir,'color_physical.mat'),'xyzDensity');
+storedPixel = reshape(C.xyzDensity(i,j,:),1,3);
+disp(storedPixel-pixelXYZd);   % 应仅有浮点求和的微小差异
+clear C                       % 颜色数组不再需要时释放
+% 将pixelXYZd代入配套练习第4节，即可追踪显示映射
+% 使用mapping记录的实际gain；不要用PNG反推未曝光XYZ
+mapInfo = load(fullfile(f192Dir,'color_physical.mat'),'mapping');
+disp(mapInfo.mapping)</code></pre>
+<h3>从同一 physical 核对窗口能量</h3><pre><code>windowPerLambda = zeros(41,1);
+for k = 1:41
+    onePage = P.spectralEnergy(:,:,k); % 一次只取一个波长页
+    windowPerLambda(k) = sum(onePage(:));
+end
+computedWindow = dot(windowPerLambda,meta.spectrum.energyWeights);
+fprintf('窗口反射 %.9f%%\n',100*computedWindow);
+% 预期约9.038006790%；勿把该有限窗口强制归一化成总反射
+clear onePage P                % 释放重型变量；CSV分析可继续</code></pre>
+<p>每页约 26 MB，循环内取页可避免另建整个三维乘权数组。spectralIrradiance 没有重复保存，需要时由 E·incidentPower/receiverPixelArea 重建单页，若要宽带波段贡献再乘 EnergyWeight。只有这个位置的一条 41 点光谱还不足以重算总反射，因为总反射需要全物面或全部反射方向的信息。</p>
+<div class="note"><strong>真实像素核对值：</strong>上面的选择得到 (i,j)=(901,996)，θy=0°、θx=0.52777778°。从本次 physical.mat 抽取的 E 在380、550、780nm分别约为 3.19497356×10⁻⁷、7.39196058×10⁻⁶、1.66465694×10⁻⁸。完整41点经保存权重积分、除ΔΩ，得到 XYZDensity≈(191.952378,525.055040,286.789274)。制作手册时已与另存的xyzDensity核对，最大分量差约1.14×10⁻¹³；这些值来自原始数组，而非从PNG反推。</div>
+<p><strong>不要误用部分加载：</strong>MATLAB 的 matfile 能对合适的顶层数值数组部分读取，但本次 spectralEnergy 嵌套在 physical 结构体里，不能保证 <code>matfile(...).physical.spectralEnergy(i,j,:)</code> 只读这个小切片。因此本章明确按一次完整load估算内存。维护验证可用HDF5工具读取v7.3内部切片，但这属于文件内部布局，不作为初学者日常接口。</p>
+</section>
+<section id="sourcecode"><h2>14 · 将学习步骤对应到实际源码</h2>
+<p>公共接口只有 <a href="../src/COEReflection_main.m">COEReflection_main.m</a>、<a href="../src/coeReflectionDefaults.m">coeReflectionDefaults.m</a>、<a href="../src/runCOEReflection.m">runCOEReflection.m</a>。private 是 MATLAB 特殊目录，由父目录中的函数/脚本按规则访问；不应单独 addpath，更不要 genpath 把内部函数暴露成公共接口。</p>
+<pre><code>srcDir = fullfile(moduleDir,'src');
+addpath(srcDir)                 % 只添加src
+which COEReflection_main -all   % 检查是否命中另一个旧副本
+which runCOEReflection -all
+% 不要：addpath(fullfile(srcDir,'private'))
+% 不要：addpath(genpath(moduleDir))</code></pre>
+<table><tr><th>学习步骤</th><th>实际文件（点击可查看）</th><th>主要输入 → 输出</th></tr><tr><td>组织普通流程</td><td><a href="../src/COEReflection_main.m">COEReflection_main</a></td><td>选择项目 → 初始化 settings → 读 config → 建谱和膜堆 → 传播 → 指标 → 色度 → 图与保存</td></tr><tr><td>批量本次三项目</td><td><a href="../src/private/benchMaterialSpectrumComparison.m">benchMaterialSpectrumComparison</a></td><td>逐项目 config → 同一生产传播 → 汇总 → 跨项目峰值 → 共同曝光导出</td></tr><tr><td>配置读取</td><td><a href="../src/private/coreLoadProjectConfig.m">coreLoadProjectConfig</a></td><td>config + settings → 覆盖后的 settings 和配置记录</td></tr><tr><td>建立波长权重</td><td><a href="../src/private/coreLoadSpectrum.m">coreLoadSpectrum</a></td><td>波长、D65、CMF → 41×1/41×3 权重</td></tr><tr><td>建立局部膜堆</td><td><a href="../src/private/corePrepareLayerStack.m">corePrepareLayerStack</a> → <a href="../src/private/coreReflectFilmStack.m">coreReflectFilmStack</a></td><td>掩膜、nk、厚度 → regionMap、13×41 查表、材料/区域表</td></tr><tr><td>公共函数路径</td><td><a href="../src/runCOEReflection.m">runCOEReflection</a></td><td>cfg、stack、inputDir → 几何准备 → 状态传播；本函数不自动读config</td></tr><tr><td>高度状态</td><td><a href="../src/private/coreSimulateHeightStates.m">coreSimulateHeightStates</a></td><td>heightMap全零 → 只算一次；baseline 为兼容引用，不代表重复算一次</td></tr><tr><td>逐波长传播</td><td><a href="../src/private/coreSimulateDiffraction.m">coreSimulateDiffraction</a></td><td>循环 λ → r → 入射场 → field → 接收能量 → throughput/Parseval</td></tr><tr><td>照明与接收</td><td><a href="../src/private/coreBuildIllumination.m">coreBuildIllumination</a> → <a href="../src/private/corePropagateReceiver.m">corePropagateReceiver</a></td><td>归一化入射复场 → chirp卷积傅里叶积分 → bin强度与能量</td></tr><tr><td>角域与亮斑</td><td><a href="../src/private/coreComputeAngularMetrics.m">coreComputeAngularMetrics</a> / <a href="../src/private/coreComputeDiffractionSpots.m">coreComputeDiffractionSpots</a></td><td>E、掩膜、权重 → 积分表、累计曲线、亮斑表</td></tr><tr><td>色度与显示</td><td><a href="../src/private/coreSynthesizeColor.m">coreSynthesizeColor</a></td><td>E → XYZ/xy/密度 → RGB曝光与增强</td></tr></table>
+<h3>实际普通调用链与批处理的关系</h3><p>普通 main 自己先准备膜堆，然后调用 coreSimulateHeightStates；它并不必须绕经 runCOEReflection。runCOEReflection 提供另一个公共函数入口；本次 bench 复用该入口，因此局部膜堆和生产传播相同。bench 的“比较”是组织多项目、保存与共同显示，不是悄悄换一种简化算法。</p>
+<p>追源码时先找函数声明，再看输入形状与返回值，最后看主计算几行。比如 <code>field=incoming.*coefficient</code> 是物面相乘；<code>abs(propagated).^2</code> 才是远场强度；<code>signals*spectrum.xyzWeights</code> 才进入色度阶段。可在编辑器左侧行号旁设断点，然后从公共入口运行，暂停时用 size/whos 查看当前函数工作区；不要为了断点直接调用 private。</p>
+<h3>内存和保存为何这样设计</h3><p>保存 physical.mat 时仅保留一份 spectralEnergy，不重复保存 baseline/clear/irradiance 大数组；颜色密度单独保存。仅1801×1801×41的double能量数组就占1,063,901,128字节（约0.991 GiB）；每页约26 MB，完整XYZ密度约78 MB。MAT 的压缩磁盘大小不等于加载内存。MATLAB 初始赋值可共享数据，但修改共享数组会触发复制；矩阵乘、reshape 后的后续运算也可能产生大临时量。分析优先用已有 CSV；需要全数组时一次加载、分波长处理、及时 clear 明确变量，避免 clearvars 清掉用户整个工作区。</p>
+</section>
+<section id="rerun"><h2>15 · 怎样安全地手动复现 F192</h2>
+<p>阅读现有结果不需要重跑。只有确认要新算一遍时，才执行本章；正式参数每次产生上亿个物理值，计算与导出可能持续较长时间。以下是运行指导，本手册没有替你修改 main、config 或默认开关。</p>
+<ol><li>保存当前工作区和图窗中需要保留的内容。确认你打开的是本项目 src/COEReflection_main.m，使用 which 检查旧副本。</li><li>先读 Input/F192/config.txt，与本次 config_snapshot.txt 比较；若已发生后续修改，不要把新运行说成同一历史参数。核对六张 PNG 和四份 Materials CSV 均在正确项目目录。</li><li>在 main 中显式选择 <code>projectName="F192"</code>、<code>useProjectConfig=true</code>；保持 runSamplingBenchmark、runFourPatternComparison、runMaterialSpectrumComparison 为 false，走普通单项目流程。</li><li>理解输出位置：普通 main 默认写 Output/F192，同名文件会覆盖。若该目录有需要保留的结果，先备份，或在 main 的 outputDir 赋值处明确改成一个新的输出目录，例如 <code>fullfile(moduleDir,'Output','F192_tutorial_run')</code>。它是脚本内输出位置选择，不要作为未知键塞进 config。</li><li>核对 config：Pitch=59.06e-6、periods=[4,4]、64点/Pitch、原图250点/Pitch、D65 380:10:780、±5°/1801、z=0.25、Iinc=1、plane/direct/none、heightMap=0、nkFile启用，厚度仍是本手册第5章。</li><li>点击“运行”。main 首先执行 clearvars/clc/close all。观察进度、警告和输出路径；不要在后台仍运行时再启动第二次仿真。</li><li>先核对配置记录、逐波长 Throughput 与 Parseval，再核对宽带指标及几何图，最后看 RGB。普通运行自动曝光与三项目共同曝光不同，应优先比较物理值而非屏幕亮度。</li><li>若只需与历史共同曝光匹配，在受控的新运行配置副本中明确设置 fixedGain=0.0006609544398142476、EV=0、toneStrength=60、luminanceGamma=0.72，记录这次改变；不要误以为普通 fixedGain=0 自带此值。历史 MaterialSpectra 结果目录继续保留。</li></ol>
+<div class="warn">不要只运行 <code>cfg=coeReflectionDefaults(); runCOEReflection(cfg)</code> 就称为复现 F192。它没有自动读 F192 config、原图和材料。本项目公共入口布局要求内部配置加载仍由 main/受维护批处理负责，不应另建一套平行生产脚本来绕过它。</div>
+<p>main 当前默认 case01、两个批量比较开关 false 应保留为项目日常默认。你将来临时选择 F192 完成工作后，可按自己的版本管理流程恢复选择；本手册的制作没有更改这些运行参数。无需为学习重跑三项目完整大仿真。</p>
+</section>
+<section id="trouble"><h2>16 · 常见错误与自检题</h2>
+<table><tr><th>现象</th><th>先检查什么</th><th>原因或动作</th></tr><tr><td>未定义函数/运行到旧文件</td><td>pwd、which -all、src路径</td><td>只 addpath 当前模块src；避免genpath和多份旧副本</td></tr><tr><td>private 函数无法命令行调用</td><td>是否绕过公共入口</td><td>这是封装规则；通过main或runCOEReflection，别单独addpath private</td></tr><tr><td>矩阵维度不匹配</td><td>size(A)、size(B)、波长列数</td><td>矩阵乘内维相等；逐元素乘需要兼容尺寸；检查行列方向</td></tr><tr><td>索引越界/第0索引</td><td>RegionCode是否加1、波长索引是否正确</td><td>MATLAB下标从1开始；550nm是第18点</td></tr><tr><td>图层全反/几何错位</td><td>threshold、invert、六图尺寸与原点</td><td>先查sampled_geometry，不要直接修原图求“看起来一致”</td></tr><tr><td>材料CSV报范围错</td><td>波长单位nm、380—780范围、单调递增</td><td>材料表不应靠越界外推补齐；核对nkFile相对项目路径</td></tr><tr><td>改了main参数却不生效</td><td>useProjectConfig及config对应键</td><td>项目config在计算前覆盖；看快照与实际材料表</td></tr><tr><td>图片很亮但总反射小</td><td>gain与tone mapping、密度和积分的区别</td><td>显示增强不改物理能量；峰高不等于总量</td></tr><tr><td>线性PNG像素不是线性比例</td><td>是否已经sRGB编码</td><td>使用保存的未曝光线性密度进行定量分析</td></tr><tr><td>和旧图亮度/上下方向不同</td><td>共享/单项目曝光、纯PNG保存约定</td><td>先对物理数组与mapping，带轴图优先；勿随意再flipud</td></tr><tr><td>MAT加载很慢/内存不足</td><td>是否重复加载、struct中大数组</td><td>先CSV；一次load；分波长处理；clear明确大变量</td></tr><tr><td>API说600秒超时</td><td>进程/导出是否仍在继续、最终完成标记</td><td>捕获超时不等于计算终止；别立即重复启动</td></tr><tr><td>总反射和窗口相加不为100%</td><td>分母及窗外反射</td><td>窗口是总反射的一部分，不能相加当守恒式</td></tr><tr><td>有厚膜/远场警告</td><td>model_warnings和诊断数值</td><td>按第8章解释限制，不因已有图就宣称收敛</td></tr></table>
+<h3>做完再展开答案</h3>
+<details><summary>1 · 256×256 从哪里来？物面面积是多少？</summary><p>每轴4 Pitch×64点/Pitch=256；边长236.24 μm；面积5.58093376×10⁻⁸ m²。1000×1000是同一物面原图的采样，不代表更大的物理尺寸。</p></details>
+<details><summary>2 · heightMap=0，为什么颜色仍随波长变化？</summary><p>材料n/k随波长变化，有限膜厚有往返干涉相位，衍射角尺度也随λ变。heightMap只关闭额外高度相位，不消除膜堆已有相位。</p></details>
+<details><summary>3 · 某波长T=0.1、ZeroOrderFraction=0.05，零级/入射是多少？</summary><p>0.1×0.05=0.005，即0.5%。宽带时应逐波长先相乘，再用对应权重求和。</p></details>
+<details><summary>4 · 把E直接按第三维求平均，是否就是D65？</summary><p>不是。D65各波长功率不同，端点还有梯形半权重；XYZ更要三条配色函数和共同Y归一化。用已保存权重，不能重复乘SPD或步长。</p></details>
+<details><summary>5 · 0.06609544 是曝光倍率吗？</summary><p>在教学像素XYZd=(120,100,80)中，它是Ye=100g。g约0.00066095444。Y在曝光之前已经是XYZ第二分量。</p></details>
+<details><summary>6 · Parseval误差10⁻¹⁴，能否证明10nm光谱精确？</summary><p>不能。Parseval核对离散变换的能量归一化；厚膜光谱可能漏采样，需另外做波长步长收敛研究。</p></details>
+<details><summary>7 · 窗口捕获91.13%，剩余8.87%是否吸收？</summary><p>这是反射光中未落入±5°窗口的比例，属于窗外反射；不是入射能量的8.87%，也不能称吸收。</p></details>
+<details><summary>8 · 两张各自自动曝光的图看起来同样亮，是否反射率相等？</summary><p>不能。各自曝光可能抵消物理强弱差异。比较反射率读CSV；比较相对显示亮度用相同gain和映射；比较色度用原始XYZ/xy。</p></details>
+<h3>进一步的小练习</h3><p>在配套练习中分别改“教学像素”的Y尺度、EV和toneStrength，观察结果；不要改正式config。把教学权重改为均匀，解释与D65结果的差异。读取固定ROI表，检查半径增大时积分不下降。用 λ/Pitch 分别计算450、550、620nm的名义间隔，并解释彩色斑为什么错开。每次只改变一个量，写清楚它影响“物理响应”还是“显示”。</p>
+</section>
+<section id="references"><h2>资料、验证与词汇索引</h2>
+<p>本手册依据当前工作区源码、F192配置、本次保存的快照和CSV编写。MATLAB基础接口使用本机 R2024a 的 help 核对；FFT 按列处理的规则可查 <a href="https://www.mathworks.com/help/matlab/ref/fft.html">MathWorks fft 官方文档</a>。CIE数据及定义可查 <a href="https://www.cie.co.at/data-tables">CIE 官方数据目录</a>与项目 Input/Colorimetry 的署名说明；离线阅读本手册不需要访问这些外部链接。</p>
+<p>历史正式运行的三项目完整传播已经结束，comparison_report.mat 是最后图像导出后的完成标记。此前长任务命令窗口捕获在600秒超时，但后台继续导出。model_warnings.txt 是保存参数诊断汇总，不是补造的控制台逐字日志。历史 <a href="../Output/MaterialSpectra_20261117_nkEnabled/validation.json">validation.json</a> 记录三项目共398,962,923个物理值的独立核对及配置回归；这些是已完成运行的验证，不代表本手册又重跑了一遍。</p>
+<table><tr><th>名称</th><th>本手册中的准确含义</th><th>回看</th></tr><tr><td>Pitch / sample</td><td>物理重复间距 / 离散采样点</td><td><a href="#geometry">第4章</a></td></tr><tr><td>mask / regionMap</td><td>单层布尔覆盖 / 多层组合区域编码</td><td><a href="#stack">第5章</a></td></tr><tr><td>r / R</td><td>复振幅反射系数 / 强度反射率|r|²</td><td><a href="#stack">第5章</a></td></tr><tr><td>field / intensity / energy</td><td>复场 / 模平方强度 / bin或区域积分</td><td><a href="#propagation">第7章</a></td></tr><tr><td>XYZ / xy / density</td><td>三刺激积分 / 色度比例 / 每近轴立体角密度</td><td><a href="#spectrum">第9章</a></td></tr><tr><td>gain / gamma / sRGB</td><td>全图线性曝光 / 人为亮度增强幂 / 显示编码</td><td><a href="#display">第10章</a></td></tr><tr><td>Throughput / Captured</td><td>全反射/入射 / 有限窗口捕获</td><td><a href="#metrics">第11章</a></td></tr></table>
+<p>本手册交付检查：配套练习在MATLAB R2024a运行通过，Code Analyzer未报告问题；本地链接和图片路径逐一检查，PNG解码通过；真实像素的41点积分与保存XYZ密度核对通过。公式使用HTML文本直接显示，无需MathJax或网络字体。浏览器自动预览因安全策略阻止file协议，未完成截图渲染检查。</p>
+<p class="muted">维护方式：本 HTML 本身即为可编辑源文件；无需另外维护一套平行 Markdown。插图通过相对路径引用本次真实输出，复制手册到别处时请保留 docs 与 Output 的相对结构。代码块可选中复制，打印可用浏览器“打印→另存PDF”。折叠答案在打印前请先展开。</p>
+<p><a href="#start">返回开头</a> · <a href="f192_tutorial_lab.m">打开配套练习</a> · <a href="README.md">返回权威说明</a></p>
+</section></main>
+<script>
+document.querySelectorAll('pre').forEach(p=>{const b=document.createElement('button');b.textContent='复制代码';b.setAttribute('aria-label','复制下方 MATLAB 代码');const t=document.createElement('div');t.className='tools';t.append(b);p.before(t);b.onclick=async()=>{try{await navigator.clipboard.writeText(p.innerText);b.textContent='已复制'}catch(e){const s=window.getSelection(),r=document.createRange();r.selectNodeContents(p);s.removeAllRanges();s.addRange(r);b.textContent='已选中，请按 Ctrl+C'}setTimeout(()=>b.textContent='复制代码',2500)}});
+</script></body></html>

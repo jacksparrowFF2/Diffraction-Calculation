@@ -27,6 +27,7 @@ runSamplingBenchmark = false;   % true：运行独立采样基准并返回；结
 samplingBenchmarkMode = "all"; % all：五类采样扫描；periods：Pitch数；raster：物面采样率收敛
 runPlaneWaveComparison = projectName=="F192_AnodeBM_PlaneRGB"; % 可手动设true：局部单元/阵列共同曝光RGB对比后返回
 runFourPatternComparison = false; % true批量比较四图样；false走普通单项目指标/绘图
+runMaterialSpectrumComparison = false; % true：F192/F192Base/COEB3全谱、共同曝光比较
 
 % MAT 文件可包含以下任意字段，读取后覆盖脚本中的对应值：
 % mask：二维 0~1 材料区域图，推荐二值；1 为特征区，0 为背景区。
@@ -177,6 +178,10 @@ if useProjectConfig
     settings.rgbOptions = rgbOptions;
     settings.colorOptions = colorOptions;
     settings.colorView = colorView;
+    if runMaterialSpectrumComparison
+        materialSpectrumComparison = benchMaterialSpectrumComparison(settings, moduleDir);
+        return
+    end
     [settings, projectConfig] = coreLoadProjectConfig(fullfile(inputDir, 'config.txt'), settings);
     cfg = settings.cfg;
     stack = settings.stack;

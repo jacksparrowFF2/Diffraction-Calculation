@@ -2,13 +2,37 @@
 
 更新日期：2026-11-17。本文件是本模块的统一使用说明，包含项目配置、实际图样输入、物理模型、结果解释与开发交接。文中 `src/`、`Input/`、`Output/` 均相对于 `topic_coe_reflection/`。
 
+重新熟悉 MATLAB 可从[《F192 MATLAB 教学手册》](F192_MATLAB教学手册.html)开始：离线 HTML 按操作、数组、几何、膜堆、传播、色度、指标和结果读取逐步讲解本次真实 F192 仿真，并附[只读小型练习](f192_tutorial_lab.m)。手册用于学习本次实例，配置、功能及模型规则仍以本 README 为准。
+
 正式仿真按图层列表读取用户提供的任意命名图样（默认阳极、BM、RGB CF），不调整像素形状。主入口是 `src/COEReflection_main.m`；选定项目后，自动读取该项目的 `config.txt`，无需反复修改 MATLAB 中的常用参数。额外高度默认 **0 nm**。
 
 新增 `Input/F192Base/` 后，当前共25个项目，F192Base沿用下述统一运行参数；下文24项目/74图像的审计记录指新增前的快照。F192Base包含独立六层PNG、config与Materials，对应CAD为 `Input/Cad/F192/(20261103)F192Base.dwg`；同时更新COEB3的DWG，CAD备份与锁文件不纳入版本。
 
-F192、COEB3及F192Base的Materials已保存新版BM/CF_R/CF_G/CF_B波长相关n/k CSV；F192/Materials同时保留四份原始TXT供追溯。数据格式为波长nm、n、k，CSV不含表头。三个项目当前 `nkFile=""`，运行时仍使用config中的n/k常数；归档CSV不会自动启用材料谱，启用路径和膜厚说明见下文材料章节。此处仅记录文件来源，不将未经核实的数据标注为实测。
+F192、COEB3及F192Base的Materials已保存新版BM/CF_R/CF_G/CF_B波长相关n/k CSV；F192/Materials同时保留四份原始TXT供追溯。数据格式为波长nm、n、k，CSV不含表头。三个项目已在config中显式启用各自的四份 `Materials/*_nk.csv`，运行时优先读取材料谱并线性插值至计算波长；原n/k常数仅作未启用文件时的后备值。膜厚继续取原config：BM 1μm、CF_R 1.1μm、CF_G 1μm、CF_B 0.9μm；Anode直接反射率和IJP常数n=1.5、k=0、10μm保留。文件名不用于推断膜厚，未经核实的数据不标为实测。
 
-**当前统一运行参数（2026-11-17，覆盖下文历史阶段参数）：** 全部25个Input config（含新增F192Base）已统一为4×4 Pitch、光栅→接收面25cm、出射角±5°、D65 380:10:780nm共41波长、平面波入射、无独立人眼入瞳。单波长内部空间相干，不同波长叠加强度；最终用CIE 1931 2° XYZ积分转sRGB。各项目原始图片、Pitch、层序、n/k、厚度及反射系数保留；当前验证继续运行case03_PlaneWave_Pitch4，通用主入口默认case01。下文中的旧周期数、RGB三波长和观察模型是历史对照记录，不代表现行config。
+三项目正式全谱比较可将主脚本的 `runMaterialSpectrumComparison=true`，保留 `useProjectConfig=true` 后运行；默认该开关为false，主入口仍默认case01且 `runFourPatternComparison=false`。内部 `benchMaterialSpectrumComparison` 逐个运行41波长、1801×1801网格，读取各项目现行config，在独立 `Output/MaterialSpectra_时间戳/` 中保存物理能量、配置、材料加载表、角域/接收面RGB与比较表。主比较使用单位入射功率归一化的物理能量密度，三项目共用 `fixedGain=0.9/三者最大线性RGB密度峰值`，EV=0；同时保留线性曝光sRGB与toneStrength=60、luminanceGamma=0.72的增强显示，不按单图自动归一化或额外压低中心。不同Pitch导致物理照明面积不同，表中同时记录面积及入射功率，反射率比较均除以各自实际入射功率。
+
+比较表中 `Radiant*Percent` 的分母为该波段D65总入射辐射功率，权重为 `S_D65(λ)Δλ / ΣS_D65(λ)Δλ`；`Photopic*Percent` 分母为入射明视觉光通量，权重为 `S_D65(λ)V(λ)Δλ / ΣS_D65(λ)V(λ)Δλ`。梯形积分在380/780nm端点取半权重。`Total` 来自物面反射场功率/入射功率（包含输出窗口之外的反射），`Window` 为θx、θy均±5°的方形窗口，`Cone2p5` 为中心半角2.5°圆域，`Zero` 为各波长半径 `0.45λ/Pitch` 圆域。上述值均以入射量为分母；`CaptureOfReflectionPercent` 和 `ZeroOfReflectionPercent` 则以相应D65权重下的总反射量为分母，先合计分子/分母再取比，不能直接平均逐波长比例。`fixed_roi_comparison.csv` 另外保存0.15/0.30/0.5/1/2.5/5°固定圆域积分。窗口色坐标为窗口内未映射XYZ的合计xy；峰宽为θy=0中心局部峰的半高全宽，550nm的 `λ/Pitch` 阶次间隔仅为名义参考，不自动等同于全部实际亮斑间距。
+
+每项目的 `physical.mat` 保留double精度 `physical.spectralEnergy`（每bin反射功率/入射功率）、实际cfg、膜堆/几何、光谱权重、角域和光斑指标，不重复保存baseline及可推导的大型辐照度数组。接收面每波长辐照度可由 `spectralEnergy * incidentPower / receiverPixelArea` 重建；实际D65谱积分使用保存的归一权重。`color_physical.mat` 保留未映射XYZ密度、线性RGB密度和共同显示映射。所有大型输出位于Git忽略的Output中，历史常数材料结果保留。
+
+2026-11-17这三项目已实际完成全部正式波长和网格，输出位于 `Output/MaterialSpectra_20261117_nkEnabled/`。三组材料CSV逐字节相同；F192/F192Base的Pitch相同且CF图相同，仅Anode/BM图不同，COEB3的图样和Pitch均不同。下表单位均为%，分母为对应D65入射辐射功率或入射明视觉光通量，未使用RGB外观估计物理反射率。
+
+| 项目 | 辐射总反射 | 明视觉总反射 | ±5°窗口辐射反射 | 半角2.5°辐射反射 | 零级辐射反射 |
+|---|---:|---:|---:|---:|---:|
+| F192 | 9.917559 | 9.386819 | 9.038007 | 7.759253 | 0.530507 |
+| F192Base | 10.639441 | 10.047510 | 9.716351 | 8.301355 | 0.584098 |
+| COEB3 | 8.574545 | 8.297100 | 7.708812 | 6.587600 | 0.382820 |
+
+本指定离散网格下，总反射排序为F192Base > F192 > COEB3；F192Base的辐射总反射比F192高7.28%、比COEB3高24.08%。窗口CIE xy分别为(0.29474,0.32040)、(0.29082,0.31890)、(0.30463,0.32893)，前两者的整体窗口色度更向蓝侧，COEB3更接近D65白点；各方向仍有不同的彩色衍射结构，窗口合计色度不代表每个光斑颜色。550nm主轴亮斑从F192/F192Base的约±0.52778°移至COEB3的约±0.57222°；中心峰横向半高全宽分别0.12104°、0.12120°、0.12949°。名义λ/Pitch阶次间隔为0.53357°/0.53357°/0.57265°，在25cm接收面分别约2.32814/2.32814/2.49864mm；有限阵列包络与材料相位会影响实际峰值位置，不将两种间隔混为一谈。
+
+三组共同曝光gain=0.0006609544，EV=0，增强映射仍为60/0.72，无额外中心抑制。查看[角域增强并排图](../Output/MaterialSpectra_20261117_nkEnabled/comparison_angle_enhanced.png)、[毫米坐标增强并排图](../Output/MaterialSpectra_20261117_nkEnabled/comparison_receiver_mm_enhanced.png)、[线性曝光并排图](../Output/MaterialSpectra_20261117_nkEnabled/comparison_angle_linear.png)、[物理曲线比较](../Output/MaterialSpectra_20261117_nkEnabled/numerical_comparison.png)和[完整数值表](../Output/MaterialSpectra_20261117_nkEnabled/comparison_summary.csv)。每项目目录均含角域/毫米坐标各自的线性曝光和增强图，完整文件名以 `rgb_angle_*_shared.png`、`rgb_receiver_mm_*_shared.png` 区分。
+
+最大Parseval绝对误差2.19×10⁻¹⁴。仍须保留适用性限制：指定25cm略低于F192/F192Base约29.37cm、COEB3约25.50cm的常用远场尺度；保守厚膜诊断的最大往返相位步进约18.59rad，10nm积分尚无连续光谱收敛保证，建议约0.823nm或更小另行检查。本次不改变已指定的传播算法、距离、步长或膜厚。窗口辐射捕获/总反射约91.13%/91.32%/89.90%，窗外能量不当作吸收。详细说明见[适用性诊断](../Output/MaterialSpectra_20261117_nkEnabled/model_warnings.txt)。
+
+独立读取保存后的三组完整double数组，共398,962,923个能量值，有限性/非负性、窗口/零级/2.5°积分、材料CSV插值、XYZ抽样值、共同曝光和输入哈希核对均通过；保存数组积分与导出指标的最大绝对差5.69×10⁻¹⁶，记录见[validation.json](../Output/MaterialSpectra_20261117_nkEnabled/validation.json)。现行25项目配置回归再次3/3通过，记录在同目录 `config_test_results.mat`。长任务API在600秒后返回命令窗口捕获超时，后台计算/导出仍完整结束，`comparison_report.mat`为全部图像导出后的完成标记；未将缺失的控制台文本伪作原始警告日志。
+
+**当前统一运行参数（2026-11-17，覆盖下文历史阶段参数）：** 全部25个Input config（含新增F192Base）已统一为4×4 Pitch、光栅→接收面25cm、出射角±5°、D65 380:10:780nm共41波长、平面波入射、无独立人眼入瞳。单波长内部空间相干，不同波长叠加强度；最终用CIE 1931 2° XYZ积分转sRGB。各项目原始图片、Pitch、层序、厚度及反射系数保留；F192/F192Base/COEB3显式启用前述材料谱，其余项目沿用原材料设置。通用主入口默认case01。下文中的旧周期数、RGB三波长和观察模型是历史对照记录，不代表现行config。
 
 统一计算采样为64点/Pitch，角网格1801×1801。若原图片覆盖大于4×4 Pitch，config显式开启 `stack.geometry.cropToFit=true`，在降采样后的整Pitch边界上选中心区域；若原单元小于4×4，继续完整平铺。`inputSamplesPerPeriod`记录原生采样，保持物理Pitch；少数原生16点/Pitch的示例显式开启 `pixelReplication=true`，只进行整数倍像素块复制。两选项在代码默认均false，原图片文件不改写。`layerGeometry`记录inputPeriods、selectedPeriods、cropBoundsPixels、repeatCounts和pixelReplicationFactor。全24项目配置与图层几何已检查，74个输入图像哈希未改变；配置审计表在 `Output/ConfigAudit_380_780_10nm/config_audit.csv`。
 
@@ -1031,15 +1055,138 @@ stack.layers.CF_B.thickness  = 900e-9;
 
 ### 共同曝光与亮度增强
 
-对每个输出角度 bin，按 XYZ 权重合成三刺激值，计算 `x=X/(X+Y+Z)`、`y=Y/(X+Y+Z)`。无信号处 xy 为 NaN。保存的 XYZ 是该 bin 的积分量，以单位入射明视觉量为参考。
+以下按 `src/private/coreSynthesizeColor.m` 的实际实现逐步说明。物理光谱积分与显示映射是两个阶段：曝光、对数增强、高光压缩都只生成显示副本，不改写原始物理能量。**Y本来就是XYZ的第二个分量；曝光不创造新的Y，只把原有Y乘以倍率。**
 
-显示前将 XYZ 除以近轴角度 bin 面积，得到每单位近轴立体角的信号密度，避免输出网格变密导致图像自动变暗。这是归一化角分布，不直接等同于实测 BRDF 或 cd/m²。
+#### 第1步：把每个角度像素的离散光谱积分为XYZ
 
-XYZ 采用 D65 白点的 XYZ→线性 sRGB 矩阵转换，再使用同一个曝光倍数和标准 sRGB 分段编码。`colorOptions.fixedGain=0` 时，以两状态共同的最大线性 RGB 密度为参考；设为正数时固定曝光，适合不同设计间保持一致。`exposureEV` 对两状态共同乘以 2^EV。
+`result.spectralEnergy` 的尺寸为 `m×n×p`：前两维是输出角度网格，第三维是波长。`spectralEnergy(i,j,:)` 是空间位置 `(i,j)` 的一条离散光谱；单个元素对应一个波长的bin积分能量/该波长入射能量。本次F192的数组为 `1801×1801×41`。
 
-现在默认启用可调的亮度增强，不做逐通道增强、亮度匹配或白平衡。对共同曝光后的亮度 Y 使用 `Y_target=[log(1+alpha*Y)/log(1+alpha)]^gamma`，再对 XYZ 统一乘以 `Y_target/Y`。默认 alpha=3000、gamma=0.75；两种状态使用同一个函数和同一组参数，设 `toneMapping="none"` 可关闭。
+对每个位置，分别用三条CIE配色函数积分，得到 `m×n×3` 的XYZ：
 
-高光通过 RGB 三个分量统一除以 `max(1,max(R,G,B))` 压入可显示范围，XYZ 同步缩放。在 sRGB 色域内，以上处理保持 xy 不变；色域外负线性 RGB 的裁剪仍可能改变显示色度。增强显示不保留亮度的线性比例，不应拿增强图像的亮度计算能量指标。
+$$
+\begin{bmatrix}X_{ij}\\Y_{ij}\\Z_{ij}\end{bmatrix}
+=C\sum_k E_{ij,k}S_{\mathrm{D65}}(\lambda_k)\Delta\lambda_k
+\begin{bmatrix}\bar{x}(\lambda_k)\\\bar{y}(\lambda_k)\\\bar{z}(\lambda_k)\end{bmatrix},
+\qquad C=\frac{1}{\sum_k S_{\mathrm{D65}}(\lambda_k)\bar{y}(\lambda_k)\Delta\lambda_k}.
+$$
+
+本程序原始 `spectralEnergy` 尚未乘D65，不能遗漏上述SPD权重，也不能重复乘权重。`spectrum.xyzWeights` 已包含D65、三条配色函数、梯形积分权重及共同归一化常数C；380/780nm端点取半权重。仅乘明视觉视见函数（对应这里的 `yBar`）只能得到Y，完整XYZ需要三条函数。代码用 `reshape` 将所有位置展开后，一次矩阵乘法 `signals*spectrum.xyzWeights` 完成积分，再恢复图像尺寸。
+
+此时还未曝光或增强。保存的XYZ是该角度bin的积分量，以单位入射明视觉量为参考；`x=X/(X+Y+Z)`、`y=Y/(X+Y+Z)` 为色度坐标，无信号处xy为NaN。
+
+#### 第2步：将每bin的XYZ转换为颜色密度
+
+每bin能量会随网格变细而减小，因此显示前除以近轴角度bin面积：
+
+$$
+\Delta\Omega=(\theta_{i+1}-\theta_i)^2,\qquad
+(X_d,Y_d,Z_d)=\frac{(X,Y,Z)}{\Delta\Omega}.
+$$
+
+角度在公式中用弧度；本次F192的 `binSolidAngle≈9.4017722e-9`。该近轴立体角约定与当前传播模型一致，不能把度数间距直接代入。`XYZDensity(:,:,2)` 就是未曝光的Y密度，尚无对数或gamma。它是归一化角分布，不直接等同于实测BRDF或屏幕亮度cd/m²。
+
+#### 第3步：计算未曝光的线性RGB密度，并寻找参考峰值
+
+对每个位置作同一个固定矩阵变换：
+
+$$
+\begin{bmatrix}R_d\\G_d\\B_d\end{bmatrix}
+=A\begin{bmatrix}X_d\\Y_d\\Z_d\end{bmatrix},\qquad
+A=\begin{bmatrix}
+3.2404542&-1.5371385&-0.4985314\\
+-0.9692660&1.8760108&0.0415560\\
+0.0556434&-0.2040259&1.0572252
+\end{bmatrix}.
+$$
+
+得到的 `linearSRGBDensity` 仍是未曝光、未编码的线性数值，可以大于1，也可能因超出sRGB色域而有负分量。对一个项目的所有像素、所有三个通道取最大值，得到一个标量参考峰值：
+
+$$
+P_q=\max_{i,j,c}\bigl(\mathrm{linearSRGBDensity}_q(i,j,c)\bigr).
+$$
+
+代码中的 `max(color.linearSRGBDensity(:))` 即此操作，`(:)` 表示把整个三维数组视为一个长向量，不是对每个像素分别曝光。本次保存的实际参考峰值如下：
+
+| 项目q | 未曝光的最大线性RGB密度Pq |
+|---|---:|
+| F192 | 1133.9989041892534 |
+| F192Base | 1361.6672281571073 |
+| COEB3 | 748.4557541156225 |
+
+#### 第4步：确定共同曝光倍率g，应用到所有位置
+
+普通单项目运行的 `colorOptions.fixedGain=0` 表示自动曝光：在该项目参与比较的高度状态之间取共同峰值P，再用 `0.9/P`。零高度单状态只使用一次结果。不同项目单独运行且各自自动曝光时，P不同，图片亮度不能直接作为跨项目反射强弱的证据。
+
+本次三项目批处理先取 `P=max(P_F192,P_F192Base,P_COEB3)`，然后固定同一倍率：
+
+$$
+g_0=\frac{0.9}{1361.6672281571073}=0.0006609544398142476,\qquad
+g=g_0\,2^{\mathrm{exposureEV}}.
+$$
+
+0.9是程序选定的线性RGB峰值显示目标，留出一些高光余量，不是物理反射率；它约束的是RGB最大通道，不是Y的最大值。本次EV=0，所以g等于g0。`fixedGain>0` 时直接使用指定值作为g0，不再由该项目峰值自动计算。共同曝光是三个项目、全部像素和三个XYZ分量共用同一个g：
+
+$$
+(X_e,Y_e,Z_e)=g(X_d,Y_d,Z_d).
+$$
+
+例如下表是帮助理解乘法的假设像素，不是从F192提取的实测或仿真像素：
+
+| 假设像素 | 未曝光XYZ密度 | 共同曝光后的XYZ |
+|---|---|---|
+| A | (120,100,80) | (0.07931453,0.06609544,0.05287636) |
+| B | (60,50,40) | (0.03965727,0.03304772,0.02643818) |
+
+像素A的 `Y_e=100*g≈0.06610`；**0.06610是曝光后的Y，不是g**。此步线性缩放保持A/B的两倍关系，也保持每个像素的xy色度。
+
+#### 第5步：对曝光后的Y做对数压缩和亮度gamma
+
+当前25项目config显式采用 `toneMapping="log"`、`toneStrength=60`、`luminanceGamma=0.72`，因此：
+
+$$
+Y_t=\left[\frac{\ln(1+60Y_e)}{\ln(61)}\right]^{0.72}.
+$$
+
+对数压缩减小强峰与弱衍射之间的显示亮度差，0.72次幂进一步提亮暗部。此式得到的是增强后的亮度，还不是最终RGB图。它不是逐R/G/B通道分别取对数，也没有额外针对中心光斑作压暗。代码用 `log1p(x)` 计算 `ln(1+x)`，改善小数值时的精度。
+
+#### 第6步：用亮度比a同步缩放三个颜色分量
+
+对 `Y_e>0` 的像素计算：
+
+$$
+a=Y_t/Y_e,\qquad (X',Y',Z')=a(X_e,Y_e,Z_e).
+$$
+
+再通过矩阵A得到增强后的线性RGB。生产代码先算未曝光的线性RGB密度，再乘 `g*a`，与上述XYZ路径在数学上等价，因为线性矩阵变换与统一标量乘法可交换。它不需要重复做一次光谱积分。`Y_e=0` 处保持比例因子为1，避免除零；无信号黑像素保持黑色。
+
+#### 第7步：高光整体压缩和色域裁剪
+
+在log增强分支中，每个像素分别取 `b=max(1,R',G',B')`，然后三个通道一起除以b：
+
+$$
+(R_c,G_c,B_c)=(R',G',B')/b.
+$$
+
+例如 `(1.8,0.9,0.45) → (1,0.5,0.25)`。最大通道不超过1时b=1，像素不变；超过1时同比例压缩，保留通道比例，XYZ显示副本也同步缩放。这里的b随像素变化，是高光映射，不是第4步共用的曝光g。
+
+随后 `encodeSRGB` 对每个通道执行 `c=min(max(c,0),1)`。例如 `(-0.08,0.5,0.2) → (0,0.5,0.2)`。负线性RGB说明该XYZ颜色不能由sRGB三原色完整表达；裁剪可能改变色度。前面的同倍率缩放本身保持xy，不能据此宣称包括色域裁剪后的最终图在所有像素都严格保色。
+
+#### 第8步：sRGB编码，得到用于显示/保存的图像
+
+对裁剪到 `[0,1]` 的每个线性通道c作分段编码：
+
+$$
+c_{\mathrm{sRGB}}=\begin{cases}
+12.92c,&c\leq0.0031308,\\
+1.055c^{1/2.4}-0.055,&c>0.0031308.
+\end{cases}
+$$
+
+例如线性 `(1,0.5,0.25)` 编码后约为 `(1,0.735,0.537)`。**这是sRGB传递函数，与第5步人为选择的亮度gamma=0.72是两项独立处理。** sRGB编码用于正确保存/显示线性颜色结果；数值变大不代表物理能量增加。
+
+完整概念顺序为：`各波长物理能量 → D65/CIE积分XYZ → XYZ密度 → 共同曝光 → Y对数及gamma增强 → 按亮度比缩放颜色 → 线性RGB → 高光整体压缩 → 色域裁剪 → sRGB编码`。实现中提前计算未曝光线性RGB以寻找曝光峰值，与此概念顺序一致。
+
+`toneMapping="none"` 时跳过亮度增强及增强分支的整体高光压缩，直接将曝光后的线性RGB裁剪并sRGB编码。称为“线性曝光版”是指没有额外tone mapping，不表示输出PNG的像素值仍是线性RGB。
 
 原始 `XYZ`、`xy`、`XYZDensity`、`linearSRGBDensity` 均不修改，`sRGB` 保留原线性曝光图；`displayXYZ` 和 `displaySRGB` 单独保存增强结果。`gamutClippedFraction` 记录原线性曝光的裁剪像素比例，`displayGamutClippedFraction` 记录增强及整体高光压缩后仍需裁剪的像素比例，二者都不是能量损失比例。若要精确比较颜色，应基于保存的原始 XYZ/xy，而不是增强截图。
 
@@ -1047,7 +1194,7 @@ XYZ 采用 D65 白点的 XYZ→线性 sRGB 矩阵转换，再使用同一个曝�
 
 该图是基于 CIE 的色度预测，不再是三条窄带线直接充当 R/G/B 的代理颜色；但材料常数、简化光学模型、未知绝对照明和显示设备仍限制它与真实产品观感的一致性。
 
-显示参数包括 `colorOptions.fixedGain`（0为共同自动曝光，正数固定曝光）、`exposureEV`、`toneMapping`（log或none）、`toneStrength`（默认3000）、`luminanceGamma`（默认0.75），以及 `colorView.centerDeg/halfAngleDeg`（默认中心0、局部±1.5°）。跨项目比较应固定或记录曝光。RGB代理模式另使用 rgbOptions 的亮部截断、对数和伽马参数。
+显示参数包括 `colorOptions.fixedGain`（0为当前项目/状态的共同自动曝光，正数固定曝光）、`exposureEV`、`toneMapping`（log或none）、`toneStrength`、`luminanceGamma`，以及 `colorView.centerDeg/halfAngleDeg`（脚本默认中心0、局部±1.5°）。当前项目config将增强参数覆盖为60/0.72；脚本/函数中仍保留3000/0.75的历史初始值，不代表读取现行config后的实际值。跨项目比较应固定或记录曝光。RGB代理模式另使用rgbOptions的亮部截断、对数和伽马参数。
 
 ### 图形标记开关
 
@@ -1274,7 +1421,7 @@ CIE原始CSV、元数据、许可和MD5清单保留在 [Input/Colorimetry/README
 1. `coreBuildIllumination.m`已有有限距离point源，输入应记录source.type="point"、distance=0.05、diameter=0.005；plane下distance与diameter不参与该计算。先做小成本单源及面源收敛诊断，不直接运行8000²、81波长、大量源点的暴力组合。默认每轴5点只用于演示，不能证明5mm面源已收敛。需要加速时，可在已验证近轴及移不变条件下，将带球面曲率的单源结果与角向辐亮度分布做逐波长强度积分/卷积，并与显式源点结果核对；不要对RGB增强图做模糊来替代物理源积分。
 2. `coreLoadSpectrum.m`已有custom SPD接口；实拍应使用实际手机闪光灯SPD，而不是默认D65或人为三条谱线。目视与照片接近意味着不能把差异主要推给相机白平衡；照片本身仍不足以反演真实SPD。
 3. 核对接收光路。`corePropagateReceiver.m`当前输出是远场角分布，cfg.propagationDistance只给出角度到接收面坐标与辐照度标定，改成0.05并不会切换到Fresnel近场或眼/镜头成像。只有观察几何确定后，才能决定是否另加有限距离传播或成像模型；“正对”本身不等于远场。
-4. 实际材料CSV/膜厚、IJP所在位置和连续界面需核实。当前nkFile为空，所有n/k均为占位常数；不能把材料名CF_R/G/B等同于实际RGB透过光谱。保留R→B→G交叠及各层膜厚，不因视觉相似度改变几何或去掉相位。
+4. 实际材料CSV/膜厚、IJP所在位置和连续界面需核实。本段历史结果计算时nkFile为空、n/k为占位常数；2026-11-17起F192/F192Base/COEB3已显式启用各自BM/CF材料谱，历史结果不覆盖。不能把材料名CF_R/G/B等同于实际RGB透过光谱或宣称未经核实的文件是实测。保留R→B→G交叠及各层膜厚，不因视觉相似度改变几何或去掉相位。
 5. `coreSynthesizeColor.m`继续以原始XYZ作为物理结果，同时查看线性曝光与温和显示映射；旧式RGB三线图只作排查。统一角度范围、曝光与标注后比较，不把显示效果相似当作物理验证。
 
 本轮没有修改正式物理配置或传播算法。下一步应先匹配照明与接收条件，再用实测SPD和材料数据校核；完整大网格计算保持停止。
