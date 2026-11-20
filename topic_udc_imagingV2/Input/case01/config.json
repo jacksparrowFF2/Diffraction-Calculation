@@ -1,0 +1,41 @@
+{
+  "layerImageDir": "topic_udc_imagingV2/Input/case01",
+  "sceneFile": "topic_udc_imaging/Input/USAF500.png",
+  "wavelengthRangeNm": [380, 780],
+  "wavelengthStepNm": 10,
+  "channelCentersNm": [620, 550, 450],
+  "channelSigmaNm": [30, 30, 25],
+  "cfg": {
+    "pitch": 0.00005906,
+    "periods": [4, 4],
+    "samplesPerPeriod": 64,
+    "heightMap": 0,
+    "deltaIndex": 0.2,
+    "pupilRadius": 0.0001,
+    "focalLength": 0.003,
+    "sensorPitch": 0.000001,
+    "outputSize": 401,
+    "receiverBinSamples": 3
+  },
+  "stack": {
+    "layerNames": ["Opening"],
+    "layerLevels": [1],
+    "incidentN": 1,
+    "exitN": 1,
+    "geometry": {
+      "source": "images",
+      "repeatToFit": true,
+      "cropToFit": true,
+      "pixelReplication": true,
+      "inputSamplesPerPeriod": 250
+    }
+  },
+  "transmissionModes": {
+    "direct": {
+      "Opening": {"file": "transmission_mask.png", "invert": false, "method": "transmittance", "transmittance": 0.10}
+    },
+    "nk": {
+      "Opening": {"file": "transmission_mask.png", "invert": false, "method": "nk", "n": 1.5, "k": 0.2, "thickness": 0.0000005}
+    }
+  }
+}

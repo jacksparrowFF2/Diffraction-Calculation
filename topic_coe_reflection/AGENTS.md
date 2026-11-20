@@ -4,6 +4,7 @@
 - `src/` 顶层仅保留主脚本，以及已供外部代码调用的公共接口 `coeReflectionDefaults.m`、`runCOEReflection.m`。未经明确需求，不新增公共接口。
 - 新增内部计算、输入读取、绘图与保存辅助函数时，直接创建在 `src/private/`，不要先放在主脚本同级再要求用户手动移动。
 - 内部函数及其文件统一遵循文末“函数命名与拆分规则”，采用 `core`、`plot`、`bench` 三类前缀。
+- `src/+displayoptics/` 保存 COE 与 UDC V2 共同调用的图层几何及远场积分。随 COE 源码一同交付，COE 保持可独立运行。
 - 保留 MATLAB 特殊目录名 `private`，不要对其单独 `addpath`，不要使用 `genpath` 展开私有目录。模块只需添加 `src/`。
 - 移动函数时检查基于 `mfilename('fullpath')` 的输入路径，并同步修改所有调用、测试、说明与打包脚本。通过主脚本和独立复制模块的回归验证真实私有函数解析。
 - 新的功能测试优先通过公共入口验证。现有数值算法测试的临时副本由 `tests/private/addCoeAlgorithmFixture.m` 管理，不为测试暴露生产私有函数。

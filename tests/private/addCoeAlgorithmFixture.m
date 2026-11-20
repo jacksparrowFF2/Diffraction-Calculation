@@ -6,6 +6,7 @@ function addCoeAlgorithmFixture(testCase, root)
     mkdir(accessDir);
     module = fullfile(root, 'topic_coe_reflection');
     copyfile(fullfile(module, 'src', 'private', '*.m'), accessDir);
+    copyfile(fullfile(module, 'src', '+displayoptics'), fullfile(accessDir, '+displayoptics'));
     % 保持算法文件到 Input 的相对层级，供 CIE 默认数据定位使用。
     copyfile(fullfile(module, 'Input'), fullfile(temporary.Folder, 'Input'));
     testCase.applyFixture(matlab.unittest.fixtures.PathFixture(accessDir));

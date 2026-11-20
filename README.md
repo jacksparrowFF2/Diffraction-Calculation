@@ -10,6 +10,7 @@ MATLAB 孔径衍射、COE 反射和 UDC 成像仿真。后续开发以 COE/UDC �
 | `topic_phase_layer`（暂停开发） | 专利工作中的非周期相位层优化程序 | [使用说明](topic_phase_layer/docs/README.md) |
 | `topic_coe_reflection` | 主要开发方向：COE 反射方案评估与对比 | [使用说明](topic_coe_reflection/docs/README.md) |
 | `topic_udc_imaging` | 主要开发方向：UDC 成像方案评估与对比 | [使用说明](topic_udc_imaging/docs/README.md) |
+| `topic_udc_imagingV2` | 使用 COE 同版图及接收格积分计算 UDC 透射成像 | [case01 使用说明](topic_udc_imagingV2/docs/README.md) |
 | `topic_pixel_unfolding` | 同事编写的像素显示仿真 GUI | [使用说明](topic_pixel_unfolding/docs/README.md) |
 | `topic_coe_reference`（暂停开发） | 同事编写的像素显示仿真程序，保留供功能设计参考 | [使用说明](topic_coe_reference/docs/README.md) |
 
