@@ -17,3 +17,15 @@
 两条流程均以指定均匀频率网格上的傅里叶积分和接收格内中点细分积分计算功率。V2 把接收格定在传感器坐标上，按 `传感器坐标 / 焦距` 转换为近轴角度。通道核按 D65 光谱和相机响应加权，保留透过率及画幅截断损失。单位和 PSF 用于亮度匹配，MTF 从该 PSF 求得。
 
 `case01/transmission_mask.png` 按原 COE 版图生成，阳极区为黑，BM 覆盖区为白，示例在 BM 区验证非零透射。直接模式取 `T=0.10`，有限膜模式取 `n=1.5`、`k=0.2`、厚度 0.5 μm。两种模式均使用 4×4 Pitch、64 点/Pitch 和 D65 的 380–780 nm（间隔 10 nm）。相机取 0.20 mm 入瞳直径、3 mm 焦距、1 μm 像元及 401×401 接收格，RGB 响应采用示例高斯权重。相机和透射材料值均为流程验证参数。
+
+## 阵列与入瞳对比
+
+[MATLAB 算例](../benchmarks/array_pupil/run_comparison.m) 用同一份 `case01` 的 Mask、`nk` 膜层和相机配置运行三组试验。
+
+| 阵列 | 入瞳直径 | G 通道 PSF 水平半高全宽 | G 通道水平 MTF50 |
+|---|---:|---:|---:|
+| 4×4 | 0.20 mm | 8.69 μm | 44.8 cycles/mm |
+| 8×8 | 0.20 mm | 8.69 μm | 44.8 cycles/mm |
+| 8×8 | 0.40 mm | 4.32 μm | 92.8 cycles/mm |
+
+从算例脚本生成 MAT 文件后，用 Python 运行 [绘图脚本](../benchmarks/array_pupil/plot_comparison.py)（需要 NumPy、SciPy、Matplotlib），在 `Output/case01/array_pupil_comparison/` 生成 `comparison.png` 和 `summary.csv`。图中的场景按通道匹配亮度。相对信号用窗口捕获比例乘以采样入瞳面积，按相同入射辐照度和曝光估算。
