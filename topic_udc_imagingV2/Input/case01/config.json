@@ -7,15 +7,20 @@
   "channelSigmaNm": [30, 30, 25],
   "cfg": {
     "pitch": 0.00005906,
-    "periods": [4, 4],
+    "periods": [8, 8],
     "samplesPerPeriod": 64,
     "heightMap": 0,
     "deltaIndex": 0.2,
     "pupilRadius": 0.0001,
     "focalLength": 0.003,
     "sensorPitch": 0.000001,
-    "outputSize": 401,
-    "receiverBinSamples": 3
+    "outputSize": 1201,
+    "receiverBinSamples": 3,
+    "quality": {
+      "tailRadiiUm": [10, 20, 50],
+      "mtfBandCyclesPerMm": [10, 100],
+      "hdrPointSignal": 1000
+    }
   },
   "stack": {
     "layerNames": ["Opening"],
@@ -35,7 +40,7 @@
       "Opening": {"file": "transmission_mask.png", "invert": false, "method": "transmittance", "transmittance": 0.10}
     },
     "nk": {
-      "Opening": {"file": "transmission_mask.png", "invert": false, "method": "nk", "n": 1.5, "k": 0.2, "thickness": 0.0000005}
+      "Opening": {"file": "transmission_mask.png", "invert": false, "method": "nk", "nkFile": "Materials/BM_nk.csv", "thickness": 0.0000005}
     }
   }
 }

@@ -1,8 +1,11 @@
-function lookup = coreTransmitLayerStack(wavelengths, stack, patterns)
+function lookup = coreTransmitLayerStack(wavelengths, stack, patterns, inputDir)
 %coreTransmitLayerStack 求各区域法向复透射，以入射功率归一化振幅。
     validateattributes(stack.incidentN, {'numeric'}, {'scalar','real','finite','positive'});
     validateattributes(stack.exitN, {'numeric'}, {'scalar','real','finite','positive'});
     names = string(stack.layerNames);
+    background = "opaque";
+    if isfield(stack,'backgroundMode'), background = string(stack.backgroundMode); end
+    mustBeMember(background,["opaque","medium"]);
     direct = false(1,numel(names));
     directAmplitude = zeros(numel(names),numel(wavelengths));
     nk = zeros(numel(names),numel(wavelengths));
@@ -18,13 +21,7 @@ function lookup = coreTransmitLayerStack(wavelengths, stack, patterns)
             directAmplitude(j,:) = sqrt(reshape(layer.transmittance,1,[]));
         else
             validateattributes(layer.thickness, {'numeric'}, {'scalar','real','finite','nonnegative'});
-            validateattributes(layer.n, {'numeric'}, {'vector','real','finite','positive'});
-            validateattributes(layer.k, {'numeric'}, {'vector','real','finite','nonnegative'});
-            assert(isscalar(layer.n) || numel(layer.n)==numel(wavelengths), ...
-                'UDCImagingV2:IndexSize', 'n 应为标量或与波长一一对应。');
-            assert(isscalar(layer.k) || numel(layer.k)==numel(wavelengths), ...
-                'UDCImagingV2:IndexSize', 'k 应为标量或与波长一一对应。');
-            nk(j,:) = reshape(layer.n,1,[]) + 1i*reshape(layer.k,1,[]);
+            nk(j,:) = layerIndex(layer,wavelengths,inputDir);
             thickness(j) = layer.thickness;
         end
     end
@@ -36,7 +33,7 @@ function lookup = coreTransmitLayerStack(wavelengths, stack, patterns)
     lookup = complex(zeros(size(patterns,1),numel(wavelengths)));
     for region = 1:size(patterns,1)
         present = find(patterns(region,:));
-        if isempty(present)
+        if isempty(present) && background=="opaque"
             continue
         end
         effective = present(direct(present));
@@ -69,4 +66,49 @@ function lookup = coreTransmitLayerStack(wavelengths, stack, patterns)
     end
     assert(all(isfinite(lookup),'all') && all(abs(lookup)<=1+1e-9,'all'), ...
         'UDCImagingV2:FilmPassivity', '膜堆透射系数须有限且满足无源功率约束。');
+end
+
+function index = layerIndex(layer,wavelengths,inputDir)
+    if isfield(layer,'nkFile') && strlength(layer.nkFile)>0
+        file = fullfile(inputDir,layer.nkFile);
+        assert(isfile(file),'UDCImagingV2:NKFile','找不到材料光谱文件：%s',file);
+        data = readNkRows(file);
+        assert(size(data,2)==3 && size(data,1)>=2 && isreal(data) && all(isfinite(data),'all') && ...
+            all(diff(data(:,1))>0) && all(data(:,1)>0) && all(data(:,2)>0) && all(data(:,3)>=0), ...
+            'UDCImagingV2:NKTable','材料表须为三列（波长 nm、n、k），波长严格递增，n>0、k≥0：%s',file);
+        wavelengthNm = wavelengths*1e9;
+        lower = data(1,1);
+        upper = data(end,1);
+        tolerance = 8*eps(max(upper,max(wavelengthNm)));
+        assert(all(wavelengthNm>=lower-tolerance & wavelengthNm<=upper+tolerance), ...
+            'UDCImagingV2:NKRange','材料表未覆盖全部计算波长：%s',file);
+        % 消除 m 与 nm 互换的端点舍入误差，实际超出光谱范围的查询已报错。
+        wavelengthNm = min(max(wavelengthNm,lower),upper);
+        index = interp1(data(:,1),complex(data(:,2),data(:,3)),wavelengthNm,'linear');
+        return
+    end
+    validateattributes(layer.n, {'numeric'}, {'vector','real','finite','positive'});
+    validateattributes(layer.k, {'numeric'}, {'vector','real','finite','nonnegative'});
+    assert((isscalar(layer.n) || numel(layer.n)==numel(wavelengths)) && ...
+        (isscalar(layer.k) || numel(layer.k)==numel(wavelengths)), ...
+        'UDCImagingV2:IndexSize','n、k 应为标量或与波长一一对应。');
+    index = reshape(layer.n,1,[]) + 1i*reshape(layer.k,1,[]);
+end
+
+function data = readNkRows(file)
+    lines = strtrim(readlines(file));
+    lines(ismissing(lines) | strlength(lines)==0) = [];
+    if isempty(lines), data = zeros(0,3); return; end
+    if startsWith(lower(lines(1)),["wavelength","lambda"],'IgnoreCase',true)
+        lines(1) = [];
+    end
+    number = "([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)";
+    separator = "(?:\s*,\s*|\s+)";
+    pattern = "^"+number+separator+number+separator+number+"(?:\s*,)*$";
+    data = zeros(numel(lines),3);
+    for row = 1:numel(lines)
+        tokens = regexp(lines(row),pattern,'tokens','once');
+        assert(~isempty(tokens),'UDCImagingV2:NKTable','材料表中存在非三列数值行：%s（数据行 %d）',file,row);
+        data(row,:) = str2double(tokens);
+    end
 end

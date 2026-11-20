@@ -25,7 +25,7 @@ function [optics, images] = runUDCImagingV2(cfg, stack, inputDir, scene, encodin
     assert(isscalar(cfg.heightMap) || isequal(size(cfg.heightMap),size(regionMap)), ...
         'UDCImagingV2:HeightSize', 'heightMap 须为标量或与计算网格同尺寸。');
 
-    lookup = coreTransmitLayerStack(cfg.wavelengths, stack, patterns);
+    lookup = coreTransmitLayerStack(cfg.wavelengths, stack, patterns, inputDir);
     dx = geometry.gridStep;
     [ny,nx] = size(regionMap);
     x = ((0:nx-1)-floor(nx/2))*dx;
@@ -52,24 +52,41 @@ function [optics, images] = runUDCImagingV2(cfg, stack, inputDir, scene, encodin
     kernel = zeros(cfg.outputSize,cfg.outputSize,size(response,2));
     clearKernel = zeros(size(kernel));
     [throughput,captured,clearCaptured,samples] = deal(zeros(nLambda,1));
+    method = "midpoint";
+    if isfield(cfg,'receiverMethod'), method = string(cfg.receiverMethod); end
+    mustBeMember(method,["midpoint","fftBins"]);
+    if method=="fftBins"
+        fftReceiver = corePrepareFftReceiver(cfg,pupil,regionMap,dx,coordinate);
+        samples(:) = NaN; % FFT 分箱使用原生格重叠，无固定子格点数。
+    end
     for k = 1:nLambda
         lambda = cfg.wavelengths(k);
-        t = reshape(lookup(double(regionMap(:))+1,k),ny,nx);
-        field = pupil.*t.*exp(2i*pi*cfg.deltaIndex*cfg.heightMap/lambda);
-        [energy(:,:,k),~,samples(k)] = displayoptics.integrateFarField( ...
-            field,x,y,angles,lambda,cfg.focalLength,cfg.receiverBinSamples,incidentArea);
-        clearEnergy = displayoptics.integrateFarField( ...
-            pupil,x,y,angles,lambda,cfg.focalLength,cfg.receiverBinSamples,incidentArea);
-        throughput(k) = sum(abs(field).^2,'all')*dx^2/incidentArea;
+        if method=="fftBins"
+            [energy(:,:,k),clearEnergy,throughput(k)] = coreIntegrateFftReceiver( ...
+                fftReceiver,lookup(:,k),lambda,coordinate,cfg.focalLength);
+            if k==1 || mod(k,10)==0 || k==nLambda
+                fprintf('FFT 接收格积分 %d/%d，%.0f nm\n',k,nLambda,lambda*1e9);
+            end
+        else
+            t = reshape(lookup(double(regionMap(:))+1,k),ny,nx);
+            field = pupil.*t.*exp(2i*pi*cfg.deltaIndex*cfg.heightMap/lambda);
+            [energy(:,:,k),~,samples(k)] = displayoptics.integrateFarField( ...
+                field,x,y,angles,lambda,cfg.focalLength,cfg.receiverBinSamples,incidentArea);
+            clearEnergy = displayoptics.integrateFarField( ...
+                pupil,x,y,angles,lambda,cfg.focalLength,cfg.receiverBinSamples,incidentArea);
+            throughput(k) = sum(abs(field).^2,'all')*dx^2/incidentArea;
+        end
         captured(k) = sum(energy(:,:,k),'all');
         clearCaptured(k) = sum(clearEnergy,'all');
         weight = reshape(response(k,:),1,1,[]);
         kernel = kernel + energy(:,:,k).*weight;
         clearKernel = clearKernel + clearEnergy.*weight;
     end
+    clear fftReceiver
 
     optics.config = cfg;
     optics.config.mode = "udc"; % 复用现有线性图像卷积接口。
+    optics.config.receiverMethod = method;
     optics.layerGeometry = geometry;
     optics.regionMap = regionMap;
     optics.regionPatterns = patterns;
@@ -93,6 +110,7 @@ function [optics, images] = runUDCImagingV2(cfg, stack, inputDir, scene, encodin
     optics.spatialFrequency = (-half:half)/(cfg.outputSize*cfg.sensorPitch*1e3); % cycles/mm
     optics.metrics = table(cfg.wavelengths(:)*1e9, throughput, captured, clearCaptured, samples, ...
         'VariableNames',{'WavelengthNm','Throughput','CapturedThroughput','ClearCapturedFraction','SamplesPerBinAxis'});
+    optics.quality = coreAssessDiffraction(optics);
     images = [];
     if ~isempty(scene)
         images = formUDCImage(scene,optics,encoding);

@@ -7,6 +7,7 @@ if ~isfolder(out), mkdir(out); end
 addpath(fullfile(moduleDir,'src'));
 settings = jsondecode(fileread(fullfile(moduleDir,'Input','case01','config.json')));
 cfg = settings.cfg;
+cfg.outputSize = 401; % Keep the published benchmark's sensor window.
 stack = settings.stack;
 stack.layerNames = reshape(string(stack.layerNames),1,[]);
 stack.layerLevels = reshape(stack.layerLevels,1,[]);

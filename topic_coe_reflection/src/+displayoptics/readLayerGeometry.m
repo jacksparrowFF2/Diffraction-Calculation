@@ -148,8 +148,14 @@ function [geometry, regionMap, patterns] = readLayerGeometry(cfg, stack, inputDi
         validateattributes(value, {'numeric','logical'}, {'real','finite','size',shape});
         validateattributes(layer.invert, {'logical'}, {'scalar'});
         assert(~strictBinary || ~layer.invert, ...
-            'UDCImagingV2:MaskPolarity', '透射掩膜固定为黑色遮光、白色透光，不能反相：%s', names(j));
-        masks(:,:,j) = xor(logical(value),layer.invert);
+            'UDCImagingV2:MaskPolarity', '透射图层的 invert 须为 false，请用 materialOn 指定材料覆盖颜色：%s', names(j));
+        selectBlack = layer.invert;
+        if strictBinary && isfield(layer,'materialOn')
+            color = string(layer.materialOn);
+            mustBeMember(color,["black","white"]);
+            selectBlack = color=="black";
+        end
+        masks(:,:,j) = xor(logical(value),selectBlack);
         geometry.layerMasks.(names(j)) = masks(:,:,j);
     end
     for level = unique(levels)
