@@ -13,6 +13,14 @@ function [optics,images,reportPath] = runUDCProject(projectName,transmissionMode
     if isempty(transmissionModes)
         transmissionModes = reshape(string(fieldnames(settings.transmissionModes)),1,[]);
     end
+    assert(~isempty(transmissionModes) && all(isfield(settings.transmissionModes,transmissionModes)), ...
+        'UDCImagingV2:TransmissionMode','项目须包含所有选定的透射模式。');
+    if isfield(settings,'reuseProject')
+        [optics,images,reportPath] = reuseProject(moduleDir,projectName,settings,projectConfig,transmissionModes);
+        return
+    end
+    assert(~isfield(settings,'neutralTransmittance'),'UDCImagingV2:NeutralTransmittance', ...
+        '中性衰减须指定已有的未衰减基准项目 reuseProject。');
     cfg = settings.cfg;
     stack = settings.stack;
     cfg.periods = reshape(cfg.periods,1,[]);
@@ -44,6 +52,57 @@ function [optics,images,reportPath] = runUDCProject(projectName,transmissionMode
         saveResults(outputDir,optics,images,stack,projectConfig,imageDir,mode);
     end
     reportPath = writeUDCReport(fullfile(moduleDir,'Output',projectName),transmissionModes);
+    fprintf('HTML report: %s\n',reportPath);
+end
+
+function [optics,images,reportPath] = reuseProject(moduleDir,projectName,settings,projectConfig,modes)
+    source = string(settings.reuseProject);
+    assert(isscalar(source) && isvarname(char(source)) && source~=projectName,'UDCImagingV2:ReuseProject', ...
+        'reuseProject 须为另一有效项目名。');
+    physicalSettings = rmfield(settings,'reuseProject');
+    transmittance = 1;
+    if isfield(settings,'neutralTransmittance')
+        transmittance = settings.neutralTransmittance;
+        validateattributes(transmittance,{'numeric'},{'scalar','real','finite','positive','<=',1});
+        physicalSettings = rmfield(physicalSettings,'neutralTransmittance');
+    end
+    outputRoot = fullfile(moduleDir,'Output');
+    for mode = modes
+        file = fullfile(outputRoot,source,mode,'udc_results.mat');
+        assert(isfile(file),'UDCImagingV2:ReuseProject','找不到基准结果：%s',file);
+        saved = load(file,'optics','images','stack','projectConfig','imageDir');
+        sourceSettings = jsondecode(saved.projectConfig);
+        assert(~isfield(sourceSettings,'neutralTransmittance') || sourceSettings.neutralTransmittance == 1, ...
+            'UDCImagingV2:ReuseSettings','基准结果须为未衰减结果：%s',source);
+        if isfield(sourceSettings,'reuseProject')
+            sourceSettings = rmfield(sourceSettings,'reuseProject');
+        end
+        if isfield(sourceSettings,'neutralTransmittance')
+            sourceSettings = rmfield(sourceSettings,'neutralTransmittance');
+        end
+        assert(isequaln(physicalSettings,sourceSettings),'UDCImagingV2:ReuseSettings', ...
+            '项目与基准结果的原始配置不一致：%s',source);
+        optics = saved.optics;
+        images = saved.images;
+        optics.config.reusedFromProject = source;
+        optics.config.neutralTransmittance = transmittance;
+        if transmittance ~= 1
+            % 均匀中性衰减只改变场振幅和绝对强度，归一化及无遮挡参考保持不变。
+            optics.transmissionLookup = optics.transmissionLookup * sqrt(transmittance);
+            optics.spectralEnergy = optics.spectralEnergy .* transmittance;
+            optics.kernel = optics.kernel .* transmittance;
+            optics.channelThroughput = optics.channelThroughput * transmittance;
+            optics.channelCapturedThroughput = optics.channelCapturedThroughput * transmittance;
+            optics.metrics.Throughput = optics.metrics.Throughput * transmittance;
+            optics.metrics.CapturedThroughput = optics.metrics.CapturedThroughput * transmittance;
+            optics.quality = coreAssessDiffraction(optics);
+            images.fixedExposure = images.fixedExposure .* transmittance;
+        end
+        fprintf('UDC V2 %s / %s: %s, T = %.3g\n',projectName,mode,source,transmittance);
+        saveResults(fullfile(outputRoot,projectName,mode),optics,images,saved.stack,projectConfig,saved.imageDir,mode);
+        clear saved
+    end
+    reportPath = writeUDCReport(fullfile(outputRoot,projectName),modes);
     fprintf('HTML report: %s\n',reportPath);
 end
 

@@ -3,6 +3,9 @@
 !/topic_*/Output/.gitkeep
 /topic_coe_reference/src/Physical_Intensity_Data*.mat
 *.bak
+/topic_udc_imagingV2/Input/CAD/*.dwl
+/topic_udc_imagingV2/Input/CAD/*.dwl2
+/topic_udc_imagingV2/benchmarks/**/__pycache__/
 
 # Local learning scratch files; keep them outside the submitted source set.
 /topic_coe_reflection/src/codelearn.m

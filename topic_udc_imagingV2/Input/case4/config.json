@@ -1,0 +1,88 @@
+{
+  "layerImageDir": "topic_udc_imagingV2/Input/case4",
+  "sceneFile": "topic_udc_imaging/Input/USAF500.png",
+  "wavelengthRangeNm": [
+    380,
+    780
+  ],
+  "wavelengthStepNm": 10,
+  "channelCentersNm": [
+    620,
+    550,
+    450
+  ],
+  "channelSigmaNm": [
+    30,
+    30,
+    25
+  ],
+  "cfg": {
+    "pitch": 0.0002362,
+    "periods": [
+      17,
+      17
+    ],
+    "samplesPerPeriod": 500,
+    "heightMap": 0,
+    "deltaIndex": 0.2,
+    "pupilRadius": 0.002,
+    "focalLength": 0.003,
+    "sensorPitch": 1e-06,
+    "outputSize": 201,
+    "receiverBinSamples": 3,
+    "quality": {
+      "tailRadiiUm": [
+        10,
+        20,
+        50
+      ],
+      "mtfBandCyclesPerMm": [
+        10,
+        100
+      ],
+      "hdrPointSignal": 1000,
+      "hdrDisplayHalfWidthUm": 50
+    },
+    "receiverMethod": "fftBins",
+    "receiverFftPaddingFactor": 2
+  },
+  "stack": {
+    "layerNames": [
+      "Cath",
+      "BM"
+    ],
+    "layerLevels": [
+      1,
+      2
+    ],
+    "incidentN": 1,
+    "exitN": 1,
+    "geometry": {
+      "source": "images",
+      "repeatToFit": true,
+      "cropToFit": false,
+      "pixelReplication": false,
+      "inputSamplesPerPeriod": 1000
+    },
+    "backgroundMode": "medium"
+  },
+  "transmissionModes": {
+    "nk": {
+      "Cath": {
+        "invert": false,
+        "method": "nk",
+        "nkFile": "Materials/Cath_nk.csv",
+        "thickness": 1.2e-08,
+        "coverage": "full"
+      },
+      "BM": {
+        "file": "BM.png",
+        "invert": false,
+        "materialOn": "black",
+        "method": "nk",
+        "nkFile": "Materials/BM_nk.csv",
+        "thickness": 2e-06
+      }
+    }
+  }
+}

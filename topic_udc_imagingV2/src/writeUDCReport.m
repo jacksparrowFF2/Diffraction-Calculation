@@ -68,6 +68,10 @@ function html = modeSection(folder,mode,label)
         cfg.periods(1),cfg.periods(2),2e3*cfg.pupilRadius,1e3*cfg.focalLength, ...
         1e6*cfg.sensorPitch,cfg.outputSize,cfg.outputSize,spanMm, ...
         min(cfg.wavelengths)*1e9,max(cfg.wavelengths)*1e9,numel(cfg.wavelengths));
+    if isfield(cfg,'reusedFromProject')
+        setup = string(setup) + sprintf(' 复用 %s 的衍射解。理想中性层强度透过率为 %.3g%%，所有波长相同。', ...
+            cfg.reusedFromProject,100*cfg.neutralTransmittance);
+    end
     channel = readtable(fullfile(folder,'udc_channel_metrics.csv'),'TextType','string');
     mtf = readtable(fullfile(folder,'udc_mtf_directional_summary.csv'),'TextType','string');
     tail = readtable(fullfile(folder,'udc_psf_tail.csv'),'TextType','string');
