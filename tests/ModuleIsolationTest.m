@@ -269,10 +269,7 @@ classdef ModuleIsolationTest < matlab.unittest.TestCase
             folder = portableModule(testCase, 'topic_coe_reflection');
             scriptPath = fullfile(folder, 'src', 'COEReflection_main.m');
             prepareSmallScript(testCase, scriptPath);
-            text = strrep(fileread(scriptPath), 'opticalModel = "simple";', 'opticalModel = "multilayer";');
-            file = fopen(scriptPath, 'w', 'n', 'UTF-8');
-            assert(file >= 0, 'Cannot write temporary script.');
-            fprintf(file, '%s', text); fclose(file);
+
             runScriptIsolated(scriptPath);
             saved = load(fullfile(folder, 'Output', 'coe_reflection_results.mat'));
             testCase.verifyEqual(saved.stack.layerLevels, [1,2,3,4,5,6]);
@@ -290,13 +287,7 @@ classdef ModuleIsolationTest < matlab.unittest.TestCase
         function coeD65ScriptProducesColorAndAngularResults(testCase)
             folder = portableModule(testCase, 'topic_coe_reflection');
             scriptPath = fullfile(folder, 'src', 'COEReflection_main.m');
-            prepareSmallScript(testCase, scriptPath);
-            text = strrep(fileread(scriptPath), 'spectrumMode = "RGB";', 'spectrumMode = "D65";');
-            text = strrep(text, 'cfg.materials.enabled = false;', 'cfg.materials.enabled = true;');
-            file = fopen(scriptPath, 'w', 'n', 'UTF-8');
-            assert(file >= 0, 'Cannot write temporary script.');
-            fprintf(file, '%s', text);
-            fclose(file);
+            prepareSmallScript(testCase, scriptPath, "D65");
 
             runScriptIsolated(scriptPath);
 
@@ -327,16 +318,11 @@ classdef ModuleIsolationTest < matlab.unittest.TestCase
         function coeMainScriptProducesResults(testCase)
             folder = portableModule(testCase, 'topic_coe_reflection');
             scriptPath = fullfile(folder, 'src', 'COEReflection_main.m');
-            prepareSmallScript(testCase, scriptPath);
+            prepareSmallScript(testCase, scriptPath, "RGB", "height_test.mat");
             % 用户输入非零高度 MAT；不再依赖生产代码生成条纹。
             heightValue=687.5e-9;
             heightMap=repmat([1,1,0,0],64,16)*heightValue;
             save(fullfile(folder,'Input','height_test.mat'),'heightMap');
-            text=strrep(fileread(scriptPath),'inputFile = "";','inputFile = "height_test.mat";');
-            file = fopen(scriptPath, 'w', 'n', 'UTF-8');
-            assert(file >= 0, 'Cannot write temporary script.');
-            fprintf(file, '%s', text);
-            fclose(file);
 
             runScriptIsolated(scriptPath);
 
@@ -383,15 +369,10 @@ classdef ModuleIsolationTest < matlab.unittest.TestCase
         function coeMainScriptReadsDesignInput(testCase)
             folder = portableModule(testCase, 'topic_coe_reflection');
             scriptPath = fullfile(folder, 'src', 'COEReflection_main.m');
-            prepareSmallScript(testCase, scriptPath);
+            prepareSmallScript(testCase, scriptPath, "RGB", "design.mat");
             heightMap = [zeros(64, 32), ones(64, 32)]*550e-9/(4*0.20);
             complexCoefficient = 0.5;
             save(fullfile(folder, 'Input', 'design.mat'), 'heightMap', 'complexCoefficient');
-            text = strrep(fileread(scriptPath), 'inputFile = "";', 'inputFile = "design.mat";');
-            file = fopen(scriptPath, 'w', 'n', 'UTF-8');
-            assert(file >= 0, 'Cannot write temporary script.');
-            fprintf(file, '%s', text);
-            fclose(file);
 
             runScriptIsolated(scriptPath);
 
@@ -600,38 +581,43 @@ function cfg = portableConfig(cfg)
     cfg.angleHalfRangeDeg = 3;
 end
 
-function prepareSmallScript(testCase, scriptPath)
+function prepareSmallScript(testCase, scriptPath, spectrumMode, inputFile)
+    arguments
+        testCase
+        scriptPath
+        spectrumMode (1,1) string = "RGB"
+        inputFile (1,1) string = ""
+    end
     % Only the temporary copy is changed; production simulation defaults stay intact.
     text = fileread(scriptPath);
-    text = strrep(text, 'useProjectConfig = true;', 'useProjectConfig = false;');
-    text = regexprep(text, 'projectName = "[^"]*";', 'projectName = "";');
-    text = strrep(text, 'clear, clc, close all', 'clear');
-    text = strrep(text, 'nn = 1000;', 'nn = 24;');
-    text = strrep(text, 'nn = 700;', 'nn = 24;');
-    text = strrep(text, 'useBestDoeDesign = true;', 'useBestDoeDesign = false;');
-    text = strrep(text, 'phaseFillFactor = 0.40;', 'phaseFillFactor = 0.01;');
-    text = strrep(text, 'cfg.periods = [16, 16];', 'cfg.periods = [4, 4];');
-    text = strrep(text, 'cfg.samplesPerPeriod = 32;', 'cfg.samplesPerPeriod = 16;');
-    text = strrep(text, 'cfg.samplesPerPeriod = 64;', 'cfg.samplesPerPeriod = 16;');
-    text = strrep(text, 'cfg.paddingFactor = 4;', 'cfg.paddingFactor = 2;');
-    text = strrep(text, 'cfg.outputSize = 401;', 'cfg.outputSize = 129;');
-    text = strrep(text, 'cfg.outputSize = 801;', 'cfg.outputSize = 129;');
-    text = strrep(text, 'cfg.outputSize = 1201;', 'cfg.outputSize = 129;');
-    text = strrep(text, 'cfg.angleHalfRangeDeg = 6;', 'cfg.angleHalfRangeDeg = 3;');
-    text = strrep(text, 'spectrumMode = "D65";', 'spectrumMode = "RGB";');
-    text = strrep(text, 'cfg.materials.enabled = true;', 'cfg.materials.enabled = false;');
-    text = strrep(text, 'opticalModel = "multilayer";', 'opticalModel = "simple";');
-    file = fopen(scriptPath, 'w', 'n', 'UTF-8');
-    assert(file >= 0, 'Cannot write temporary script.');
-    closeFile = onCleanup(@() fclose(file));
-    fprintf(file, '%s', text);
     if endsWith(scriptPath, 'COEReflection_main.m')
+        text = regexprep(text, '(?m)^projectName = "[^"]*";', 'projectName = "";');
+        text = regexprep(text, '(?m)^useProjectConfig = [^;\r\n]+;', 'useProjectConfig = false;');
+        text = regexprep(text, '(?m)^inputFile = "[^"]*";', sprintf('inputFile = "%s";', inputFile));
+        text = regexprep(text, '(?m)^spectrumMode = "[^"]*";', sprintf('spectrumMode = "%s";', spectrumMode));
+        text = regexprep(text, '(?m)^wavelengthStepNm = [^;\r\n]+;', 'wavelengthStepNm = 5;');
+        text = regexprep(text, '(?m)^cfg\.periods = [^;\r\n]+;', 'cfg.periods = [4, 4];');
+        text = regexprep(text, '(?m)^cfg\.samplesPerPeriod = [^;\r\n]+;', 'cfg.samplesPerPeriod = 16;');
+        text = regexprep(text, '(?m)^cfg\.outputSize = [^;\r\n]+;', 'cfg.outputSize = 129;');
+        % At 50 um pitch, 16 samples and 380 nm, Nyquist is about 3.48 deg.
+        % The outer pixel edge of this 129-pixel grid is about 3.02 deg.
+        text = regexprep(text, '(?m)^cfg\.angleHalfRangeDeg = [^;\r\n]+;', 'cfg.angleHalfRangeDeg = 3;');
         inputFolder = fullfile(fileparts(fileparts(scriptPath)), 'Input');
         for stem = ["anode","IJP","BM","CF_R","CF_G","CF_B"]
             source = imread(fullfile(inputFolder,'Case1',stem+".png"));
             imwrite(source(1:4:256,1:4:256),fullfile(inputFolder,stem+".png"));
         end
+    else
+        text = strrep(text, 'clear, clc, close all', 'clear');
+        text = strrep(text, 'nn = 1000;', 'nn = 24;');
+        text = strrep(text, 'nn = 700;', 'nn = 24;');
+        text = strrep(text, 'useBestDoeDesign = true;', 'useBestDoeDesign = false;');
+        text = strrep(text, 'phaseFillFactor = 0.40;', 'phaseFillFactor = 0.01;');
     end
+    file = fopen(scriptPath, 'w', 'n', 'UTF-8');
+    assert(file >= 0, 'Cannot write temporary script.');
+    closeFile = onCleanup(@() fclose(file));
+    fprintf(file, '%s', text);
     originalVisibility = get(groot, 'DefaultFigureVisible');
     testCase.addTeardown(@() set(groot, 'DefaultFigureVisible', originalVisibility));
     set(groot, 'DefaultFigureVisible', 'off');
