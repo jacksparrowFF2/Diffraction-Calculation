@@ -1,6 +1,6 @@
 # UDC 透射衍射成像 V2
 
-在 MATLAB 中运行 [UDCImagingV2_main.m](../src/UDCImagingV2_main.m)。默认读取 [case01 配置](../Input/case01/config.json)，以同一张透射掩膜和 V1 的 `USAF500.png` 场景运行 `direct` 和 `nk` 两种配置。主脚本的 `transmissionModes` 可只选择其中一种。配套运行 [COEReflection_main.m](../../topic_coe_reflection/src/COEReflection_main.m) 可得到同一版图的反射衍射。
+在 MATLAB 中运行 [UDCImagingV2_main.m](../src/UDCImagingV2_main.m)。默认读取 [case01 配置](../Input/case01/config.json)，以同一张透射掩膜和 V1 的 `USAF500.png` 场景运行 `specifiedTransmittance`（给定功率透过率）和 `nk`（按薄膜 n、k 与厚度计算）两种配置。主脚本的 `transmissionModes` 可只选择其中一种。配套运行 [COEReflection_main.m](../../topic_coe_reflection/src/COEReflection_main.m) 可得到同一版图的反射衍射。
 
 - `Input/<项目>/` 存放透射掩膜和相机参数。配置中的 `layerImageDir` 相对仓库根目录。
 - `src/` 为主脚本和批量接口 `runUDCImagingV2`，`src/private/` 为透射膜堆求解。
@@ -56,7 +56,7 @@
 
 每个模式都会计算同一入瞳、焦距、光谱和像元网格下的无遮挡能量核。项目主流程用同一张场景图生成 `udc_clear.png` 和含 Mask 的同曝光图。直接调用 `runUDCImagingV2` 时，提供场景图即可同时得到 `images.clear`。
 
-如果已有完整的 CSV、MAT 和 PNG，可将本模块的 `src` 加入 MATLAB 路径，再调用 `writeUDCReport(项目输出目录, ["direct","nk"])` 单独重新导出报告。
+如果已有完整的 CSV、MAT 和 PNG，可将本模块的 `src` 加入 MATLAB 路径，再调用 `writeUDCReport(项目输出目录, ["specifiedTransmittance","nk"])` 单独重新导出报告。历史 `direct` 目录也可用于生成报告。
 
 ## 4 mm 入瞳对比
 

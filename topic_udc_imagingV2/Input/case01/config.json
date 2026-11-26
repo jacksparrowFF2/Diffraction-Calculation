@@ -36,7 +36,7 @@
     }
   },
   "transmissionModes": {
-    "direct": {
+    "specifiedTransmittance": {
       "Opening": {"file": "transmission_mask.png", "invert": false, "method": "transmittance", "transmittance": 0.10}
     },
     "nk": {

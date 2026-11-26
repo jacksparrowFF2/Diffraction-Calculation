@@ -4,6 +4,7 @@ function reportPath = writeUDCReport(projectOutputDir,modes)
         projectOutputDir (1,1) string
         modes (1,:) string {mustBeNonempty}
     end
+    modes = coreCanonicalUDCModeNames(modes);
     [~,projectName] = fileparts(projectOutputDir);
     heading = escapeHtml(projectName)+" · UDC 成像报告";
     sections = strings(numel(modes),1);
@@ -12,11 +13,12 @@ function reportPath = writeUDCReport(projectOutputDir,modes)
         mode = modes(k);
         assert(isvarname(char(mode)), 'UDCImagingV2:ReportMode','无效的透射模式名：%s',mode);
         label = mode;
-        if mode=="direct", label = "直接透过率"; end
-        if mode=="nk", label = "n,k 薄膜"; end
+        if mode=="specifiedTransmittance", label = "给定功率透过率"; end
+        if mode=="nk", label = "薄膜 n、k 与厚度"; end
         label = escapeHtml(label);
         navigation(k) = "<a href=""#"+mode+""">"+label+"</a>";
-        sections(k) = modeSection(fullfile(projectOutputDir,mode),mode,label);
+        modeOutputDir = coreFindUDCModeResults(projectOutputDir,mode);
+        sections(k) = modeSection(modeOutputDir,mode,label);
     end
 
     style = [

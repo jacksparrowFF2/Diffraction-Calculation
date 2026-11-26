@@ -23,8 +23,8 @@ classdef UDCImagingV2Test < matlab.unittest.TestCase
     end
 
     methods (Test)
-        function directAppliesPowerTransmittanceToWhitePixels(testCase)
-            stack = testCase.stackFor("direct");
+        function specifiedTransmittanceAppliesToWhitePixels(testCase)
+            stack = testCase.stackFor("specifiedTransmittance");
             optics = runUDCImagingV2(testCase.Config,stack,testCase.InputDir);
             openFraction = nnz(optics.layerGeometry.unionMask & optics.pupil)/nnz(optics.pupil);
             testCase.verifyGreaterThan(openFraction,0);
@@ -93,7 +93,7 @@ classdef UDCImagingV2Test < matlab.unittest.TestCase
         end
 
         function rejectsGrayBeforeResampling(testCase)
-            stack = testCase.stackFor("direct");
+            stack = testCase.stackFor("specifiedTransmittance");
             temporary = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture());
             mask = imread(fullfile(testCase.InputDir,stack.layers.Opening.file));
             mask(1,1) = 128; % 原图第一像素会在配置的降采样中被跳过。

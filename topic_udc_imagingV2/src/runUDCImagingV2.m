@@ -1,118 +1,124 @@
-function [optics, images] = runUDCImagingV2(cfg, stack, inputDir, scene, encoding)
+function [optics, images] = runUDCImagingV2(opticsConfig, layerStack, layerImageDir, sceneImage, encoding)
 %runUDCImagingV2 用共用远场积分计算透射核，并在线性传感器平面成像。
     arguments
-        cfg (1,1) struct
-        stack (1,1) struct
-        inputDir (1,1) string
-        scene {mustBeNumericOrLogical} = []
+        opticsConfig (1,1) struct
+        layerStack (1,1) struct
+        layerImageDir (1,1) string
+        sceneImage {mustBeNumericOrLogical} = []
         encoding (1,1) string {mustBeMember(encoding,["linear","srgb"])} = "linear"
     end
     moduleDir = fileparts(fileparts(mfilename('fullpath')));
     root = fileparts(moduleDir);
     savedPath = path;
     restorePath = onCleanup(@() path(savedPath));
-    addpath(fullfile(root,'topic_coe_reflection','src'), fullfile(root,'topic_udc_imaging','src'));
-    [geometry, regionMap, patterns] = displayoptics.readLayerGeometry(cfg, stack, inputDir, true);
-    validateattributes(cfg.wavelengths, {'numeric'}, {'row','real','finite','positive','nonempty'});
-    validateattributes(cfg.focalLength, {'numeric'}, {'scalar','real','finite','positive'});
-    validateattributes(cfg.sensorPitch, {'numeric'}, {'scalar','real','finite','positive'});
-    validateattributes(cfg.outputSize, {'numeric'}, {'scalar','integer','>=',3,'finite'});
-    validateattributes(cfg.receiverBinSamples, {'numeric'}, {'scalar','integer','positive','finite'});
-    validateattributes(cfg.pupilRadius, {'numeric'}, {'scalar','real','positive','nonnan'});
-    validateattributes(cfg.heightMap, {'numeric'}, {'2d','real','finite'});
-    validateattributes(cfg.deltaIndex, {'numeric'}, {'scalar','real','finite'});
-    assert(mod(cfg.outputSize,2)==1, 'UDCImagingV2:OutputSize', '输出采样点数须为奇数。');
-    assert(isscalar(cfg.heightMap) || isequal(size(cfg.heightMap),size(regionMap)), ...
+    addpath(fullfile(root,'topic_coe_reflection','src'));
+    [layerGeometry, regionMap, regionPatterns] = displayoptics.readLayerGeometry( ...
+        opticsConfig,layerStack,layerImageDir,true);
+    validateattributes(opticsConfig.wavelengths, {'numeric'}, {'row','real','finite','positive','nonempty'});
+    validateattributes(opticsConfig.focalLength, {'numeric'}, {'scalar','real','finite','positive'});
+    validateattributes(opticsConfig.sensorPitch, {'numeric'}, {'scalar','real','finite','positive'});
+    validateattributes(opticsConfig.outputSize, {'numeric'}, {'scalar','integer','>=',3,'finite'});
+    validateattributes(opticsConfig.receiverBinSamples, {'numeric'}, {'scalar','integer','positive','finite'});
+    validateattributes(opticsConfig.pupilRadius, {'numeric'}, {'scalar','real','positive','nonnan'});
+    validateattributes(opticsConfig.heightMap, {'numeric'}, {'2d','real','finite'});
+    validateattributes(opticsConfig.deltaIndex, {'numeric'}, {'scalar','real','finite'});
+    assert(mod(opticsConfig.outputSize,2)==1, 'UDCImagingV2:OutputSize', '输出采样点数须为奇数。');
+    assert(isscalar(opticsConfig.heightMap) || isequal(size(opticsConfig.heightMap),size(regionMap)), ...
         'UDCImagingV2:HeightSize', 'heightMap 须为标量或与计算网格同尺寸。');
 
-    lookup = coreTransmitLayerStack(cfg.wavelengths, stack, patterns, inputDir);
-    dx = geometry.gridStep;
-    [ny,nx] = size(regionMap);
-    x = ((0:nx-1)-floor(nx/2))*dx;
-    y = ((0:ny-1)-floor(ny/2))*dx;
-    assert(isinf(cfg.pupilRadius) || 2*cfg.pupilRadius <= min(nx,ny)*dx, ...
+    transmissionAmplitudeByRegion = coreTransmitLayerStack( ...
+        opticsConfig.wavelengths,layerStack,regionPatterns,layerImageDir);
+    objectGridStep = layerGeometry.gridStep;
+    [objectRows,objectColumns] = size(regionMap);
+    x = ((0:objectColumns-1)-floor(objectColumns/2))*objectGridStep;
+    y = ((0:objectRows-1)-floor(objectRows/2))*objectGridStep;
+    assert(isinf(opticsConfig.pupilRadius) || 2*opticsConfig.pupilRadius <= min(objectColumns,objectRows)*objectGridStep, ...
         'UDCImagingV2:PupilExtent', '有限入瞳必须完整落在计算物面内。');
-    pupil = double(y(:).^2+x.^2 <= cfg.pupilRadius^2);
-    incidentArea = nnz(pupil)*dx^2;
+    pupil = double(y(:).^2+x.^2 <= opticsConfig.pupilRadius^2);
+    incidentArea = nnz(pupil)*objectGridStep^2;
     assert(incidentArea>0, 'UDCImagingV2:EmptyPupil', '采样后的入瞳为空。');
-    half = (cfg.outputSize-1)/2;
-    coordinate = (-half:half)*cfg.sensorPitch;
-    angles = coordinate/cfg.focalLength;
-    edgeAngle = (half+0.5)*cfg.sensorPitch/cfg.focalLength;
-    assert(edgeAngle <= min(cfg.wavelengths)/(2*dx)*(1+1e-12), ...
+    sensorHalfWidthPixels = (opticsConfig.outputSize-1)/2;
+    sensorCoordinate = (-sensorHalfWidthPixels:sensorHalfWidthPixels)*opticsConfig.sensorPitch;
+    sensorAngles = sensorCoordinate/opticsConfig.focalLength;
+    sensorEdgeAngle = (sensorHalfWidthPixels+0.5)*opticsConfig.sensorPitch/opticsConfig.focalLength;
+    assert(sensorEdgeAngle <= min(opticsConfig.wavelengths)/(2*objectGridStep)*(1+1e-12), ...
         'UDCImagingV2:Aliasing', '传感器窗口超出物面网格的无混叠角域。');
 
-    nLambda = numel(cfg.wavelengths);
-    validateattributes(cfg.spectralWeights, {'numeric'}, {'vector','numel',nLambda,'real','finite','nonnegative'});
-    validateattributes(cfg.channelResponse, {'numeric'}, {'2d','nrows',nLambda,'real','finite','nonnegative','nonempty'});
-    response = cfg.channelResponse.*cfg.spectralWeights(:);
-    assert(all(sum(response,1)>0), 'UDCImagingV2:Spectrum', '各通道均需正的积分光谱权重。');
-    response = response./sum(response,1);
-    energy = zeros(cfg.outputSize,cfg.outputSize,nLambda);
-    kernel = zeros(cfg.outputSize,cfg.outputSize,size(response,2));
-    clearKernel = zeros(size(kernel));
-    [throughput,captured,clearCaptured,samples] = deal(zeros(nLambda,1));
-    method = "midpoint";
-    if isfield(cfg,'receiverMethod'), method = string(cfg.receiverMethod); end
-    mustBeMember(method,["midpoint","fftBins"]);
-    if method=="fftBins"
-        fftReceiver = corePrepareFftReceiver(cfg,pupil,regionMap,dx,coordinate);
-        samples(:) = NaN; % FFT 分箱使用原生格重叠，无固定子格点数。
+    wavelengthCount = numel(opticsConfig.wavelengths);
+    validateattributes(opticsConfig.spectralWeights, {'numeric'}, {'vector','numel',wavelengthCount,'real','finite','nonnegative'});
+    validateattributes(opticsConfig.channelResponse, {'numeric'}, {'2d','nrows',wavelengthCount,'real','finite','nonnegative','nonempty'});
+    channelSpectralWeights = opticsConfig.channelResponse.*opticsConfig.spectralWeights(:);
+    assert(all(sum(channelSpectralWeights,1)>0), 'UDCImagingV2:Spectrum', '各通道均需正的积分光谱权重。');
+    channelSpectralWeights = channelSpectralWeights./sum(channelSpectralWeights,1);
+    spectralEnergy = zeros(opticsConfig.outputSize,opticsConfig.outputSize,wavelengthCount);
+    channelEnergyKernel = zeros(opticsConfig.outputSize,opticsConfig.outputSize,size(channelSpectralWeights,2));
+    clearChannelEnergyKernel = zeros(size(channelEnergyKernel));
+    [throughput,capturedThroughput,clearCapturedFraction,samplesPerBinAxis] = deal(zeros(wavelengthCount,1));
+    receiverMethod = "midpoint";
+    if isfield(opticsConfig,'receiverMethod'), receiverMethod = string(opticsConfig.receiverMethod); end
+    mustBeMember(receiverMethod,["midpoint","fftBins"]);
+    if receiverMethod=="fftBins"
+        fftReceiver = corePrepareFftReceiver(opticsConfig,pupil,regionMap,objectGridStep,sensorCoordinate);
+        samplesPerBinAxis(:) = NaN; % FFT 分箱使用原生格重叠，无固定子格点数。
     end
-    for k = 1:nLambda
-        lambda = cfg.wavelengths(k);
-        if method=="fftBins"
-            [energy(:,:,k),clearEnergy,throughput(k)] = coreIntegrateFftReceiver( ...
-                fftReceiver,lookup(:,k),lambda,coordinate,cfg.focalLength);
-            if k==1 || mod(k,10)==0 || k==nLambda
-                fprintf('FFT 接收格积分 %d/%d，%.0f nm\n',k,nLambda,lambda*1e9);
+    for wavelengthIndex = 1:wavelengthCount
+        wavelength = opticsConfig.wavelengths(wavelengthIndex);
+        if receiverMethod=="fftBins"
+            [spectralEnergy(:,:,wavelengthIndex),clearEnergy,throughput(wavelengthIndex)] = coreIntegrateFftReceiver( ...
+                fftReceiver,transmissionAmplitudeByRegion(:,wavelengthIndex),wavelength,sensorCoordinate,opticsConfig.focalLength);
+            if wavelengthIndex==1 || mod(wavelengthIndex,10)==0 || wavelengthIndex==wavelengthCount
+                fprintf('FFT 接收格积分 %d/%d，%.0f nm\n',wavelengthIndex,wavelengthCount,wavelength*1e9);
             end
         else
-            t = reshape(lookup(double(regionMap(:))+1,k),ny,nx);
-            field = pupil.*t.*exp(2i*pi*cfg.deltaIndex*cfg.heightMap/lambda);
-            [energy(:,:,k),~,samples(k)] = displayoptics.integrateFarField( ...
-                field,x,y,angles,lambda,cfg.focalLength,cfg.receiverBinSamples,incidentArea);
+            localTransmissionAmplitude = reshape( ...
+                transmissionAmplitudeByRegion(double(regionMap(:))+1,wavelengthIndex),objectRows,objectColumns);
+            transmittedField = pupil.*localTransmissionAmplitude ...
+                .*exp(2i*pi*opticsConfig.deltaIndex*opticsConfig.heightMap/wavelength);
+            [spectralEnergy(:,:,wavelengthIndex),~,samplesPerBinAxis(wavelengthIndex)] = displayoptics.integrateFarField( ...
+                transmittedField,x,y,sensorAngles,wavelength,opticsConfig.focalLength,opticsConfig.receiverBinSamples,incidentArea);
             clearEnergy = displayoptics.integrateFarField( ...
-                pupil,x,y,angles,lambda,cfg.focalLength,cfg.receiverBinSamples,incidentArea);
-            throughput(k) = sum(abs(field).^2,'all')*dx^2/incidentArea;
+                pupil,x,y,sensorAngles,wavelength,opticsConfig.focalLength,opticsConfig.receiverBinSamples,incidentArea);
+            throughput(wavelengthIndex) = sum(abs(transmittedField).^2,'all')*objectGridStep^2/incidentArea;
         end
-        captured(k) = sum(energy(:,:,k),'all');
-        clearCaptured(k) = sum(clearEnergy,'all');
-        weight = reshape(response(k,:),1,1,[]);
-        kernel = kernel + energy(:,:,k).*weight;
-        clearKernel = clearKernel + clearEnergy.*weight;
+        capturedThroughput(wavelengthIndex) = sum(spectralEnergy(:,:,wavelengthIndex),'all');
+        clearCapturedFraction(wavelengthIndex) = sum(clearEnergy,'all');
+        channelWeightAtWavelength = reshape(channelSpectralWeights(wavelengthIndex,:),1,1,[]);
+        channelEnergyKernel = channelEnergyKernel + spectralEnergy(:,:,wavelengthIndex).*channelWeightAtWavelength;
+        clearChannelEnergyKernel = clearChannelEnergyKernel + clearEnergy.*channelWeightAtWavelength;
     end
     clear fftReceiver
 
-    optics.config = cfg;
+    optics.config = opticsConfig;
     optics.config.mode = "udc"; % 复用现有线性图像卷积接口。
-    optics.config.receiverMethod = method;
-    optics.layerGeometry = geometry;
+    optics.config.receiverMethod = receiverMethod;
+    optics.layerGeometry = layerGeometry;
     optics.regionMap = regionMap;
-    optics.regionPatterns = patterns;
-    optics.transmissionLookup = lookup;
+    optics.regionPatterns = regionPatterns;
+    optics.transmissionLookup = transmissionAmplitudeByRegion;
     optics.pupil = pupil;
     optics.x = x;
     optics.y = y;
-    optics.coordinate = coordinate;
+    optics.coordinate = sensorCoordinate;
     optics.coordinateUnit = "m (sensor)";
-    optics.spectralEnergy = energy;
-    optics.kernel = kernel;
-    optics.clearKernel = clearKernel;
-    totals = sum(sum(kernel,1),2);
-    optics.channelCapturedThroughput = reshape(totals,1,[]);
-    optics.channelThroughput = throughput.'*response;
-    totals(totals==0) = 1;
-    optics.psf = kernel./totals;
+    optics.spectralEnergy = spectralEnergy;
+    optics.kernel = channelEnergyKernel;
+    optics.clearKernel = clearChannelEnergyKernel;
+    psfNormalization = sum(sum(channelEnergyKernel,1),2);
+    optics.channelCapturedThroughput = reshape(psfNormalization,1,[]);
+    optics.channelThroughput = throughput.'*channelSpectralWeights;
+    psfNormalization(psfNormalization==0) = 1;
+    optics.psf = channelEnergyKernel./psfNormalization;
     centeredPsf = ifftshift(ifftshift(optics.psf,1),2);
     otf = fft2(centeredPsf);
     optics.mtf = abs(fftshift(fftshift(otf,1),2));
-    optics.spatialFrequency = (-half:half)/(cfg.outputSize*cfg.sensorPitch*1e3); % cycles/mm
-    optics.metrics = table(cfg.wavelengths(:)*1e9, throughput, captured, clearCaptured, samples, ...
+    optics.spatialFrequency = (-sensorHalfWidthPixels:sensorHalfWidthPixels) ...
+        /(opticsConfig.outputSize*opticsConfig.sensorPitch*1e3); % cycles/mm
+    optics.metrics = table(opticsConfig.wavelengths(:)*1e9, ...
+        throughput,capturedThroughput,clearCapturedFraction,samplesPerBinAxis, ...
         'VariableNames',{'WavelengthNm','Throughput','CapturedThroughput','ClearCapturedFraction','SamplesPerBinAxis'});
     optics.quality = coreAssessDiffraction(optics);
     images = [];
-    if ~isempty(scene)
-        images = formUDCImage(scene,optics,encoding);
+    if ~isempty(sceneImage)
+        images = coreFormUDCScene(sceneImage,optics,encoding);
     end
 end

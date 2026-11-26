@@ -5,9 +5,8 @@ function plotImagingComparison(optics,outputDir)
     clearPsf = optics.quality.clearPsf(:,:,green);
     maskPsf = optics.psf(:,:,green);
     referencePeak = max(clearPsf,[],'all');
-    psfToDb = @(psf) 10*log10(max(psf/referencePeak,1e-7));
-    clearDb = psfToDb(clearPsf);
-    maskDb = psfToDb(maskPsf);
+    clearDb = 10*log10(max(clearPsf/referencePeak,1e-7));
+    maskDb = 10*log10(max(maskPsf/referencePeak,1e-7));
     selected = abs(x)<=25+8*eps(25);
     if nnz(selected)<3, selected(:) = true; end
     detail = x(selected);
