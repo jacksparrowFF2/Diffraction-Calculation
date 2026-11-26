@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from build_interactive_comparison import png_url, psf_palettes, psf_url, render_page
+from build_interactive_comparison import mask_payload, png_url, psf_palettes, psf_url, render_page
 from case_compatibility import RULES, common_band, common_tail_radii, evaluate
 from case_workspace import RGB
 from comparison_data import PSF_FLOOR_DB, rgb_peak, rgb_psf_png
@@ -71,6 +71,7 @@ def workspace_page(cases, show_clear):
             rgbPsf=png_url(rgb) if rgb is not None else None,
             rgbLegacy=rgb is not None and rgb_kernel is None,
             rgbExtent=[float(axis[0] - step/2), float(axis[-1] + step/2)],
+            maskPreview=None if clear else mask_payload(case.mask_previews),
             relative=[num / den if den > 0 else None for num, den in zip(captured, denominators)],
             captured=captured, total=[1 if clear else case.channels[ch][0] for ch in RGB],
             freq=freq, mtf=curve, bandMin=band_min, mtf300=mtf_300,

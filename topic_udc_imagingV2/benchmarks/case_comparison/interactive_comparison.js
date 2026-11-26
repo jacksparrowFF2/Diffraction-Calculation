@@ -1,9 +1,18 @@
 const {records, palettes, floorDb, workspace, rgbDisplay} = JSON.parse(document.getElementById('data').textContent);
 const byId = id => document.getElementById(id);
+const comparisonView = byId('comparison-view');
+const guideView = byId('guide-view');
+const comparisonLink = byId('comparison-link');
+const guideLink = byId('guide-link');
 const figure = byId('figure');
+const plots = byId('plots');
+const caseHeader = byId('case-header');
+const caseTrack = byId('case-track');
+const plotScrollers = [caseHeader, ...plots.querySelectorAll('.plot-window')];
 const empty = byId('empty');
 const status = byId('status');
 const exportButton = byId('export');
+const maskMode = byId('mask-mode');
 const psfMode = byId('psf-mode');
 const psfPalette = byId('psf-palette');
 const tailMode = byId('tail-mode');
@@ -16,7 +25,14 @@ const gridColor = '#e0e8ee';
 const rgb = ['#bd4956', '#31805b', '#416bb5'];
 const radians = Math.PI * 2;
 const scale = 2;
+const columnLeft = 70;
+const columnRight = 64;
+const columnGutters = columnLeft + columnRight;
+const maskLayers = ['BM', 'Cath'];
+// Palette indices encode coverage: bit 0 = BM, bit 1 = Cath.
+const maskColors = [[255, 255, 255], [38, 117, 172], [243, 164, 59], [116, 81, 154]];
 let ready = false;
+let comparisonScrollY = 0;
 
 const percent = value => Number.isFinite(value) ? `${(100 * value).toFixed(2)}%` : '—';
 const number = (value, digits) => Number.isFinite(value) ? value.toFixed(digits) : '—';
@@ -67,6 +83,7 @@ function reset() {
   psfMode.value = 'normalized';
   psfPalette.value = 'magma';
   tailMode.value = 'tailFraction';
+  maskMode.value = 'layers';
   update();
 }
 
@@ -140,10 +157,51 @@ function drawLegend(ctx, cases, width) {
   return 113 + (Math.ceil(cases.length / cols) - 1) * 24;
 }
 
+function caseDash(record) {
+  return isReference(record) ? [3, 5] : record.dash ?? (record.id === 'case8' ? [7, 5] : []);
+}
+
 function lineStyle(ctx, record) {
   ctx.strokeStyle = record.color;
   ctx.lineWidth = 2.2;
-  ctx.setLineDash(isReference(record) ? [3, 5] : record.dash ?? (record.id === 'case8' ? [7, 5] : []));
+  ctx.setLineDash(caseDash(record));
+}
+
+function syncScroll(left) {
+  for (const scroller of plotScrollers) {
+    if (scroller.scrollLeft !== left) scroller.scrollLeft = left;
+  }
+}
+
+function drawCaseHeader(cases, width) {
+  caseTrack.style.width = `${width}px`;
+  caseTrack.style.paddingInline = `${columnLeft}px ${columnRight}px`;
+  caseTrack.style.gridTemplateColumns = `repeat(${cases.length}, minmax(0, 1fr))`;
+  caseHeader.tabIndex = width > caseHeader.clientWidth ? 0 : -1;
+  caseTrack.replaceChildren(...cases.map(record => {
+    const heading = document.createElement('div');
+    heading.className = 'case-heading';
+    heading.title = nameOf(record);
+    const mark = document.createElement('span');
+    mark.className = 'case-mark';
+    mark.style.borderColor = record.color;
+    if (caseDash(record).length) mark.style.borderBlockStartStyle = 'dashed';
+    const name = document.createElement('span');
+    name.textContent = heading.title;
+    heading.append(mark, name);
+    return heading;
+  }));
+}
+
+function drawPlot(id, width, start, end) {
+  const canvas = byId(id);
+  const height = (end - start) * scale;
+  canvas.width = width * scale;
+  canvas.height = height;
+  canvas.style.width = `${width}px`;
+  // Use the same finished raster for the plots on screen and the PNG export.
+  canvas.getContext('2d', {alpha: false}).drawImage(figure, 0, start * scale, canvas.width, height,
+                                                   0, 0, canvas.width, height);
 }
 
 function drawHeatScale(ctx, x, y, side) {
@@ -158,12 +216,113 @@ function drawHeatScale(ctx, x, y, side) {
   label(ctx, 'dB', x + 4, y - 7, {size: 10, color: muted});
 }
 
+function composeMaskOverlay({BM, Cath}) {
+  const source = BM ?? Cath;
+  if (!source) return {image: null};
+  const {naturalWidth: width, naturalHeight: height} = source;
+  if (BM && Cath && (Cath.naturalWidth !== width || Cath.naturalHeight !== height)) {
+    return {image: null, message: '掩膜网格尺寸不同'};
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d', {willReadFrequently: true});
+  const readCoverage = image => {
+    if (!image) return null;
+    ctx.clearRect(0, 0, width, height);
+    ctx.drawImage(image, 0, 0);
+    return ctx.getImageData(0, 0, width, height).data;
+  };
+  const bm = readCoverage(BM);
+  const cath = readCoverage(Cath);
+  const pixels = ctx.createImageData(width, height);
+  for (let i = 0; i < pixels.data.length; i += 4) {
+    // Coverage previews store dark material and white openings on the same grid.
+    const index = (bm && bm[i] < 128 ? 1 : 0) + (cath && cath[i] < 128 ? 2 : 0);
+    const [r, g, b] = maskColors[index];
+    pixels.data[i] = r;
+    pixels.data[i + 1] = g;
+    pixels.data[i + 2] = b;
+    pixels.data[i + 3] = 255;
+  }
+  ctx.putImageData(pixels, 0, 0);
+  return {image: canvas};
+}
+
+function drawMaskLegend(ctx, y) {
+  const names = ['共同开口', '仅 BM', '仅 Cath', 'BM + Cath'];
+  let x = 28;
+  names.forEach((name, i) => {
+    ctx.fillStyle = `rgb(${maskColors[i].join(',')})`;
+    ctx.fillRect(x, y - 11, 12, 12);
+    ctx.strokeStyle = gridColor;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x, y - 11, 12, 12);
+    label(ctx, name, x + 18, y, {color: muted});
+    x += ctx.measureText(name).width + 35;
+  });
+}
+
+function drawMasks(ctx, cases, width, top, side, overlay) {
+  const cell = (width - columnGutters) / cases.length;
+  const rows = overlay ? ['叠加'] : maskLayers;
+  const rowY = index => top + 50 + index * (side + 12);
+  if (overlay) {
+    label(ctx, 'BM / Cath 掩膜叠加', 28, top, {size: 17, weight: 680});
+    drawMaskLegend(ctx, top + 18);
+  } else {
+    sectionTitle(ctx, 'BM / Cath 掩膜', '物面覆盖 · 深色表示材料覆盖，白色表示开口', top);
+  }
+  for (const [index, layer] of rows.entries()) {
+    label(ctx, layer, 28, rowY(index) + side / 2 + 4, {weight: 660});
+  }
+  ctx.imageSmoothingEnabled = false;
+  cases.forEach((record, i) => {
+    const center = columnLeft + cell * (i + .5);
+    const preview = record.maskPreview;
+    label(ctx, nameOf(record), center, top + 40, {align: 'center', weight: 660, max: cell - 10});
+    if (overlay) record.maskOverlay ??= composeMaskOverlay(record.maskImages);
+    let drawn = false;
+    for (const [index, layer] of rows.entries()) {
+      const middle = rowY(index) + side / 2;
+      const image = overlay ? record.maskOverlay.image : record.maskImages[layer];
+      if (image) {
+        drawn = true;
+        const fit = side / Math.max(preview.widthUm, preview.heightUm);
+        const w = preview.widthUm * fit;
+        const h = preview.heightUm * fit;
+        ctx.drawImage(image, center - w / 2, middle - h / 2, w, h);
+        ctx.strokeStyle = gridColor;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(center - w / 2, middle - h / 2, w, h);
+      } else {
+        ctx.fillStyle = '#f2f6f8';
+        ctx.fillRect(center - side / 2, rowY(index), side, side);
+        const absent = overlay ? '未设置 BM / Cath' : `未设置 ${layer}`;
+        const message = (overlay && record.maskOverlay.message) ||
+          (preview || isReference(record) ? absent : '缺少掩膜数据');
+        label(ctx, message, center, middle + 4, {size: 11, color: muted, align: 'center', max: side - 8});
+      }
+    }
+    if (drawn) {
+      const captionY = rowY(rows.length - 1) + side + 17;
+      const extent = `${Number(preview.widthUm.toPrecision(6))} × ${Number(preview.heightUm.toPrecision(6))} μm`;
+      const scope = preview.tiled ? '平铺单元' : '完整物面';
+      const caption = `${scope}${preview.subsampled ? '（抽样）' : ''} · ${extent}`;
+      const style = {size: 10, color: muted, align: 'center', max: cell - 8};
+      label(ctx, caption, center, captionY, style);
+      const missingLayer = overlay && maskLayers.find(layer => !record.maskImages[layer]);
+      if (missingLayer) label(ctx, `未设置 ${missingLayer}`, center, captionY + 15, style);
+    }
+  });
+}
+
 function drawPsf(ctx, cases, width, top, radius, side, mode) {
   const rgbPsf = mode === 'rgb';
-  const left = 70;
-  const cell = (width - left - 64) / cases.length;
+  const cell = (width - columnGutters) / cases.length;
   cases.forEach((record, i) => {
-    const center = left + cell * (i + .5);
+    const center = columnLeft + cell * (i + .5);
     const x = center - side / 2;
     const titleY = top + 40;
     const y = top + 50;
@@ -286,12 +445,11 @@ function drawThroughput(ctx, cases, x, y, width, height) {
 }
 
 function drawScenes(ctx, cases, width, top, side) {
-  const left = 70;
-  const cell = (width - left - 64) / cases.length;
+  const cell = (width - columnGutters) / cases.length;
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
   cases.forEach((record, i) => {
-    const center = left + (i + .5) * cell;
+    const center = columnLeft + (i + .5) * cell;
     label(ctx, nameOf(record), center, top + 41, {align: 'center', weight: 660, max: cell - 10});
     const image = record.sceneImage;
     const fit = side / Math.max(image.naturalWidth, image.naturalHeight);
@@ -304,13 +462,18 @@ function drawScenes(ctx, cases, width, top, side) {
 }
 
 function drawFigure(cases) {
-  const width = Math.max(900, 138 * cases.length + 152, figure.parentElement.clientWidth);
-  const side = Math.min(202, Math.floor((width - 134) / cases.length) - 28);
+  const width = Math.max(900, 138 * cases.length + 152, plots.clientWidth);
+  const side = Math.min(202, Math.floor((width - columnGutters) / cases.length) - 28);
+  const overlay = maskMode.value === 'overlay';
+  const maskSide = overlay ? side : Math.min(152, side);
+  const maskHeight = overlay ? maskSide + 110 : 2 * maskSide + 108;
+  const responseHeight = 257;
+  const tailHeight = 194;
   const legendColumns = Math.min(cases.length, Math.floor((width - 56) / 225));
-  const height = 961 + 4 * side + (Math.ceil(cases.length / legendColumns) - 1) * 24;
+  const legendHeight = 113 + (Math.ceil(cases.length / legendColumns) - 1) * 24;
+  const height = legendHeight + maskHeight + (3 * side + 318) + responseHeight + tailHeight + (side + 93);
   figure.width = width * scale;
   figure.height = height * scale;
-  figure.style.minWidth = `${Math.max(900, 138 * cases.length + 152)}px`;
   const ctx = figure.getContext('2d', {alpha: false});
   ctx.scale(scale, scale);
   ctx.fillStyle = '#ffffff';
@@ -321,6 +484,10 @@ function drawFigure(cases) {
     : '4 mm 入瞳 · 500 点/Pitch · D65 · USAF500';
   label(ctx, subtitle, 28, 58, {color: muted});
   let top = drawLegend(ctx, cases, width);
+  const maskTop = top;
+  drawMasks(ctx, cases, width, top, maskSide, overlay);
+  top += maskHeight;
+  const psfTop = top;
   const mode = psfMode.value;
   const modeLabel = psfMode.selectedOptions[0].text;
   const paletteLabel = psfPalette.selectedOptions[0].text;
@@ -330,8 +497,8 @@ function drawFigure(cases) {
                  : '各方案窗口能量归一为 1，0 dB = 全部方案的共同峰值');
   const full = workspace?.fullRadius ?? 100;
   const zoom = workspace?.zoomRadius ?? 25;
-  sectionTitle(ctx, `G 通道 ${modeLabel} · ${workspace ? '共同视场' : '全视场'}`,
-               `±${full} μm · ${reference} · −70 至 0 dB · ${paletteLabel}`, top);
+  const psfTitle = `G 通道 ${modeLabel} · ${workspace ? '共同视场' : '全视场'}`;
+  sectionTitle(ctx, psfTitle, `±${full} μm · ${reference} · −70 至 0 dB · ${paletteLabel}`, top);
   drawPsf(ctx, cases, width, top, full, side, mode);
   top += side + 102;
   sectionTitle(ctx, `G 通道 ${modeLabel} · 中心放大`, `±${zoom} μm · 沿用同一色标`, top);
@@ -341,6 +508,7 @@ function drawFigure(cases) {
                `±${full} μm · 共同曝光 · 亮度对数强度 ${rgbDisplay.toneStrength} · γ ${rgbDisplay.gamma} · sRGB`, top);
   drawPsf(ctx, cases, width, top, full, side, 'rgb');
   top += side + 108;
+  const responseTop = top;
   const mid = width / 2;
   const box = {x: 67, y: top + 44, width: mid - 97, height: 148};
   const band = workspace ? workspace.band : [0, 500];
@@ -360,7 +528,8 @@ function drawFigure(cases) {
     (workspace ? '相对各自无遮挡参考' : '201×201 接收格 · 相对无遮挡');
   label(ctx, fluxNote, mid + 24, top + 18, {color: muted});
   drawThroughput(ctx, cases, mid + 51, box.y, mid - 79, box.height);
-  top += 243;
+  top += responseHeight;
+  const tailTop = top;
   const absolute = tailMode.value === 'tailAbsolute';
   sectionTitle(ctx, 'G 通道 PSF 拖尾', `半径之外、计算窗口以内的能量 · μm · 占${absolute ? '入射' : '窗口'}能量`, top);
   if (radii.length) {
@@ -376,21 +545,33 @@ function drawFigure(cases) {
   } else {
     label(ctx, '无共同有效半径', 67, top + 86, {color: muted});
   }
-  top += 194;
-  sectionTitle(ctx, workspace ? '同曝光成像' : 'USAF500 · 同曝光成像',
+  top += tailHeight;
+  const sceneTitle = workspace ? '同曝光成像' : 'USAF500 · 同曝光成像';
+  sectionTitle(ctx, sceneTitle,
                '使用仿真输出的同曝光预览 · G 通道线性均值以各自无遮挡为 100%', top);
   drawScenes(ctx, cases, width, top, side);
-  figure.setAttribute('aria-label',
-    `${modeLabel}（${paletteLabel}）、RGB 衍射 PSF、MTF、RGB 通量、拖尾及同曝光对比｜${cases.map(nameOf).join('、')}`);
+
+  byId('mask-title').textContent = overlay ? 'BM / Cath 掩膜叠加' : 'BM / Cath 掩膜';
+  byId('psf-title').textContent = psfTitle;
+  byId('scene-title').textContent = sceneTitle;
+  const left = caseHeader.scrollLeft;
+  drawCaseHeader(cases, width);
+  // HTML titles replace the first canvas title in sections with a header bar.
+  drawPlot('mask-plot', width, maskTop + 3, psfTop - 18);
+  drawPlot('psf-plot', width, psfTop + 3, responseTop - 18);
+  drawPlot('response-plot', width, responseTop - 18, tailTop - 18);
+  drawPlot('tail-plot', width, tailTop + 3, top - 18);
+  drawPlot('scene-plot', width, top + 3, height);
+  syncScroll(Math.min(left, width - caseHeader.clientWidth));
 }
 
 function update() {
-  if (!ready) return;
+  if (!ready || comparisonView.hidden) return;
   const cases = selected();
   const references = cases.filter(isReference).length;
   const count = cases.length - references;
   status.textContent = `已选 ${count} 个方案${references ? ' · 已显示无遮挡参考' : ' · 已隐藏无遮挡参考'}`;
-  figure.hidden = !cases.length;
+  plots.hidden = caseHeader.hidden = !cases.length;
   empty.hidden = cases.length > 0;
   empty.textContent = '请勾选至少一个方案或无遮挡参考。';
   exportButton.disabled = !cases.length;
@@ -418,10 +599,26 @@ function update() {
   if (cases.length) drawFigure(cases);
 }
 
+function showView(showGuide) {
+  if (showGuide === comparisonView.hidden) return;
+  if (showGuide) comparisonScrollY = window.scrollY;
+  comparisonView.hidden = showGuide;
+  guideView.hidden = !showGuide;
+  const activeLink = showGuide ? guideLink : comparisonLink;
+  const inactiveLink = showGuide ? comparisonLink : guideLink;
+  activeLink.setAttribute('aria-current', 'page');
+  inactiveLink.removeAttribute('aria-current');
+  if (!showGuide) update();
+  const focusTarget = showGuide ? byId('guide-title') : comparisonLink;
+  focusTarget.focus({preventScroll: true});
+  window.scrollTo(0, showGuide ? 0 : comparisonScrollY);
+}
+
 exportButton.addEventListener('click', () => {
   const ids = selected().map(record => record.id).join('-');
   const suffix = psfPalette.value === 'magma' ? '' : `-${psfPalette.value}`;
-  const filename = `UDC-${ids}-psf-${psfMode.value}${suffix}.png`;
+  const maskSuffix = maskMode.value === 'overlay' ? '-mask-overlay' : '';
+  const filename = `UDC-${ids}-psf-${psfMode.value}${suffix}${maskSuffix}.png`;
   figure.toBlob(blob => {
     if (!blob) {
       status.textContent = '无法导出 PNG，请重试。';
@@ -439,7 +636,14 @@ exportButton.addEventListener('click', () => {
 
 if (workspace) {
   document.body.classList.add('embedded');
-  byId('flux-label').hidden = fluxMode.hidden = false;
+  byId('flux-controls').hidden = false;
+  // Fragment links in srcdoc resolve against the host page. Switch views in place.
+  for (const link of document.querySelectorAll('a[href="#guide"], a[href="#comparison"]')) {
+    link.addEventListener('click', event => {
+      event.preventDefault();
+      showView(link === guideLink);
+    });
+  }
   if (radii.length) {
     byId('radius-label').hidden = tailRadius.hidden = false;
     for (const radius of radii) tailRadius.add(new Option(`${radius} μm`, radius));
@@ -450,6 +654,9 @@ if (workspace) {
   byId('none').addEventListener('click', () => setAll(false));
   byId('reset').addEventListener('click', reset);
   records.forEach(addControls);
+  const syncView = () => showView(window.location.hash === '#guide');
+  window.addEventListener('hashchange', syncView);
+  syncView();
 }
 const paletteLabels = {jet: 'Jet · 蓝–红', turbo: 'Turbo', parula: 'Parula'};
 for (const name of Object.keys(palettes)) {
@@ -457,7 +664,7 @@ for (const name of Object.keys(palettes)) {
     psfPalette.add(new Option(paletteLabels[name] ?? name, name));
   }
 }
-for (const control of [psfMode, psfPalette, tailMode, fluxMode, tailRadius]) {
+for (const control of [maskMode, psfMode, psfPalette, tailMode, fluxMode, tailRadius]) {
   const storageKey = `udc-workspace:${control.id}`;
   if (workspace) {
     try {
@@ -472,21 +679,29 @@ for (const control of [psfMode, psfPalette, tailMode, fluxMode, tailRadius]) {
     update();
   });
 }
+for (const scroller of plotScrollers) {
+  scroller.addEventListener('scroll', () => syncScroll(scroller.scrollLeft));
+}
 window.addEventListener('resize', update);
 Promise.all(records.map(async record => {
-  const [normalized, absolute, scene, rgbPsf] = await Promise.all([
+  const [normalized, absolute, scene, rgbPsf, masks] = await Promise.all([
     loadPsfRaster(record.psf), loadPsfRaster(record.absolutePsf), loadImage(record.scene),
-    record.rgbPsf ? loadImage(record.rgbPsf) : null
+    record.rgbPsf ? loadImage(record.rgbPsf) : null,
+    Promise.all(maskLayers.map(layer => {
+      const url = record.maskPreview?.layers[layer];
+      return url ? loadImage(url) : null;
+    }))
   ]);
   record.psfRasters = {normalized, absolute};
   record.sceneImage = scene;
   record.rgbPsfImage = rgbPsf;
+  record.maskImages = Object.fromEntries(maskLayers.map((layer, i) => [layer, masks[i]]));
 })).then(() => {
   ready = true;
   update();
 }).catch(error => {
   status.textContent = '本地仿真图像加载失败。';
-  figure.hidden = true;
+  plots.hidden = caseHeader.hidden = true;
   empty.hidden = false;
   empty.textContent = '请重新生成完整的 HTML 文件。';
   exportButton.disabled = true;

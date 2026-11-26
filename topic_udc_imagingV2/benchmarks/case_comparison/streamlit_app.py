@@ -142,7 +142,7 @@ def main():
     except ValueError as error:
         st.error(str(error))
         return
-    st.iframe(page, alt='所选方案的 PSF、MTF、通量、拖尾与同曝光成像总图')
+    st.iframe(page, height=760, alt='所选方案的 BM 和 Cath 掩膜、PSF、MTF、通量、拖尾与同曝光成像总图')
 
 
 main()

@@ -13,6 +13,7 @@ import numpy as np
 from PIL import Image
 
 from comparison_data import green_mtf, read_csv
+from mask_previews import MASK_LAYERS, MAX_SIDE, MaskPreviews, read_mask_previews
 
 
 OUTPUT = Path(__file__).resolve().parents[2] / 'Output'
@@ -45,6 +46,7 @@ class Case:
     clear_rgb_psf: bytes | None = None
     rgb_kernel: np.ndarray | None = None
     clear_rgb_kernel: np.ndarray | None = None
+    mask_previews: MaskPreviews | None = None
 
 
 def fingerprint(*arrays):
@@ -106,6 +108,7 @@ def read_result(folder, name):
         fixed_scene = f.get('images/fixedExposure')
         clear_scene = f.get('images/clear')
         axis = f['optics/coordinate'][()].ravel() * 1e6
+        previews = read_mask_previews(f)
         wavelengths = cfg['wavelengths'][()].ravel() * 1e9 if 'wavelengths' in cfg else []
         pitch = scalar('pitch', 1e6)
         samples = scalar('samplesPerPeriod')
@@ -150,7 +153,7 @@ def read_result(folder, name):
                          freq[defined], mtf[defined], clear_mtf[defined], channels, tails,
                          (folder / 'udc_fixed_exposure.png').read_bytes(),
                          (folder / 'udc_clear.png').read_bytes(),
-                         rgb_kernel=all_kernel, clear_rgb_kernel=all_clear))
+                         rgb_kernel=all_kernel, clear_rgb_kernel=all_clear, mask_previews=previews))
 
 
 def validate(case):
@@ -204,6 +207,10 @@ def write_package(case, target):
     manifest = dict(format='udc-case', version=1, name=case.name, conditions=case.conditions,
                     axis_um=case.axis_um.tolist(), freq=case.freq.tolist(), mtf=case.mtf.tolist(),
                     clear_mtf=case.clear_mtf.tolist(), channels=case.channels, tails=case.tails)
+    previews = case.mask_previews
+    if previews is not None:
+        manifest['mask_preview'] = dict(width_um=previews.width_um, height_um=previews.height_um,
+                                        tiled=previews.tiled, subsampled=previews.subsampled)
     with ZipFile(target, 'w', ZIP_DEFLATED) as archive:
         archive.writestr('case.json', json.dumps(manifest, ensure_ascii=False, allow_nan=False))
         for key in ('kernel', 'clear_kernel'):
@@ -219,6 +226,9 @@ def write_package(case, target):
             archive.writestr('rgb-psf.png', case.rgb_psf)
         if case.clear_rgb_psf is not None:
             archive.writestr('clear-rgb-psf.png', case.clear_rgb_psf)
+        if previews is not None:
+            for name, png in previews.layers.items():
+                archive.writestr(f'masks/{name}.png', png)
 
 
 def read_package(data):
@@ -254,12 +264,31 @@ def read_package(data):
             return np.stack((red, green.T, blue))
 
         green, clear_green = kernel('kernel'), kernel('clear_kernel')
+        previews = None
+        if (mask_meta := meta.get('mask_preview')) is not None:
+            width, height = [float(mask_meta[key]) for key in ('width_um', 'height_um')]
+            if not all(np.isfinite(v) and v > 0 for v in (width, height)):
+                raise ValueError('数据包的掩膜显示尺寸无效。')
+            layers = {}
+            for name in MASK_LAYERS:
+                png = optional(f'masks/{name}.png')
+                if png is None:
+                    continue
+                if len(png) > MAX_IMAGE or not png.startswith(b'\x89PNG\r\n\x1a\n'):
+                    raise ValueError('掩膜预览必须为有效大小的 PNG。')
+                with Image.open(BytesIO(png)) as image:
+                    if max(image.size) > MAX_SIDE:
+                        raise ValueError('数据包的掩膜预览超出支持的采样尺寸。')
+                    image.verify()
+                layers[name] = png
+            previews = MaskPreviews(width, height, bool(mask_meta['tiled']), bool(mask_meta['subsampled']), layers)
         return validate(Case(meta['name'], meta['conditions'], axis, green, clear_green,
                              np.asarray(meta['freq'], dtype=float),
                              np.asarray(meta['mtf'], dtype=float), np.asarray(meta['clear_mtf'], dtype=float),
                              meta['channels'], meta['tails'], archive.read('scene.png'), archive.read('clear.png'),
                              optional('rgb-psf.png'), optional('clear-rgb-psf.png'),
-                             rgb_kernel('rgb_kernel', green), rgb_kernel('clear_rgb_kernel', clear_green)))
+                             rgb_kernel('rgb_kernel', green), rgb_kernel('clear_rgb_kernel', clear_green),
+                             mask_previews=previews))
 
 
 def main():

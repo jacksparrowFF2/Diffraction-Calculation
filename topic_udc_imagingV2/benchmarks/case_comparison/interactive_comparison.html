@@ -21,6 +21,16 @@
     .masthead { max-width: 1720px; margin: auto; padding: 30px clamp(20px, 4vw, 60px); }
     h1 { font-size: clamp(24px, 3vw, 38px); margin: 0 0 6px; line-height: 1.2; font-weight: 680; }
     .masthead p { margin: 0; color: #c9dce9; font-size: 14px; }
+    .view-tabs {
+      display: flex; gap: 6px; max-width: 1720px; margin: auto;
+      padding: 12px clamp(14px, 3vw, 42px) 0;
+    }
+    .view-tabs a {
+      padding: 6px 14px; border: 1px solid transparent; border-radius: 6px;
+      color: var(--accent); font-weight: 650; text-decoration: none;
+    }
+    .view-tabs a:hover { background: #f6fafc; }
+    .view-tabs [aria-current=page] { background: #fff; border-color: #c9d7e1; }
     main {
       max-width: 1720px; margin: auto; padding: 24px clamp(14px, 3vw, 42px) 44px;
       display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 20px; align-items: start;
@@ -36,7 +46,9 @@
     }
     button:hover, select:hover { background: #edf5fa; }
     button:disabled { opacity: .5; cursor: default; }
-    button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid #16649b; outline-offset: 2px; }
+    button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible {
+      outline: 2px solid #16649b; outline-offset: 2px;
+    }
     .primary { background: var(--accent); border-color: var(--accent); color: white; padding: 8px 14px; }
     .primary:hover { background: #0b3654; }
     .control-row {
@@ -57,23 +69,69 @@
     .bar { padding: 15px 18px; flex-wrap: wrap; }
     .bar div:last-child { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
     .scroller { overflow: auto; }
-    .figure { border-top: 1px solid var(--line); padding: 0 0 4px; }
-    canvas { display: block; width: 100%; height: auto; }
+    .case-header {
+      position: sticky; top: 0; z-index: 2; overflow-x: auto; scrollbar-width: thin;
+      background: #f2f6f9; border-block: 1px solid #cddbe5;
+      box-shadow: 0 2px 5px #112b4012;
+    }
+    .case-track { display: grid; align-items: stretch; }
+    .case-heading {
+      display: flex; min-width: 0; justify-content: center; align-items: center; gap: 7px;
+      padding: 9px 8px; font-size: 12px; font-weight: 650;
+    }
+    .case-heading + .case-heading { border-inline-start: 1px solid var(--line); }
+    .case-heading span:last-child { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .case-mark { flex: 0 0 15px; border-block-start: 2px solid; }
+    .panel-heading {
+      display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;
+      gap: 8px 20px; padding: 14px 28px 4px;
+    }
+    .plot-panel + .plot-panel { border-top: 1px solid var(--line); }
+    .panel-heading h3 { margin: 0; font-size: 17px; font-weight: 680; }
+    .panel-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; }
+    .panel-controls label { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); }
+    .plot-window { overflow-x: auto; scrollbar-width: none; }
+    .plot-window canvas { display: block; height: auto; }
     .empty { min-height: 180px; padding: 35px 18px; text-align: center; color: var(--muted); }
     table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
     th, td { padding: 9px 12px; border-top: 1px solid var(--line); white-space: nowrap; text-align: right; }
     th { background: #f2f6f8; font-weight: 650; }
     th:first-child, td:first-child { text-align: left; }
     tbody tr:nth-child(even) { background: #f8fafb; }
+    .guide-view { display: block; max-width: 1120px; }
+    .guide-article {
+      padding: clamp(18px, 3.4vw, 40px); background: white;
+      border: 1px solid var(--line); border-radius: 12px;
+    }
+    .guide-article h2 { font-size: clamp(24px, 3vw, 32px); line-height: 1.2; }
+    .guide-article h3 { font-size: 19px; margin: 0 0 10px; }
+    .guide-article p { margin: 0 0 10px; }
+    .guide-article a { color: var(--accent); }
+    .guide-article .guide-intro { color: var(--muted); margin-top: 10px; }
+    .guide-topic { padding-block: 18px; border-bottom: 1px solid var(--line); }
+    .guide-optics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+    .guide-article dl { margin: 0; }
+    .guide-article dt { font-weight: 680; margin-top: 8px; }
+    .guide-article dd { margin: 0 0 5px; }
+    .guide-table { border: 1px solid var(--line); border-radius: 7px; margin: 10px 0; }
+    .guide-table th, .guide-table td { white-space: normal; }
+    .guide-table thead th { border-top: 0; }
+    .guide-table tbody th { background: transparent; }
+    .guide-foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; margin-top: 15px; }
+    .guide-foot small { color: var(--muted); }
     [hidden] { display: none !important; }
     :root:has(body.embedded) { background: white; }
     .embedded header, .embedded aside { display: none; }
     .embedded main { display: block; max-width: none; padding: 0; }
+    .embedded .view-tabs { padding: 4px 0 8px; }
+    .embedded .guide-view { max-width: 1120px; }
     @media (max-width: 760px) {
       main { grid-template-columns: minmax(0, 1fr); }
       #case-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(154px, 1fr)); gap: 6px; }
       #case-controls .control-row { margin-top: 0; }
       .bar { padding: 12px; }
+      .panel-heading { padding-inline: 12px; }
+      .guide-optics { grid-template-columns: minmax(0, 1fr); gap: 16px; }
     }
   </style>
 </head>
@@ -84,7 +142,11 @@
       <p>4 mm 入瞳 · 236.2 μm Pitch · 17×17 · 500 点/Pitch · 3 mm 焦距 · 1 μm 像元 · D65 · USAF500</p>
     </div>
   </header>
-  <main>
+  <nav class="view-tabs" aria-label="查看仿真结果和读图说明">
+    <a href="#comparison" id="comparison-link" aria-current="page">结果对比</a>
+    <a href="#guide" id="guide-link">读图说明</a>
+  </nav>
+  <main id="comparison-view">
     <aside aria-labelledby="controls-title">
       <div class="control-header"><h2 id="controls-title">方案与显示名称</h2></div>
       <p class="hint">勾选方案，或直接编辑显示名称。</p>
@@ -100,26 +162,60 @@
       <section aria-labelledby="comparison-title">
         <div class="bar">
           <div><h2 id="comparison-title">对比图</h2><p id="status" class="status" role="status">正在加载本地仿真数据…</p></div>
-          <div>
-            <label for="psf-mode">PSF 模式</label>
-            <select id="psf-mode"><option value="normalized">归一化 PSF</option><option value="absolute">绝对能量 PSF</option></select>
-            <label for="psf-palette">PSF 色图</label>
-            <select id="psf-palette">
-              <option value="magma">Magma · 紫橙</option>
-              <option value="viridis">Viridis · 蓝绿黄</option>
-              <option value="gray">灰度 · 黑白</option>
-            </select>
-            <label for="tail-mode">拖尾纵轴</label>
-            <select id="tail-mode"><option value="tailFraction">占窗口能量</option><option value="tailAbsolute">占入射能量</option></select>
-            <label for="flux-mode" id="flux-label" hidden>捕获量分母</label>
-            <select id="flux-mode" hidden><option value="relative">各自无遮挡</option><option value="captured">入射能量</option></select>
-            <button class="primary" type="button" id="export" disabled>下载对比图 PNG</button>
+          <button class="primary" type="button" id="export" disabled>下载对比图 PNG</button>
+        </div>
+        <div class="case-header" id="case-header" role="region" aria-label="对比方案列头" hidden>
+          <div class="case-track" id="case-track"></div>
+        </div>
+        <div id="plots" hidden>
+          <div class="plot-panel">
+            <div class="panel-heading">
+              <h3 id="mask-title">BM / Cath 掩膜</h3>
+              <div class="panel-controls">
+                <label>掩膜显示 <select id="mask-mode"><option value="layers">分层显示</option><option value="overlay">BM + Cath 叠加</option></select></label>
+              </div>
+            </div>
+            <div class="plot-window"><canvas id="mask-plot" role="img" aria-label="各方案的 BM 和 Cath 掩膜"></canvas></div>
+          </div>
+          <div class="plot-panel">
+            <div class="panel-heading">
+              <h3 id="psf-title">G 通道归一化 PSF · 全视场</h3>
+              <div class="panel-controls">
+                <label>PSF 模式 <select id="psf-mode"><option value="normalized">归一化 PSF</option><option value="absolute">绝对能量 PSF</option></select></label>
+                <label>PSF 色图 <select id="psf-palette">
+                  <option value="magma">Magma · 紫橙</option>
+                  <option value="viridis">Viridis · 蓝绿黄</option>
+                  <option value="gray">灰度 · 黑白</option>
+                </select></label>
+              </div>
+            </div>
+            <div class="plot-window"><canvas id="psf-plot" role="img" aria-label="各方案的 G 通道和 RGB 衍射 PSF"></canvas></div>
+          </div>
+          <div class="plot-panel">
+            <div class="panel-heading" id="flux-controls" hidden>
+              <h3>MTF 与通量</h3>
+              <div class="panel-controls">
+                <label>捕获量分母 <select id="flux-mode"><option value="relative">各自无遮挡</option><option value="captured">入射能量</option></select></label>
+              </div>
+            </div>
+            <div class="plot-window"><canvas id="response-plot" role="img" aria-label="G 通道 MTF 和 RGB 窗口捕获量"></canvas></div>
+          </div>
+          <div class="plot-panel">
+            <div class="panel-heading">
+              <h3>G 通道 PSF 拖尾</h3>
+              <div class="panel-controls">
+                <label>拖尾纵轴 <select id="tail-mode"><option value="tailFraction">占窗口能量</option><option value="tailAbsolute">占入射能量</option></select></label>
+              </div>
+            </div>
+            <div class="plot-window"><canvas id="tail-plot" role="img" aria-label="G 通道 PSF 拖尾对比"></canvas></div>
+          </div>
+          <div class="plot-panel">
+            <div class="panel-heading"><h3 id="scene-title">USAF500 · 同曝光成像</h3></div>
+            <div class="plot-window"><canvas id="scene-plot" role="img" aria-label="各方案的同曝光成像"></canvas></div>
           </div>
         </div>
-        <div class="figure scroller">
-          <canvas id="figure" role="img" aria-label="PSF、MTF、RGB 通量、拖尾及同曝光成像对比图" hidden></canvas>
-          <p id="empty" class="empty">正在加载本地仿真数据…</p>
-        </div>
+        <canvas id="figure" hidden></canvas>
+        <p id="empty" class="empty">正在加载本地仿真数据…</p>
       </section>
       <section aria-labelledby="metrics-title">
         <div class="bar">
@@ -143,6 +239,78 @@
         </div>
       </section>
     </div>
+  </main>
+  <main class="guide-view" id="guide-view" hidden>
+    <article class="guide-article" aria-labelledby="guide-title">
+      <h2 id="guide-title" tabindex="-1">怎样读 UDC 仿真结果</h2>
+      <p class="guide-intro">用 PSF 看一个点的光散到哪里，用 MTF 看条纹对比度保留多少，再用通量和同曝光图看有多少光到达传感器。</p>
+
+      <div class="guide-topic">
+        <h3>先确认方案可比</h3>
+        <p>用无遮挡曲线和图像作共同参考。无遮挡仍包含有限入瞳的衍射和像元积分。比较时核对入瞳、焦距、光谱及 RGB 响应、像元、接收窗口与采样。比较同曝光图时，还要核对场景和曝光口径。</p>
+        <p>工作台按指标给出「可直接比较」「需注明条件」或「可比性待确认」。接收范围不同时，PSF 画面可裁成共同视场，归一化分母和拖尾仍取各自的仿真接收窗口。</p>
+      </div>
+
+      <div class="guide-topic guide-optics">
+        <div>
+          <h3>PSF · 光在像面怎么分布</h3>
+          <p>点扩散函数（PSF）描述一个点光源在像面形成的光斑。看中心光斑的集中程度，再看两侧衍射条纹、旁瓣和拖尾的范围及方向。横纵轴都用像面 μm。</p>
+          <dl>
+            <dt>归一化 PSF</dt>
+            <dd>每个像元的能量除以该方案在仿真窗口内捕获的能量，窗口内份额加起来为 1。用它比较能量分布和中心像元占比。固定八组离线页以全部方案及无遮挡的共同峰值为 0 dB，工作台以单像元占全部窗口能量为 0 dB。</dd>
+            <dt>绝对能量 PSF</dt>
+            <dd>每个像元的能量除以入射能量，0 dB 对应单像元接收全部入射能量。用它比较同一像面位置实际收集到的能量。</dd>
+          </dl>
+          <p>G 通道热图共用色标。低于色标下限的值呈现为同一种颜色。中心放大沿用相同色标与原采样。RGB 衍射 PSF 使用色调映射，可用来看彩色衍射条纹，定量能量请读绝对 PSF 和通量。</p>
+        </div>
+        <div>
+          <h3>MTF · 条纹对比度保留多少</h3>
+          <p>调制传递函数（MTF）是归一化 PSF 的二维傅里叶变换的幅值。横轴为空间频率（cycles/mm），同一长度内条纹越密，频率越高。某频率的 MTF 为 0.4，表示正弦条纹保留了输入对比度的 40%。</p>
+          <p>页面在每个频率取 G 通道横向、纵向、45° 和 135° 中的最低值。最低值对应的方向可随频率变化。判断时先看任务关注频段，再检查曲线有没有明显低谷。</p>
+          <dl>
+            <dt>最低 MTF（10–100 cycles/mm）</dt>
+            <dd>这段频率内四个方向的最低值，适合快速定位频段内最弱的表现。</dd>
+            <dt>MTF @ 300</dt>
+            <dd>300 cycles/mm 处的读数，量化一个较高频率的条纹表现。缺少覆盖该频点或频段的数据时，表中显示「—」。</dd>
+          </dl>
+          <p>归一化消除了均匀衰减的影响，因此相近的 MTF 可以对应不同的入射光利用率。</p>
+        </div>
+      </div>
+
+      <div class="guide-topic">
+        <h3>拖尾、通量和同曝光图</h3>
+        <dl>
+          <dt>G 通道拖尾</dt>
+          <dd>统计指定半径之外、接收窗口以内的能量。「占窗口能量」回答捕获的光有多少散到外围，「占入射能量」回答入射的光有多少落到外围。跨方案读取时用同一半径和窗口条件。</dd>
+          <dt>RGB 窗口捕获量与总透过率</dt>
+          <dd>窗口捕获量只计传感器计算窗口内的能量，工作台可切换为相对各自无遮挡或相对入射能量。RGB 总透过率以入射能量为分母，包含窗口之外的透射能量。</dd>
+          <dt>同曝光成像和 G 均值</dt>
+          <dd>在相同场景和曝光下看亮度、条纹可辨性和颜色。「同曝光 G 均值」用线性图像的 G 通道均值与各自无遮挡比较，适合量化整体亮度变化。</dd>
+        </dl>
+      </div>
+
+      <div class="guide-topic">
+        <h3>实例 · Case7 与 Case8</h3>
+        <p>在同一组 4 mm 入瞳仿真中，Case8 给 Case7 加了一层强度透过率为 50% 的理想中性衰减层。两个方案的归一化 PSF、MTF 和相对拖尾重合。绝对能量按 0.5 缩放，在 dB 色标上对应约 −3.01 dB。</p>
+        <div class="guide-table scroller">
+          <table aria-label="Case7 与 Case8 的读图示例">
+            <thead><tr><th scope="col">G 通道指标</th><th scope="col">Case7</th><th scope="col">Case8</th></tr></thead>
+            <tbody>
+              <tr><th scope="row">窗口捕获量（占入射）</th><td>15.70%</td><td>7.85%</td></tr>
+              <tr><th scope="row">20 μm 外拖尾（占窗口）</th><td>13.36%</td><td>13.36%</td></tr>
+              <tr><th scope="row">20 μm 外拖尾（占入射）</th><td>2.10%</td><td>1.05%</td></tr>
+              <tr><th scope="row">同曝光线性 G 均值（相对无遮挡）</th><td>15.66%</td><td>7.83%</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>读图时先在归一化模式核对光斑形状，再切到绝对能量模式，并查看同曝光图。这样能区分方案对衍射分布和进光量的影响。</p>
+      </div>
+
+      <div class="guide-foot">
+        <a href="#comparison">返回结果对比</a>
+        <small>参考定义 · <a href="https://www.mathworks.com/help/images/ref/opticalsystem.psf.html" target="_blank" rel="noopener">MathWorks PSF</a> · <a href="https://www.mathworks.com/help/images/ref/optics.result.huygensmtf.html" target="_blank" rel="noopener">MathWorks MTF</a></small>
+      </div>
+    </article>
   </main>
   <noscript><p class="empty">请启用 JavaScript 后重新打开此文件。</p></noscript>
   <script id="data" type="application/json"><!-- UDC_DATA --></script>

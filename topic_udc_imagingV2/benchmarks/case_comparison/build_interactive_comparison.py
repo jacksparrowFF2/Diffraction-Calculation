@@ -13,6 +13,7 @@ from PIL import Image
 
 from comparison_data import (PSF_COLORMAP, PSF_FLOOR_DB, RGB_LUMINANCE_GAMMA, RGB_TONE_STRENGTH,
                              green_mtf, read_csv, rgb_peak, rgb_psf_png)
+from mask_previews import read_mask_previews
 
 
 HERE = Path(__file__).resolve().parent
@@ -32,6 +33,14 @@ DEFAULT = {'case1', 'case5', 'case6', 'case7', 'case8'}
 
 def png_url(data):
     return 'data:image/png;base64,' + b64encode(data).decode('ascii')
+
+
+def mask_payload(previews):
+    if previews is None:
+        return None
+    return dict(widthUm=previews.width_um, heightUm=previews.height_um, tiled=previews.tiled,
+                subsampled=previews.subsampled,
+                layers={name: png_url(png) for name, png in previews.layers.items()})
 
 
 def psf_url(psf, reference):
@@ -79,6 +88,7 @@ def read_case(folder, case):
                                              'images/inputLinear', 'optics/clearKernel')}
         means = f['images/fixedExposure'][()].mean(axis=(1, 2))
         clear_means = f['images/clear'][()].mean(axis=(1, 2))
+        previews = read_mask_previews(f)
     for array in (psf, clear_psf):
         assert array.shape == (201, 201) and np.all(array >= 0), case
         np.testing.assert_allclose(array.sum(), 1, atol=1e-10, rtol=0)
@@ -114,6 +124,7 @@ def read_case(folder, case):
             'center': float(heatmap[100, 100]),
             'mean': ((clear_means if reference else means) / clear_means).tolist(),
             'scene': (folder / ('udc_clear.png' if reference else 'udc_fixed_exposure.png')).read_bytes(),
+            'maskPreview': None if reference else mask_payload(previews),
         }
 
     return metrics(False), metrics(True), inputs
