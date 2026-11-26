@@ -77,38 +77,6 @@
 
 给[对比绘图脚本](../benchmarks/case_comparison/plot_comparison.py)传入 `--apertures`，生成 `Output/case1_case5_case6_case7_case8_4mm_500pitch/` 下的对比图和包含无遮挡行的汇总 CSV。脚本核对 54 μm 掩膜降采样后的覆盖、连续阴极覆盖和中性衰减比例。
 
-## 交互式 HTML 对比
+## 交互式结果对比
 
-从仓库根目录运行 `python topic_udc_imagingV2/benchmarks/case_comparison/build_interactive_comparison.py`（需要 h5py、NumPy、Matplotlib 和 Pillow）。脚本直接读取已有 Case1–8 的 MAT、CSV 和 PNG，核对公共仿真参数、场景和无遮挡参考，生成 `Output/interactive_comparison/udc_comparison.html`。可用 `--results` 指定含各方案结果的目录、用 `--output` 指定 HTML 保存位置。
-
-双击生成的 HTML 即可离线查看。可勾选任意方案，单独开关无遮挡参考，编辑显示名称，并切换拖尾纵轴为窗口能量占比或入射能量占比。下载的 PNG 采用当前方案、显示名称、PSF 模式和拖尾设置。刷新文件会恢复默认选组与名称。
-
-G 通道 PSF 有两种模式。归一化模式将各方案的窗口能量归一为 1，所有方案中的最高峰为 0 dB。绝对能量模式使用仿真中每个像元捕获的入射能量份额，100% 入射能量为 0 dB。两种模式均使用固定的 −70 至 0 dB 色标及相同的 ±100 μm 全视场和 ±25 μm 中心放大。切换选组时，坐标范围及对应模式的色标参考保持一致。
-
-离线 HTML 和 Streamlit 工作台的「PSF 色图」包含本机 MATLAB R2024a 的 21 种预定义色图，以及 Magma 和 Viridis。Jet 可用于对照 Yang 等图 4 的伪彩图。所有方案的两组 G 通道 PSF 和色标同步更新，导出的总图采用当前色图。MATLAB 色表可通过同目录的 `export_matlab_colormaps.m` 重新导出。
-
-「RGB 衍射 PSF」读取 MAT 中 `optics.kernel` 和 `optics.clearKernel` 的三通道像元能量，并采用 COE 的显示流程。工作台以所选方案和各自无遮挡参考的峰值确定同一曝光，离线 HTML 在生成时以全部内置方案及无遮挡参考固定曝光。根据已有线性 RGB 估算亮度 Y，对 Y 施加 `[log1p(60 × Y) / log1p(60)]^0.72`。每像元三个通道使用共同的亮度增益，高光按 RGB 向量等比例压缩，再编码为 sRGB。该映射只用于显示。
-
-新 Case 包保留线性 RGB 能量，导入后可参与共同曝光。只有旧版 RGB PNG 的包会标为「旧版映射」，完全缺少 RGB 的包会显示缺失。用原仿真 MAT 目录重新打包即可补齐。
-
-对比图可分层显示或叠加 BM 和 Cath。掩膜取自 `udc_results.mat` 中实际参与仿真的覆盖数据，并注明所显示的物面范围。叠加时白色为共同开口、蓝色为仅 BM 覆盖、橙色为仅 Cath 覆盖、紫色为两层重叠。新 Case 包会保留掩膜预览。旧包若缺少掩膜，可从原结果目录重新打包。
-
-滚动时方案列头固定在顶部，并随各图区横向同步移动。PNG 总图采用当前掩膜模式，并保留各区标题和方案名。顶部的「读图说明」解释 PSF、MTF、拖尾、通量和同曝光成像，并用 Case7 与 Case8 演示如何结合这些指标。返回对比页时保留当前选择与设置。
-
-## Streamlit 方案对比工作台
-
-在仓库根目录运行以下命令，浏览器打开 `http://127.0.0.1:8501`。依赖为 Python 3.10+、Streamlit 1.65+、Matplotlib、h5py、NumPy 和 Pillow。仿真数据由本机 Python 读取，网页与本机服务通信。
-
-```powershell
-python -m streamlit run topic_udc_imagingV2/benchmarks/case_comparison/streamlit_app.py --server.address 127.0.0.1 --server.headless true --browser.gatherUsageStats false
-```
-
-左侧会自动发现结果目录下含完整 UDC V2 MAT、CSV 和 PNG 的方案。新结果可放在该目录的 `<方案>/<模式>/`（或直接 `<方案>/`）下。展开「打包 MATLAB 仿真结果」，选中本地方案和模式，点「生成并下载 Case 包」。生成的 `.udc.zip` 可从左侧重新导入。
-
-命令行也可以使用同一个打包脚本，例如：
-
-```powershell
-python topic_udc_imagingV2/benchmarks/case_comparison/case_workspace.py topic_udc_imagingV2/Output/case8/nk --name "Case8" --output topic_udc_imagingV2/Output/case8.udc.zip
-```
-
-选组后，工作台按指标列出不同和缺失的仿真条件。对比总图沿用离线 HTML 的布局，无遮挡参考放在方案左侧。G 通道 PSF 同时显示共同接收视场和其中的 ±25 μm 中心放大，原像元采用同一空间比例及固定的 −70 至 0 dB 色标。归一化模式的 0 dB 对应单个像元占全部窗口能量。RGB PSF 使用同一共同视场。单独选择 Case01 可查看原始 ±600 μm 接收范围。MTF 显示共同有效频段。通量可选择以入射能量或各自的无遮挡捕获量为分母。拖尾限于计算窗口，指标半径可从各方案均有效的值中选择。可从工具栏下载当前对比总图 PNG。
+已生成的 UDC V2 结果可在同级的[透射衍射对比工作台](../../topic_transmission_diffraction_viewer/docs/README.md)中查看、打包和比较。工作台会自动发现本 topic 的 `Output/` 中的结果。

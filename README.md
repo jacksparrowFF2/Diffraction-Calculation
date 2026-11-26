@@ -11,6 +11,7 @@ MATLAB 孔径衍射、COE 反射和 UDC 成像仿真。后续开发以 COE/UDC �
 | `topic_coe_reflection` | 主要开发方向：COE 反射方案评估与对比 | [使用说明](topic_coe_reflection/docs/README.md) |
 | `topic_udc_imaging` | 主要开发方向：UDC 成像方案评估与对比 | [使用说明](topic_udc_imaging/docs/README.md) |
 | `topic_udc_imagingV2` | 使用 COE 同版图及接收格积分计算 UDC 透射成像 | [case01 使用说明](topic_udc_imagingV2/docs/README.md) |
+| `topic_transmission_diffraction_viewer` | 交互式透射衍射结果对比、可比性检查和 Case 打包 | [工作台使用说明](topic_transmission_diffraction_viewer/docs/README.md) |
 | `topic_pixel_unfolding` | 同事编写的像素显示仿真 GUI | [使用说明](topic_pixel_unfolding/docs/README.md) |
 | `topic_coe_reference`（暂停开发） | 同事编写的像素显示仿真程序，保留供功能设计参考 | [使用说明](topic_coe_reference/docs/README.md) |
 
@@ -35,6 +36,8 @@ topic_方向名称/
 仓库根目录的 `src/` 保留初始化、联合演示和兼容参数入口；`docs/` 保留跨方向的模型说明。`reference/`、`input/` 和 `ImageForShow/` 保留共享教学参考及尚未归属具体方向的历史资料。
 
 ## 开始运行
+
+Windows 下可双击[透射衍射对比工作台启动器](topic_transmission_diffraction_viewer/Start_Transmission_Diffraction_Viewer.cmd)，查看已生成的 UDC V2 仿真结果。
 
 在 MATLAB 中切换到仓库根目录：
 

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>UDC 衍射成像对比</title>
+  <title>透射衍射对比工作台</title>
   <style>
     :root {
       color-scheme: light;
@@ -138,7 +138,7 @@
 <body>
   <header>
     <div class="masthead">
-      <h1>UDC 衍射成像对比</h1>
+      <h1>透射衍射对比工作台</h1>
       <p>4 mm 入瞳 · 236.2 μm Pitch · 17×17 · 500 点/Pitch · 3 mm 焦距 · 1 μm 像元 · D65 · USAF500</p>
     </div>
   </header>
@@ -178,6 +178,10 @@
             <div class="plot-window"><canvas id="mask-plot" role="img" aria-label="各方案的 BM 和 Cath 掩膜"></canvas></div>
           </div>
           <div class="plot-panel">
+            <div class="panel-heading"><h3>物面 · 有效振幅入瞳</h3></div>
+            <div class="plot-window"><canvas id="pupil-plot" role="img" aria-label="各方案的物面有效振幅入瞳及共同灰度振幅色标"></canvas></div>
+          </div>
+          <div class="plot-panel">
             <div class="panel-heading">
               <h3 id="psf-title">G 通道归一化 PSF · 全视场</h3>
               <div class="panel-controls">
@@ -198,7 +202,7 @@
                 <label>捕获量分母 <select id="flux-mode"><option value="relative">各自无遮挡</option><option value="captured">入射能量</option></select></label>
               </div>
             </div>
-            <div class="plot-window"><canvas id="response-plot" role="img" aria-label="G 通道 MTF 和 RGB 窗口捕获量"></canvas></div>
+            <div class="plot-window"><canvas id="response-plot" role="img" aria-label="G 通道 MTF 及方案图例，RGB 窗口捕获量"></canvas></div>
           </div>
           <div class="plot-panel">
             <div class="panel-heading">
@@ -207,7 +211,7 @@
                 <label>拖尾纵轴 <select id="tail-mode"><option value="tailFraction">占窗口能量</option><option value="tailAbsolute">占入射能量</option></select></label>
               </div>
             </div>
-            <div class="plot-window"><canvas id="tail-plot" role="img" aria-label="G 通道 PSF 拖尾对比"></canvas></div>
+            <div class="plot-window"><canvas id="tail-plot" role="img" aria-label="G 通道 PSF 拖尾及方案图例"></canvas></div>
           </div>
           <div class="plot-panel">
             <div class="panel-heading"><h3 id="scene-title">USAF500 · 同曝光成像</h3></div>
@@ -249,6 +253,12 @@
         <h3>先确认方案可比</h3>
         <p>用无遮挡曲线和图像作共同参考。无遮挡仍包含有限入瞳的衍射和像元积分。比较时核对入瞳、焦距、光谱及 RGB 响应、像元、接收窗口与采样。比较同曝光图时，还要核对场景和曝光口径。</p>
         <p>工作台按指标给出「可直接比较」「需注明条件」或「可比性待确认」。接收范围不同时，PSF 画面可裁成共同视场，归一化分母和拖尾仍取各自的仿真接收窗口。</p>
+      </div>
+
+      <div class="guide-topic">
+        <h3>有效振幅入瞳 · 物面上哪些区域有光透过</h3>
+        <p>物面图将几何入瞳与该位置的透射振幅相乘，采用最接近 550 nm 的仿真波长。色标上的 0 表示零振幅，1 表示与入射振幅相同。各方案共用物面坐标和振幅色标，无遮挡参考显示几何入瞳。强度透过率等于透射振幅的模平方时，50% 中性衰减在这里对应约 0.707 倍振幅。</p>
+        <p>旧 Case 包若显示「缺少物面数据」，可从原 MATLAB 结果目录重新打包。</p>
       </div>
 
       <div class="guide-topic guide-optics">

@@ -2,10 +2,10 @@
 
 import numpy as np
 
-from build_interactive_comparison import mask_payload, png_url, psf_palettes, psf_url, render_page
-from case_compatibility import RULES, common_band, common_tail_radii, evaluate
-from case_workspace import RGB
-from comparison_data import PSF_FLOOR_DB, rgb_peak, rgb_psf_png
+from .case_compatibility import RULES, common_band, common_tail_radii, evaluate
+from .case_workspace import RGB
+from .comparison_page import mask_payload, png_url, psf_palettes, psf_url, pupil_payload, render_page
+from .viewer_data import PSF_FLOOR_DB, rgb_peak, rgb_psf_png
 
 
 CASE_COLORS = ('#2379ab', '#be552b', '#228475', '#8756b2', '#b34d72', '#996811')
@@ -21,6 +21,7 @@ def reference_groups(cases):
         name = ('共同无遮挡参考' if len(group) == len(cases) and len(cases) > 1 else
                 '无遮挡 · ' + ' / '.join(case.name for case in group))
         representative = max(group, key=lambda case: (case.clear_rgb_kernel is not None,
+                                                      case.pupil_preview is not None,
                                                       case.clear_rgb_psf is not None))
         yield name, representative
 
@@ -72,6 +73,7 @@ def workspace_page(cases, show_clear):
             rgbLegacy=rgb is not None and rgb_kernel is None,
             rgbExtent=[float(axis[0] - step/2), float(axis[-1] + step/2)],
             maskPreview=None if clear else mask_payload(case.mask_previews),
+            pupilPreview=pupil_payload(case.pupil_preview, clear),
             relative=[num / den if den > 0 else None for num, den in zip(captured, denominators)],
             captured=captured, total=[1 if clear else case.channels[ch][0] for ch in RGB],
             freq=freq, mtf=curve, bandMin=band_min, mtf300=mtf_300,

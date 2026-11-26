@@ -28,6 +28,7 @@ const scale = 2;
 const columnLeft = 70;
 const columnRight = 64;
 const columnGutters = columnLeft + columnRight;
+const legendRowHeight = 22;
 const maskLayers = ['BM', 'Cath'];
 // Palette indices encode coverage: bit 0 = BM, bit 1 = Cath.
 const maskColors = [[255, 255, 255], [38, 117, 172], [243, 164, 59], [116, 81, 154]];
@@ -140,12 +141,20 @@ function sectionTitle(ctx, title, note, y) {
   label(ctx, note, 28, y + 18, {color: muted});
 }
 
-function drawLegend(ctx, cases, width) {
-  const cols = Math.min(cases.length, Math.max(1, Math.floor((width - 56) / 225)));
-  const cell = (width - 56) / cols;
+function legendColumns(cases, width) {
+  return Math.min(cases.length, Math.max(1, Math.floor(width / 180)));
+}
+
+function legendHeight(cases, width) {
+  return legendRowHeight * Math.ceil(cases.length / legendColumns(cases, width));
+}
+
+function drawLegend(ctx, cases, left, top, width) {
+  const cols = legendColumns(cases, width);
+  const cell = width / cols;
   cases.forEach((record, i) => {
-    const x = 28 + (i % cols) * cell;
-    const y = 91 + Math.floor(i / cols) * 24;
+    const x = left + (i % cols) * cell;
+    const y = top + Math.floor(i / cols) * legendRowHeight;
     lineStyle(ctx, record);
     ctx.beginPath();
     ctx.moveTo(x, y - 4);
@@ -154,7 +163,6 @@ function drawLegend(ctx, cases, width) {
     ctx.setLineDash([]);
     label(ctx, nameOf(record), x + 29, y, {size: 12, max: cell - 36});
   });
-  return 113 + (Math.ceil(cases.length / cols) - 1) * 24;
 }
 
 function caseDash(record) {
@@ -363,6 +371,64 @@ function drawPsf(ctx, cases, width, top, radius, side, mode) {
   if (!rgbPsf) drawHeatScale(ctx, width - 52, top + 50, side);
 }
 
+function drawPupils(ctx, cases, width, top, side) {
+  const cell = (width - columnGutters) / cases.length;
+  const extent = Math.max(0, ...cases.flatMap(record => record.pupilPreview?.extent.map(Math.abs) ?? []));
+  const rounding = 10 ** (Math.floor(Math.log10(extent || 1)) - 1);
+  const radius = Math.ceil(extent / rounding) * rounding;
+  const firstImage = cases.findIndex(record => record.pupilImage);
+  sectionTitle(ctx, '物面 · 有效振幅入瞳', '选用最接近 550 nm 的仿真波长 · 共同物面坐标和 0–1 振幅色标', top);
+  const y = top + 50;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  cases.forEach((record, i) => {
+    const center = columnLeft + (i + .5) * cell;
+    const x = center - side / 2;
+    label(ctx, nameOf(record), center, top + 40, {align: 'center', weight: 660, max: cell - 10});
+    ctx.fillStyle = '#f2f6f8';
+    ctx.fillRect(x, y, side, side);
+    if (!record.pupilImage) {
+      label(ctx, '缺少物面数据', center, y + side / 2 + 4,
+            {size: 11, color: muted, align: 'center', max: side - 8});
+      return;
+    }
+
+    const [left, right, bottom, upper] = record.pupilPreview.extent;
+    const px = side / (2 * radius);
+    ctx.drawImage(record.pupilImage, center + left * px, y + (radius - upper) * px,
+                  (right - left) * px, (upper - bottom) * px);
+    ctx.strokeStyle = gridColor;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x, y, side, side);
+    for (const tick of [-radius, 0, radius]) {
+      const text = String(Number(tick.toPrecision(5)));
+      label(ctx, text, center + tick * px, y + side + 14, {size: 10, color: muted, align: 'center'});
+      if (i === firstImage) {
+        label(ctx, text, x - 5, y + side / 2 - tick * px + 3,
+              {size: 10, color: muted, align: 'right'});
+      }
+    }
+    if (i === firstImage) {
+      label(ctx, 'y (μm)', x - 4, y - 7, {size: 10, color: muted, align: 'right'});
+    }
+    const detail = isReference(record) ? '几何入瞳' : `${Number(record.pupilPreview.wavelengthNm.toFixed(2))} nm`;
+    label(ctx, `x (μm) · ${detail}`, center, y + side + 29, {size: 10, color: muted, align: 'center'});
+  });
+  if (radius > 0) {
+    const x = width - 52;
+    const gradient = ctx.createLinearGradient(0, y, 0, y + side);
+    gradient.addColorStop(0, '#fff');
+    gradient.addColorStop(1, '#000');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(x, y, 12, side);
+    ctx.strokeStyle = gridColor;
+    ctx.strokeRect(x, y, 12, side);
+    for (const value of [1, .5, 0]) {
+      label(ctx, String(value), x + 16, y + (1 - value) * side + 4, {size: 10, color: muted});
+    }
+  }
+}
+
 function chartAxes(ctx, x, y, width, height, ticks, maximum, format) {
   ctx.lineWidth = 1;
   ctx.strokeStyle = gridColor;
@@ -463,15 +529,19 @@ function drawScenes(ctx, cases, width, top, side) {
 
 function drawFigure(cases) {
   const width = Math.max(900, 138 * cases.length + 152, plots.clientWidth);
-  const side = Math.min(202, Math.floor((width - columnGutters) / cases.length) - 28);
+  const cellWidth = Math.floor((width - columnGutters) / cases.length);
+  const side = Math.min(202, cellWidth - 28);
   const overlay = maskMode.value === 'overlay';
   const maskSide = overlay ? side : Math.min(152, side);
   const maskHeight = overlay ? maskSide + 110 : 2 * maskSide + 108;
-  const responseHeight = 257;
-  const tailHeight = 194;
-  const legendColumns = Math.min(cases.length, Math.floor((width - 56) / 225));
-  const legendHeight = 113 + (Math.ceil(cases.length / legendColumns) - 1) * 24;
-  const height = legendHeight + maskHeight + (3 * side + 318) + responseHeight + tailHeight + (side + 93);
+  const pupilSide = Math.min(202, cellWidth - 40);
+  const pupilHeight = pupilSide + 105;
+  const mid = width / 2;
+  const band = workspace ? workspace.band : [0, 500];
+  const responseHeight = band ? 240 + legendHeight(cases, mid - 97) : 257;
+  const tailHeight = radii.length ? 200 + legendHeight(cases, width - 98) : 194;
+  const maskTop = 91 + legendHeight(cases, width - 56);
+  const height = maskTop + maskHeight + pupilHeight + (3 * side + 318) + responseHeight + tailHeight + (side + 93);
   figure.width = width * scale;
   figure.height = height * scale;
   const ctx = figure.getContext('2d', {alpha: false});
@@ -483,10 +553,11 @@ function drawFigure(cases) {
     ? (workspace.caution ? '所选方案存在条件差异或缺失项 · 详见工作台可比性判定' : '选中方案 · 固定色标与物理坐标')
     : '4 mm 入瞳 · 500 点/Pitch · D65 · USAF500';
   label(ctx, subtitle, 28, 58, {color: muted});
-  let top = drawLegend(ctx, cases, width);
-  const maskTop = top;
-  drawMasks(ctx, cases, width, top, maskSide, overlay);
-  top += maskHeight;
+  drawLegend(ctx, cases, 28, 91, width - 56);
+  drawMasks(ctx, cases, width, maskTop, maskSide, overlay);
+  const pupilTop = maskTop + maskHeight;
+  drawPupils(ctx, cases, width, pupilTop, pupilSide);
+  let top = pupilTop + pupilHeight;
   const psfTop = top;
   const mode = psfMode.value;
   const modeLabel = psfMode.selectedOptions[0].text;
@@ -509,9 +580,7 @@ function drawFigure(cases) {
   drawPsf(ctx, cases, width, top, full, side, 'rgb');
   top += side + 108;
   const responseTop = top;
-  const mid = width / 2;
   const box = {x: 67, y: top + 44, width: mid - 97, height: 148};
-  const band = workspace ? workspace.band : [0, 500];
   const note = workspace && band ? ` · 共同频段 ${band[0].toFixed(2)}–${band[1].toFixed(2)}` : '';
   sectionTitle(ctx, 'G 通道 MTF', `逐频率取四方向最低值${note} · cycles/mm`, top);
   if (band) {
@@ -520,6 +589,7 @@ function drawFigure(cases) {
     drawCurves(ctx, cases, box, {xMin, xMax, xTicks, yMax: 1,
         yTicks: [0, .25, .5, .75, 1], format: n => n.toFixed(2)},
       record => [record.freq, record.mtf]);
+    drawLegend(ctx, cases, box.x, top + 232, box.width);
   } else {
     label(ctx, '无共同有效频段', box.x, box.y + 30, {color: muted});
   }
@@ -542,6 +612,7 @@ function drawFigure(cases) {
         yTicks: [0, tickStep, 2*tickStep, 3*tickStep, 4*tickStep],
         markers: true, format: n => `${Math.round(100 * n)}%`},
       record => [radii, record[tailMode.value]]);
+    drawLegend(ctx, cases, 67, top + 193, width - 98);
   } else {
     label(ctx, '无共同有效半径', 67, top + 86, {color: muted});
   }
@@ -557,7 +628,8 @@ function drawFigure(cases) {
   const left = caseHeader.scrollLeft;
   drawCaseHeader(cases, width);
   // HTML titles replace the first canvas title in sections with a header bar.
-  drawPlot('mask-plot', width, maskTop + 3, psfTop - 18);
+  drawPlot('mask-plot', width, maskTop + 3, pupilTop - 18);
+  drawPlot('pupil-plot', width, pupilTop + 3, psfTop - 18);
   drawPlot('psf-plot', width, psfTop + 3, responseTop - 18);
   drawPlot('response-plot', width, responseTop - 18, tailTop - 18);
   drawPlot('tail-plot', width, tailTop + 3, top - 18);
@@ -684,18 +756,20 @@ for (const scroller of plotScrollers) {
 }
 window.addEventListener('resize', update);
 Promise.all(records.map(async record => {
-  const [normalized, absolute, scene, rgbPsf, masks] = await Promise.all([
+  const [normalized, absolute, scene, rgbPsf, masks, pupil] = await Promise.all([
     loadPsfRaster(record.psf), loadPsfRaster(record.absolutePsf), loadImage(record.scene),
     record.rgbPsf ? loadImage(record.rgbPsf) : null,
     Promise.all(maskLayers.map(layer => {
       const url = record.maskPreview?.layers[layer];
       return url ? loadImage(url) : null;
-    }))
+    })),
+    record.pupilPreview ? loadImage(record.pupilPreview.png) : null,
   ]);
   record.psfRasters = {normalized, absolute};
   record.sceneImage = scene;
   record.rgbPsfImage = rgbPsf;
   record.maskImages = Object.fromEntries(maskLayers.map((layer, i) => [layer, masks[i]]));
+  record.pupilImage = pupil;
 })).then(() => {
   ready = true;
   update();
