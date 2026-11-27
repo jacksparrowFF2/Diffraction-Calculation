@@ -1,6 +1,7 @@
-function [energy,clearEnergy,throughput] = coreIntegrateFftReceiver(receiver,transmissionAmplitudeByRegion,wavelength,sensorCoordinate,focalLength)
+function [energy,clearEnergy,throughput] = coreIntegrateFftReceiver(receiver,transmissionAmplitudeByRegion,wavelength,sensorCoordinate,imageDistance,binBounds)
 %coreIntegrateFftReceiver 在传感器坐标中按格面积重叠积分 FFT 强度。
-    fftBinCoordinates = wavelength*focalLength*receiver.frequency;
+    sceneBins = binBounds(1):binBounds(2);
+    fftBinCoordinates = wavelength*imageDistance*receiver.frequency(sceneBins);
     fftBinWidth = fftBinCoordinates(2)-fftBinCoordinates(1);
     sensorBinWidth = sensorCoordinate(2)-sensorCoordinate(1);
     overlapLimit = max(abs(sensorCoordinate))+(fftBinWidth+sensorBinWidth)/2;
@@ -8,6 +9,7 @@ function [energy,clearEnergy,throughput] = coreIntegrateFftReceiver(receiver,tra
     overlapStart = max(sensorCoordinate(:)-sensorBinWidth/2,fftBinCoordinates(overlappingBins)-fftBinWidth/2);
     overlapEnd = min(sensorCoordinate(:)+sensorBinWidth/2,fftBinCoordinates(overlappingBins)+fftBinWidth/2);
     overlapWeights = sparse(max(0,overlapEnd-overlapStart)/fftBinWidth);
+    overlappingBins = sceneBins(overlappingBins);
     clear overlapStart overlapEnd
 
     regionAmplitudes = transmissionAmplitudeByRegion(receiver.regions);

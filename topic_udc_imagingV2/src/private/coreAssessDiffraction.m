@@ -1,7 +1,7 @@
 function quality = coreAssessDiffraction(optics)
 %coreAssessDiffraction 比较同一入瞳的遮挡与无遮挡成像。
     options = struct('tailRadiiUm',[10,20,50], 'mtfBandCyclesPerMm',[10,100], ...
-        'hdrPointSignal',1000,'hdrDisplayHalfWidthUm',Inf);
+        'hdrPointSignal',1000,'hdrDisplayHalfWidthUm',Inf,'rgbDisplayFloorDb',[]);
     if isfield(optics.config,'quality')
         configured = optics.config.quality;
         for name = string(fieldnames(configured)).'
@@ -14,6 +14,9 @@ function quality = coreAssessDiffraction(optics)
         {'vector','numel',2,'real','finite','nonnegative','increasing'});
     validateattributes(options.hdrPointSignal,{'numeric'},{'scalar','real','finite','positive'});
     validateattributes(options.hdrDisplayHalfWidthUm,{'numeric'},{'scalar','real','nonnan','positive'});
+    if ~isempty(options.rgbDisplayFloorDb)
+        validateattributes(options.rgbDisplayFloorDb,{'numeric'},{'scalar','real','finite','<',0});
+    end
 
     nChannels = size(optics.kernel,3);
     channels = (1:nChannels).';

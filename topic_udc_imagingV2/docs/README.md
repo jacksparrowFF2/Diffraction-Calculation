@@ -16,9 +16,39 @@
 
 两种方式都可叠加 `heightMap` 指定的单程相位。共用 `displayoptics.readLayerGeometry` 完成采样、整周期裁取或平铺，并生成膜层覆盖区域。
 
-两条流程均以指定均匀频率网格上的傅里叶积分和接收格内中点细分积分计算功率。V2 把接收格定在传感器坐标上，按 `传感器坐标 / 焦距` 转换为近轴角度。通道核按 D65 光谱和相机响应加权，保留透过率及画幅截断损失。单位和 PSF 用于亮度匹配，MTF 从该 PSF 求得。
+两条流程均以指定均匀频率网格上的傅里叶积分和接收格内中点细分积分计算功率。V2 把接收格定在传感器坐标上，按 `传感器坐标 / 像距` 转换为近轴角度，默认像面模式的像距等于焦距。通道核按 D65 光谱和相机响应加权，保留透过率及画幅截断损失。单位和 PSF 用于亮度匹配，MTF 从该 PSF 求得。
 
 `case01/transmission_mask.png` 按原 COE 版图生成，阳极区为黑，BM 覆盖区为白，示例在 BM 区验证非零透射。直接模式取 `T=0.10`，有限膜模式取 `n=1.5`、`k=0.2`、厚度 0.5 μm。两种模式均使用 8×8 Pitch（总计 64 Pitch）、64 点/Pitch 和 D65 的 380–780 nm（间隔 10 nm）。相机取 0.20 mm 入瞳直径、3 mm 焦距、1 μm 像元及 1201×1201 接收格。像元中心覆盖 ±0.6 mm，与 Yang 等图 4 的 1.2 mm PSF 显示宽度对齐。RGB 响应采用示例高斯权重。相机和透射材料值均为流程验证参数。
+
+## 场景输入与拍摄距离
+
+默认把 `sceneFile` 的像素视为传感器像面上的理想线性光强图的 sRGB 编码，每个像素对应 `cfg.sensorPitch`。也可显式选择 `cfg.sceneGeometry.mode = "sensor"`。
+
+物体模式把输入图视为居中、正对镜头的平面目标。示例 [case9Object](../Input/case9Object/config.json) 使用 Case9 的掩膜，把 USAF 图作为距离镜头 500 mm、宽高各 50 mm 的物体。把下面的字段放在 `cfg` 内，并运行 `runUDCProject("case9Object")`。
+
+```json
+"sceneGeometry": {
+  "mode": "object",
+  "objectSizeMm": [50, 50],
+  "objectDistanceMm": 500
+}
+```
+
+`objectSizeMm` 按宽、高顺序填写。模型使用自动对焦的近轴薄透镜，按物距计算像距和放大率，再用传感器像元间距在**线性光强**下重采样和卷积。报告图保持正向，取景范围随目标投影而变，`cfg.outputSize` 仍是 PSF 的接收格大小。目标跨出裁幅的光采用已有边界延拓。重采样调用 Image Processing Toolbox 的 `imresize`。模型采用入瞳面掩膜及视场内统一的 PSF，适合比较对焦目标上细节的尺寸效应。
+
+如需整张照片，可在物体模式的 `sceneGeometry` 里加上以下字段。省略 `sensorFrameMm` 时，报告取目标裁幅。
+
+| 字段 | 用法 |
+|---|---|
+| `sensorFrameMm` | 传感器有效画幅的宽、高（mm）。目标居中，画幅边界裁切目标。 |
+| `previewWidthPixels` | 整图导出宽度，默认 1200，最多取画幅的原生像元数。高度按画幅宽高比计算。 |
+| `backgroundLinear` | 目标周围的均匀背景强度（线性光强 0–1），默认 0.18。 |
+
+[case9ObjectFrame](../Input/case9ObjectFrame/config.json) 与 `case9Object` 使用相同目标、物距和光学条件，把传感器画幅设为 4.8×3.6 mm，输出 1200×900 的整图。卷积沿用原生像元间距，再按面积平均到显示网格。MAT 和 PNG 中的场景图保存整图预览，PSF 和 MTF 仍按原生像元计算。报告同时提供同曝光和亮度匹配对照。
+
+Case9–12 的配置在顶层设置 `"sceneModes": ["sensor", "object"]`。每次运行 `runUDCProject("case9")` 会生成两套结果。sensor 沿用 `Output/case9/nk/`，object 写入 `Output/case9/object/nk/`，同一个 HTML 报告可跳转到两种模式。object 读取 `cfg.sceneGeometry` 中的 500×500 mm 目标、500 mm 物距、4.8×3.6 mm 画幅和 1200×900 预览配置。省略 `sceneModes` 的项目沿用原先的单模式入口。
+
+使用 `fftBins` 时，同一透射模式的场景共用一次入瞳 FFT 基底。各场景仍按本身的像距和原生频格计算接收像元积分，分别输出 PSF、MTF 和成像结果。
 
 ## 阵列与入瞳对比
 

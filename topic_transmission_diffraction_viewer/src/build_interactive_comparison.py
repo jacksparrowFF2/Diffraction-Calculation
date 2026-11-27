@@ -15,6 +15,8 @@ from transmission_diffraction_viewer.mask_previews import read_mask_previews
 from transmission_diffraction_viewer.pupil_preview import read_pupil_preview
 from transmission_diffraction_viewer.viewer_data import PSF_FLOOR_DB, green_mtf, read_csv, rgb_peak, rgb_psf_png
 from transmission_diffraction_viewer.viewer_paths import OUTPUT_DIR, RESULT_ROOTS
+from transmission_diffraction_viewer.case_workspace import RESULT_FILES, read_result
+from transmission_diffraction_viewer.workspace_figure import workspace_page
 
 
 CASES = (
@@ -133,9 +135,26 @@ def payload(results):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--results', type=Path, help='Directory containing case1–case8.')
+    parser.add_argument('--results', type=Path, help='Directory containing MATLAB case output folders.')
     parser.add_argument('--output', type=Path, help='Destination HTML file.')
+    parser.add_argument('--dual-scenes', action='store_true', help='Build Case9–12 sensor/object comparison.')
     args = parser.parse_args()
+    if args.dual_scenes:
+        cases = [(f'case{i}', mode, Path(f'case{i}') / subdir / 'nk') for i in range(9, 13)
+                 for mode, subdir in [('sensor', ''), ('object', 'object')]]
+        results = next((root for root in ((args.results,) if args.results else RESULT_ROOTS)
+                        if all((root / path / name).is_file() for _, _, path in cases for name in RESULT_FILES)), None)
+        if results is None:
+            parser.error('未找到完整的 Case9–12 sensor/object 结果。')
+        records = [read_result(results / path, f'{case} · {mode}')
+                   for case, mode, path in cases]
+        if any(record.conditions.get('scene_mode') != mode for record, (_, mode, _) in zip(records, cases)):
+            parser.error('结果目录中的场景模式与 Case 名称不一致。')
+        output = args.output or OUTPUT_DIR / 'udc_case9-12_dual_scene.html'
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(workspace_page(records, True, True, standalone=True), encoding='utf-8')
+        print(output.resolve())
+        return
     results = args.results or next((root for root in RESULT_ROOTS if all(
         (root / case / 'nk' / 'udc_results.mat').is_file() for case, _, _ in CASES)), None)
     if results is None:

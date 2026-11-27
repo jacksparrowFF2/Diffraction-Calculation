@@ -8,6 +8,7 @@ FIELDS = {
     'spectrum': '波长及 RGB 光谱权重',
     'pupil_mm': '入瞳直径',
     'focus_mm': '焦距',
+    'image_distance_mm': '像距',
     'pixel_um': '像元尺寸',
     'object_step_um': '物面采样间距',
     'periods': '物面阵列周期数',
@@ -17,11 +18,12 @@ FIELDS = {
     'energy_basis': '入射能量归一化',
     'clear': '无遮挡基准',
     'scene': '输入场景',
+    'scene_mode': '场景模式',
     'scene_shape': '图像尺寸',
     'exposure': '曝光定义',
     'mapping': '预览映射',
 }
-OPTICS = ('pupil_mm', 'focus_mm', 'spectrum', 'pixel_um', 'object_step_um',
+OPTICS = ('pupil_mm', 'focus_mm', 'image_distance_mm', 'spectrum', 'pixel_um', 'object_step_um',
           'periods', 'receiver', 'receiver_samples', 'grid')
 RULES = {
     '归一化 PSF': OPTICS,
@@ -30,7 +32,7 @@ RULES = {
     'RGB 通量': (*OPTICS, 'energy_basis'),
     '相对无遮挡通量': (*OPTICS, 'energy_basis', 'clear'),
     'G 通道拖尾': (*OPTICS, 'energy_basis'),
-    '同曝光图': (*OPTICS, 'energy_basis', 'scene', 'scene_shape', 'exposure', 'mapping'),
+    '同曝光图': (*OPTICS, 'energy_basis', 'scene_mode', 'scene', 'scene_shape', 'exposure', 'mapping'),
 }
 
 

@@ -1,4 +1,4 @@
-function receiver = corePrepareFftReceiver(opticsConfig,pupil,regionMap,objectGridStep,sensorCoordinate)
+function [receiver,binBounds] = corePrepareFftReceiver(opticsConfig,pupil,regionMap,objectGridStep,sensorCoordinate,imageDistances)
 %corePrepareFftReceiver 预计算与波长无关的入瞳傅里叶基底。
     assert(isscalar(opticsConfig.heightMap),'UDCImagingV2:FftHeightMap', ...
         'FFT 基底积分需要空间均匀的 heightMap。');
@@ -6,9 +6,13 @@ function receiver = corePrepareFftReceiver(opticsConfig,pupil,regionMap,objectGr
     fftSize = 2*ceil(max(size(pupil))*opticsConfig.receiverFftPaddingFactor/2);
     frequencyStep = 1/(fftSize*objectGridStep);
     sensorEdgeCoordinate = max(abs(sensorCoordinate))+(sensorCoordinate(2)-sensorCoordinate(1))/2;
-    requiredFrequencyEdge = sensorEdgeCoordinate/(min(opticsConfig.wavelengths)*opticsConfig.focalLength)+frequencyStep/2;
+    requiredFrequencyEdge = sensorEdgeCoordinate./(min(opticsConfig.wavelengths)*imageDistances)+frequencyStep/2;
     maxFrequencyBin = max(1,ceil(requiredFrequencyEdge/frequencyStep));
-    frequencyBins = max(-fftSize/2,-maxFrequencyBin):min(fftSize/2-1,maxFrequencyBin);
+    firstBin = max(-fftSize/2,-maxFrequencyBin);
+    lastBin = min(fftSize/2-1,maxFrequencyBin);
+    % 用共用频带计算基底，各像距继续取自己的频格，保持原先分箱。
+    frequencyBins = min(firstBin):max(lastBin);
+    binBounds = [firstBin;lastBin]-frequencyBins(1)+1;
     fftIndices = mod(frequencyBins,fftSize)+1;
     regionPixelCounts = accumarray(double(regionMap(pupil~=0))+1,1,[double(max(regionMap,[],'all'))+1,1]);
     illuminatedRegions = find(regionPixelCounts>0);

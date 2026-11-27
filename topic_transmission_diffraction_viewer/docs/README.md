@@ -17,7 +17,9 @@ python -m streamlit run src/streamlit_app.py --server.address 127.0.0.1 --server
 
 ## 结果目录和 Case 包
 
-可选择结果根目录，也可直接选中一个包含 `udc_results.mat`、三个指标 CSV（通道指标、方向 MTF、PSF 拖尾）和同曝光、无遮挡两个 PNG 的方案目录。结果根目录支持 `<方案>/<模式>/` 和 `<方案>/` 两种结构。
+可选择结果根目录，也可直接选中一个包含 `udc_results.mat`、三个指标 CSV（通道指标、方向 MTF、PSF 拖尾）和同曝光、无遮挡两个 PNG 的方案目录。结果根目录支持 `<方案>/<透射模式>/`、`<方案>/object/<透射模式>/` 和 `<方案>/`。
+
+侧栏「场景模式」可以筛选 sensor 或 object。选「全部」并载入同一 Case 的两套结果后，成像采用上排 sensor、下排 object，光学图表每个 Case 显示一套 object 结果。侧栏「成像显示」可切换同曝光与亮度匹配。Case9–12 的 object 模式使用 50×50 cm 目标、50 cm 物距和 4.8×3.6 mm 画幅。
 
 展开「打包并导入本地结果」，勾选方案后点击「导入所选结果」。工作台自动打包并将方案加入当前对比，切换结果目录后已导入方案仍可参与对比。数据包保存在 `Output/case_packages/`，也可以从同一面板下载。工作台根据源文件的修改时间和大小检查更新，源文件未变时复用已有包，已加入的方案不会重复添加。再次打开工作台时，直接选择已有有效数据包的本地方案也会复用该包。源文件更新后，再点一次导入即可更新原方案。
 
@@ -36,6 +38,8 @@ python src/build_interactive_comparison.py
 ```
 
 脚本在 `Input/` 或同级 UDC V2 的 `Output/` 中查找完整的 4 mm 入瞳 Case1–8，核对仿真参数、场景和共同无遮挡参考，生成 `Output/udc_comparison.html`。可用 `--results` 指定其它结果根目录，用 `--output` 指定 HTML 保存路径。双击生成的文件即可离线使用。
+
+运行 `python src/build_interactive_comparison.py --dual-scenes` 可生成 Case9–12 的 `Output/udc_case9-12_dual_scene.html`。页内默认显示两排成像，可用场景筛选切换成单排。
 
 ## 比较结果
 

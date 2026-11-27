@@ -49,6 +49,7 @@ class Case:
     clear_rgb_kernel: np.ndarray | None = None
     mask_previews: MaskPreviews | None = None
     pupil_preview: PupilPreview | None = None
+    matched_scene: bytes | None = None
 
 
 def fingerprint(*arrays):
@@ -62,7 +63,8 @@ def fingerprint(*arrays):
 
 def discover(root):
     folders = (root, *(path.parent for path in root.glob('*/udc_results.mat')),
-               *(path.parent for path in root.glob('*/*/udc_results.mat')))
+               *(path.parent for path in root.glob('*/*/udc_results.mat')),
+               *(path.parent for path in root.glob('*/object/*/udc_results.mat')))
     return sorted(folder for folder in folders if all((folder / name).is_file() for name in RESULT_FILES))
 
 
@@ -71,8 +73,16 @@ def default_results_root():
 
 
 def source_stamp(folder):
-    return tuple((p.stat().st_mtime_ns, p.stat().st_size) for p in
-                 (folder / name for name in RESULT_FILES))
+    sources = [folder / name for name in RESULT_FILES]
+    matched = folder / 'udc_brightness_matched.png'
+    if matched.is_file():
+        sources.append(matched)
+    return tuple((info.st_mtime_ns, info.st_size) for info in (path.stat() for path in sources))
+
+
+def result_scene_mode(folder):
+    with h5py.File(folder / 'udc_results.mat') as data:
+        return 'object' if 'cfg/sceneProjection' in data else 'sensor'
 
 
 def preview_fingerprint(preview):
@@ -88,6 +98,7 @@ def preview_fingerprint(preview):
 def read_result(folder, name):
     with h5py.File(folder / 'udc_results.mat') as f:
         cfg = f['cfg']
+        scene_projection = cfg.get('sceneProjection')
 
         def scalar(key, factor=1):
             value = float(cfg[key][()].item()) * factor if key in cfg else None
@@ -127,6 +138,8 @@ def read_result(folder, name):
             'pupil_mm': ('无限入瞳' if 'pupilRadius' in cfg and np.isposinf(cfg['pupilRadius'][()].item())
                          else scalar('pupilRadius', 2e3)),
             'focus_mm': scalar('focalLength', 1e3),
+            'image_distance_mm': (float(scene_projection['imageDistanceMm'][()].item())
+                                  if scene_projection is not None else scalar('focalLength', 1e3)),
             'pixel_um': scalar('sensorPitch', 1e6),
             'object_step_um': pitch / samples if pitch and samples else None,
             'periods': periods,
@@ -138,10 +151,17 @@ def read_result(folder, name):
             'energy_basis': 'V2 / incident pupil energy' if project else None,
             'clear': fingerprint(all_clear),
             'scene': fingerprint(input_scene[()]) if input_scene is not None else None,
+            'scene_mode': 'object' if scene_projection is not None else 'sensor',
             'scene_shape': list(fixed_scene.shape) if fixed_scene is not None else None,
             'exposure': 'V2 fixedExposure / unit gain' if project and fixed_scene is not None else None,
             'mapping': 'V2 / linear clamp 0-1 to sRGB' if project and fixed_scene is not None else None,
         }
+        if set((project or {}).get('sceneModes', ())) == {'sensor', 'object'}:
+            project_folder = folder.parent if scene_projection is None else folder.parent.parent
+            pair = f'{project_folder.resolve().as_posix()}|{folder.name}'
+            conditions['scene_pair'] = sha256(pair.encode('utf-8')).hexdigest()
+        if scene_projection is not None and 'frame/sizeMm' in scene_projection:
+            conditions['scene_frame_mm'] = scene_projection['frame/sizeMm'][()].ravel().tolist()
         if fixed_scene is not None and clear_scene is not None:
             denominator = float(clear_scene[1].mean())
             if denominator > 0:
@@ -156,12 +176,13 @@ def read_result(folder, name):
                                          'ClearTailFractionWithinWindow', 'ClearTailThroughput')]
              for row in read_csv(folder, 'udc_psf_tail.csv')
              if row['Channel'] == 'G' and row['RadiusFitsWindow'] == '1']
+    matched = folder / 'udc_brightness_matched.png'
     return validate(Case(name, conditions, axis, kernel, all_clear[1].T,
                          freq[defined], mtf[defined], clear_mtf[defined], channels, tails,
                          (folder / 'udc_fixed_exposure.png').read_bytes(),
                          (folder / 'udc_clear.png').read_bytes(),
                          rgb_kernel=all_kernel, clear_rgb_kernel=all_clear, mask_previews=previews,
-                         pupil_preview=pupil))
+                         pupil_preview=pupil, matched_scene=matched.read_bytes() if matched.is_file() else None))
 
 
 def validate(case):
@@ -169,9 +190,16 @@ def validate(case):
     if (not isinstance(case.name, str) or not case.name.strip() or len(case.name) > 120
             or not isinstance(case.conditions, dict)):
         raise ValueError('方案名称或条件清单无效。')
-    for key in ('clear', 'grid', 'scene', 'spectrum', 'receiver', 'exposure', 'mapping', 'energy_basis'):
+    for key in ('clear', 'grid', 'scene', 'scene_pair', 'spectrum', 'receiver', 'exposure', 'mapping', 'energy_basis'):
         if case.conditions.get(key) is not None and not isinstance(case.conditions[key], str):
             raise ValueError(f'条件字段 {key} 的类型无效。')
+    if case.conditions.get('scene_mode') not in (None, 'sensor', 'object'):
+        raise ValueError('场景模式无效。')
+    if (frame := case.conditions.get('scene_frame_mm')) is not None:
+        size = np.asarray(frame, dtype=float)
+        if size.shape != (2,) or not np.all(np.isfinite(size) & (size > 0)):
+            raise ValueError('场景画幅尺寸无效。')
+        case.conditions['scene_frame_mm'] = size.tolist()
     if (case.axis_um.ndim != 1 or not 3 <= n <= MAX_AXIS
             or not np.all(np.isfinite(case.axis_um)) or not np.all(np.diff(case.axis_um) > 0)):
         raise ValueError('PSF 坐标必须为递增的一维有限数组。')
@@ -200,6 +228,8 @@ def validate(case):
             raise ValueError('拖尾数据无效。')
     preview_fingerprint(case.scene)
     case.conditions['clear_preview'] = preview_fingerprint(case.clear_scene)
+    if case.matched_scene is not None:
+        preview_fingerprint(case.matched_scene)
     for rgb in (case.rgb_psf, case.clear_rgb_psf):
         if rgb is not None:
             if len(rgb) > MAX_IMAGE or not rgb.startswith(b'\x89PNG\r\n\x1a\n'):
@@ -235,6 +265,8 @@ def write_package(case, target, *, cache_revision=None):
                 archive.writestr(f'{key}_rb.f64', np.asarray(rgb[[0, 2]], dtype='<f8').tobytes())
         archive.writestr('scene.png', case.scene)
         archive.writestr('clear.png', case.clear_scene)
+        if case.matched_scene is not None:
+            archive.writestr('matched.png', case.matched_scene)
         if case.rgb_psf is not None:
             archive.writestr('rgb-psf.png', case.rgb_psf)
         if case.clear_rgb_psf is not None:
@@ -328,7 +360,8 @@ def read_package(data):
                              meta['channels'], meta['tails'], archive.read('scene.png'), archive.read('clear.png'),
                              optional('rgb-psf.png'), optional('clear-rgb-psf.png'),
                              rgb_kernel('rgb_kernel', green), rgb_kernel('clear_rgb_kernel', clear_green),
-                             mask_previews=previews, pupil_preview=read_package_pupil(archive, meta.get('pupil_preview'))))
+                             mask_previews=previews, pupil_preview=read_package_pupil(archive, meta.get('pupil_preview')),
+                             matched_scene=optional('matched.png')))
 
 
 def main():

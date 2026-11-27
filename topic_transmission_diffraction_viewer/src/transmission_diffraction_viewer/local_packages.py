@@ -8,12 +8,12 @@ from tempfile import NamedTemporaryFile
 from zipfile import BadZipFile, ZipFile
 from zlib import error as DecompressionError
 
-from .case_workspace import read_result, source_stamp, write_package
+from .case_workspace import RESULT_FILES, read_result, source_stamp, write_package
 from .viewer_paths import OUTPUT_DIR
 
 
 CACHE_DIR = OUTPUT_DIR / 'case_packages'
-CACHE_VERSION = 2
+CACHE_VERSION = 3
 PRE_PUPIL_CACHE_VERSION = 1
 
 
@@ -52,11 +52,13 @@ def ensure_local_package(folder, name, directory=CACHE_DIR, *, rebuild=False):
     return store_local_package(folder, name, package, stamp, revision)
 
 
-def upgrade_pupil_package(folder, name, package):
-    """Add pupil data to a managed package whose MATLAB sources are unchanged."""
+def upgrade_local_package(folder, name, package):
+    """Refresh a managed package whose MATLAB sources are unchanged."""
     stamp = source_stamp(folder)
     expected_package, revision = package_identity(folder, stamp, package.parent)
-    if package != expected_package or cached_revision(package) != revision_for(stamp, PRE_PUPIL_CACHE_VERSION):
+    previous_stamp = stamp[:len(RESULT_FILES)]
+    previous_revisions = (revision_for(previous_stamp, PRE_PUPIL_CACHE_VERSION), revision_for(stamp, 2))
+    if package != expected_package or cached_revision(package) not in previous_revisions:
         return False
     store_local_package(folder, name, package, stamp, revision)
     return True

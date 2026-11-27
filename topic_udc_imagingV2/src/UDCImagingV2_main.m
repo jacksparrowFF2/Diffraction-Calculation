@@ -11,6 +11,10 @@ repositoryDir = fileparts(moduleDir);
 projectInputDir = fullfile(moduleDir,'Input',projectName);
 projectOutputDir = fullfile(moduleDir,'Output',projectName);
 [projectSettings,projectConfigJson,transmissionModes] = coreLoadUDCProjectConfig(projectInputDir,transmissionModes);
+if isfield(projectSettings,'sceneModes')
+    [optics,images,reportPath] = runUDCProject(projectName,transmissionModes);
+    return
+end
 
 %% 2. 读取模型参数、膜堆配置和场景
 if isfield(projectSettings,'reuseProject')

@@ -12,6 +12,20 @@ CASE_COLORS = ('#2379ab', '#be552b', '#228475', '#8756b2', '#b34d72', '#996811')
 REFERENCE_COLORS = ('#596678', '#776f88', '#567b79')
 
 
+def paired_scene_keys(cases):
+    modes = {}
+    for case in cases:
+        if pair := case.conditions.get('scene_pair'):
+            modes.setdefault(pair, []).append(case.conditions.get('scene_mode'))
+    return {pair for pair, group in modes.items() if len(group) == 2 and set(group) == {'object', 'sensor'}}
+
+
+def optical_cases(cases):
+    paired = paired_scene_keys(cases)
+    return [case for case in cases if case.conditions.get('scene_pair') not in paired
+            or case.conditions.get('scene_mode') == 'object']
+
+
 def reference_groups(cases):
     groups = {}
     for index, case in enumerate(cases):
@@ -23,10 +37,11 @@ def reference_groups(cases):
         representative = max(group, key=lambda case: (case.clear_rgb_kernel is not None,
                                                       case.pupil_preview is not None,
                                                       case.clear_rgb_psf is not None))
-        yield name, representative
+        yield name, representative, group
 
 
-def workspace_page(cases, show_clear):
+def workspace_page(cases, show_clear, brightness_matched=False, *, standalone=False):
+    paired = paired_scene_keys(cases)
     full_radius = round(min(min(-c.axis_um[0], c.axis_um[-1]) for c in cases), 9)
     if full_radius <= 0:
         raise ValueError('所选 PSF 没有以零点为中心的共同接收范围。')
@@ -34,7 +49,7 @@ def workspace_page(cases, show_clear):
     radii = common_tail_radii(cases)
     rgb_reference = rgb_peak(kernel for case in cases for kernel in (case.rgb_kernel, case.clear_rgb_kernel))
 
-    def make_record(case, name, key, color, clear=False, dash=()):
+    def make_record(case, name, key, color, clear=False, dash=(), pair=None):
         axis = case.axis_um
         step = float(axis[1] - axis[0])
         if not np.allclose(np.diff(axis), step, rtol=1e-9, atol=1e-9):
@@ -65,8 +80,18 @@ def workspace_page(cases, show_clear):
         rgb = case.clear_rgb_psf if clear else case.rgb_psf
         if rgb_kernel is not None:
             rgb = rgb_psf_png(rgb_kernel, rgb_reference)
+        scene = case.clear_scene if clear else case.scene
+        scene_note = None
+        if brightness_matched:
+            if not clear and case.matched_scene is not None:
+                scene = case.matched_scene
+            elif not clear:
+                scene_note = '同曝光 · 缺少亮度匹配预览'
+            if scene_note is None and (frame := case.conditions.get('scene_frame_mm')):
+                scene_note = f'{frame[0]:g} × {frame[1]:g} mm'
         return dict(
             id=key, name=name, color=color, selected=True, reference=clear, dash=dash,
+            sceneMode=case.conditions.get('scene_mode'), scenePair=pair,
             psf=psf_url(normalized, 1), absolutePsf=psf_url(crop, 1),
             psfExtent=[float(axis[keep[0]] - step/2), float(axis[keep[-1]] + step/2)],
             rgbPsf=png_url(rgb) if rgb is not None else None,
@@ -80,19 +105,33 @@ def workspace_page(cases, show_clear):
             tailFraction=[tail[r][3 if clear else 1] for r in radii],
             tailAbsolute=[tail[r][4 if clear else 2] for r in radii],
             center=float(kernel[center, center] / energy) if energy else None,
-            scene=png_url(case.clear_scene if clear else case.scene),
+            scene=png_url(scene), sceneNote=scene_note,
             mean=[None, 1 if clear else case.conditions.get('scene_mean_g'), None],
         )
 
     records = []
     if show_clear:
-        for i, (name, case) in enumerate(reference_groups(cases)):
+        for i, (name, case, group) in enumerate(reference_groups(cases)):
+            keys = [member.conditions.get('scene_pair') for member in group]
+            reference_pair = None
+            if keys and all(key in paired for key in keys):
+                reference_pair = 'clear:' + ':'.join(sorted(keys))
+                name = '无遮挡参考' if len(keys) * 2 == len(cases) else name
             records.append(make_record(case, name, f'clear-{i + 1}', REFERENCE_COLORS[i % len(REFERENCE_COLORS)],
-                                       clear=True))
-    records.extend(make_record(case, case.name, f'case-{i + 1}', CASE_COLORS[i % len(CASE_COLORS)],
-                               dash=(7, 5) if i % 2 else ())
-                   for i, case in enumerate(cases))
-    caution = len(cases) > 1 and any(evaluate(cases, metric)[0] != '可直接比较' for metric in RULES)
+                                       clear=True, pair=reference_pair))
+    case_styles = {}
+    for i, case in enumerate(cases):
+        pair = case.conditions.get('scene_pair')
+        pair = pair if pair in paired else None
+        name = case.name
+        if pair:
+            name = name.replace(f" · {case.conditions['scene_mode']}", '', 1)
+        style = case_styles.setdefault(pair or i, len(case_styles))
+        records.append(make_record(case, name, f'case-{i + 1}', CASE_COLORS[style % len(CASE_COLORS)],
+                                   dash=(7, 5) if style % 2 else (), pair=pair))
+    optics_only = optical_cases(cases)
+    caution = len(optics_only) > 1 and any(evaluate(optics_only, metric)[0] != '可直接比较' for metric in RULES)
     return render_page({'records': records, 'palettes': psf_palettes(), 'floorDb': PSF_FLOOR_DB,
                         'workspace': {'fullRadius': full_radius, 'zoomRadius': min(25., full_radius),
+                                      'brightnessMatched': brightness_matched, 'standalone': standalone,
                                       'band': band, 'tailRadii': radii, 'caution': caution}})

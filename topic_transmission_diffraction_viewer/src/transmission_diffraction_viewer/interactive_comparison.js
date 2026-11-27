@@ -18,6 +18,8 @@ const psfPalette = byId('psf-palette');
 const tailMode = byId('tail-mode');
 const fluxMode = byId('flux-mode');
 const tailRadius = byId('tail-radius');
+const sceneFilter = byId('scene-filter');
+const embedded = workspace && !workspace.standalone;
 const radii = workspace?.tailRadii ?? [10, 20, 50];
 const ink = '#172638';
 const muted = '#516277';
@@ -39,9 +41,20 @@ const percent = value => Number.isFinite(value) ? `${(100 * value).toFixed(2)}%`
 const number = (value, digits) => Number.isFinite(value) ? value.toFixed(digits) : '—';
 const nameOf = record => record.nameInput?.value.trim() || record.name;
 const isReference = record => record.reference || record.id === 'clear';
-const selected = () => workspace ? records : records.filter(record => record.checkbox.checked);
+const matchesScene = record => !workspace?.standalone || sceneFilter.value === 'all' || record.sceneMode === sceneFilter.value;
+const groups = new Map();
+for (const record of records) {
+  const key = record.scenePair || record.id;
+  if (!groups.has(key)) groups.set(key, []);
+  groups.get(key).push(record);
+}
+const opticalRecord = variants => variants.find(record => record.sceneMode === 'object') ?? variants[0];
+const activeGroups = () => Array.from(groups.values(), variants =>
+  variants.filter(record => matchesScene(record) && (embedded || record.checkbox.checked))).filter(group => group.length);
+const selected = () => activeGroups().map(opticalRecord);
 
-function addControls(record) {
+function addControls(variants) {
+  const record = opticalRecord(variants);
   const row = document.createElement('div');
   row.className = 'control-row';
   const checkbox = document.createElement('input');
@@ -52,7 +65,8 @@ function addControls(record) {
   const fields = document.createElement('div');
   const label = document.createElement('label');
   label.htmlFor = checkbox.id;
-  const idLabel = record.id === 'clear' ? '无遮挡参考' : record.id.replace('case', 'Case');
+  const idLabel = workspace?.standalone ? record.name :
+                  record.id === 'clear' ? '无遮挡参考' : record.id.replace('case', 'Case');
   const swatch = document.createElement('span');
   swatch.className = 'swatch';
   swatch.style.backgroundColor = record.color;
@@ -65,19 +79,21 @@ function addControls(record) {
   nameInput.addEventListener('input', update);
   fields.append(label, nameInput);
   row.append(checkbox, fields);
-  byId(record.id === 'clear' ? 'reference-control' : 'case-controls').append(row);
-  Object.assign(record, {checkbox, nameInput});
+  byId(isReference(record) ? 'reference-control' : 'case-controls').append(row);
+  for (const variant of variants) Object.assign(variant, {checkbox, nameInput, controlRow: row});
 }
 
 function setAll(checked) {
-  for (const record of records) {
-    if (record.id !== 'clear') record.checkbox.checked = checked;
+  for (const variants of groups.values()) {
+    const record = opticalRecord(variants);
+    if (!isReference(record) && variants.some(matchesScene)) record.checkbox.checked = checked;
   }
   update();
 }
 
 function reset() {
-  for (const record of records) {
+  for (const variants of groups.values()) {
+    const record = opticalRecord(variants);
     record.checkbox.checked = record.selected;
     record.nameInput.value = record.name;
   }
@@ -85,6 +101,7 @@ function reset() {
   psfPalette.value = 'magma';
   tailMode.value = 'tailFraction';
   maskMode.value = 'layers';
+  if (workspace?.standalone) sceneFilter.value = 'all';
   update();
 }
 
@@ -510,24 +527,32 @@ function drawThroughput(ctx, cases, x, y, width, height) {
   });
 }
 
-function drawScenes(ctx, cases, width, top, side) {
-  const cell = (width - columnGutters) / cases.length;
+function drawScenes(ctx, columns, width, top, side, stacked) {
+  const cell = (width - columnGutters) / columns.length;
+  const rowModes = stacked ? ['sensor', 'object'] : [null];
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
-  cases.forEach((record, i) => {
+  columns.forEach((variants, i) => {
     const center = columnLeft + (i + .5) * cell;
-    label(ctx, nameOf(record), center, top + 41, {align: 'center', weight: 660, max: cell - 10});
-    const image = record.sceneImage;
-    const fit = side / Math.max(image.naturalWidth, image.naturalHeight);
-    const w = image.naturalWidth * fit;
-    const h = image.naturalHeight * fit;
-    ctx.drawImage(image, center - w / 2, top + 52 + (side - h) / 2, w, h);
-    label(ctx, `G 均值 ${percent(record.mean[1])}`, center, top + side + 69,
-          {size: 11, color: muted, align: 'center'});
+    label(ctx, nameOf(opticalRecord(variants)), center, top + 41, {align: 'center', weight: 660, max: cell - 10});
+    rowModes.forEach((mode, row) => {
+      const record = stacked ? variants.find(item => item.sceneMode === mode)
+        ?? (row === 0 && variants.find(item => !item.sceneMode)) : variants[0];
+      const rowTop = top + 52 + row * (side + 35);
+      if (stacked && i === 0) label(ctx, mode, 24, rowTop + side / 2, {size: 12, weight: 660, color: muted});
+      if (!record) return;
+      const image = record.sceneImage;
+      const fit = side / Math.max(image.naturalWidth, image.naturalHeight);
+      const w = image.naturalWidth * fit;
+      const h = image.naturalHeight * fit;
+      ctx.drawImage(image, center - w / 2, rowTop + (side - h) / 2, w, h);
+      const note = workspace?.brightnessMatched ? record.sceneNote : `G 均值 ${percent(record.mean[1])}`;
+      if (note) label(ctx, note, center, rowTop + side + 17, {size: 11, color: muted, align: 'center'});
+    });
   });
 }
 
-function drawFigure(cases) {
+function drawFigure(cases, sceneColumns) {
   const width = Math.max(900, 138 * cases.length + 152, plots.clientWidth);
   const cellWidth = Math.floor((width - columnGutters) / cases.length);
   const side = Math.min(202, cellWidth - 28);
@@ -541,7 +566,9 @@ function drawFigure(cases) {
   const responseHeight = band ? 240 + legendHeight(cases, mid - 97) : 257;
   const tailHeight = radii.length ? 200 + legendHeight(cases, width - 98) : 194;
   const maskTop = 91 + legendHeight(cases, width - 56);
-  const height = maskTop + maskHeight + pupilHeight + (3 * side + 318) + responseHeight + tailHeight + (side + 93);
+  const stackedScenes = sceneColumns.some(variants => variants.length > 1);
+  const height = maskTop + maskHeight + pupilHeight + (3 * side + 318) + responseHeight + tailHeight
+    + side + 93 + (stackedScenes ? side + 35 : 0);
   figure.width = width * scale;
   figure.height = height * scale;
   const ctx = figure.getContext('2d', {alpha: false});
@@ -550,7 +577,8 @@ function drawFigure(cases) {
   ctx.fillRect(0, 0, width, height);
   label(ctx, 'UDC 衍射成像对比', 28, 36, {size: 25, weight: 700});
   const subtitle = workspace
-    ? (workspace.caution ? '所选方案存在条件差异或缺失项 · 详见工作台可比性判定' : '选中方案 · 固定色标与物理坐标')
+    ? (stackedScenes ? '光学图表采用 object · 成像上排 sensor、下排 object' :
+       !workspace.standalone && workspace.caution ? '所选方案存在条件差异或缺失项 · 详见工作台可比性判定' : '选中方案 · 固定色标与物理坐标')
     : '4 mm 入瞳 · 500 点/Pitch · D65 · USAF500';
   label(ctx, subtitle, 28, 58, {color: muted});
   drawLegend(ctx, cases, 28, 91, width - 56);
@@ -617,14 +645,18 @@ function drawFigure(cases) {
     label(ctx, '无共同有效半径', 67, top + 86, {color: muted});
   }
   top += tailHeight;
-  const sceneTitle = workspace ? '同曝光成像' : 'USAF500 · 同曝光成像';
-  sectionTitle(ctx, sceneTitle,
-               '使用仿真输出的同曝光预览 · G 通道线性均值以各自无遮挡为 100%', top);
-  drawScenes(ctx, cases, width, top, side);
+  const sceneTitle = workspace?.brightnessMatched ? '亮度匹配成像' :
+                     workspace ? '同曝光成像' : 'USAF500 · 同曝光成像';
+  const sceneCaption = stackedScenes ? '同一 Case 共用一列 · sensor 在上 · object 在下' :
+                       workspace?.brightnessMatched ? '使用仿真输出的亮度匹配预览' :
+                       '使用仿真输出的同曝光预览 · G 通道线性均值以各自无遮挡为 100%';
+  sectionTitle(ctx, sceneTitle, sceneCaption, top);
+  drawScenes(ctx, sceneColumns, width, top, side, stackedScenes);
 
   byId('mask-title').textContent = overlay ? 'BM / Cath 掩膜叠加' : 'BM / Cath 掩膜';
   byId('psf-title').textContent = psfTitle;
   byId('scene-title').textContent = sceneTitle;
+  byId('scene-plot').setAttribute('aria-label', stackedScenes ? `${sceneTitle}，sensor 在上、object 在下` : sceneTitle);
   const left = caseHeader.scrollLeft;
   drawCaseHeader(cases, width);
   // HTML titles replace the first canvas title in sections with a header bar.
@@ -639,7 +671,11 @@ function drawFigure(cases) {
 
 function update() {
   if (!ready || comparisonView.hidden) return;
-  const cases = selected();
+  if (workspace?.standalone) {
+    for (const variants of groups.values()) opticalRecord(variants).controlRow.hidden = !variants.some(matchesScene);
+  }
+  const sceneColumns = activeGroups();
+  const cases = sceneColumns.map(opticalRecord);
   const references = cases.filter(isReference).length;
   const count = cases.length - references;
   status.textContent = `已选 ${count} 个方案${references ? ' · 已显示无遮挡参考' : ' · 已隐藏无遮挡参考'}`;
@@ -668,7 +704,7 @@ function update() {
     return row;
   });
   byId('metrics').replaceChildren(...rows);
-  if (cases.length) drawFigure(cases);
+  if (cases.length) drawFigure(cases, sceneColumns);
 }
 
 function showView(showGuide) {
@@ -707,8 +743,15 @@ exportButton.addEventListener('click', () => {
 });
 
 if (workspace) {
-  document.body.classList.add('embedded');
   byId('flux-controls').hidden = false;
+  if (radii.length) {
+    byId('radius-label').hidden = tailRadius.hidden = false;
+    for (const radius of radii) tailRadius.add(new Option(`${radius} μm`, radius));
+    if (radii.includes(20)) tailRadius.value = '20';
+  }
+}
+if (embedded) {
+  document.body.classList.add('embedded');
   // Fragment links in srcdoc resolve against the host page. Switch views in place.
   for (const link of document.querySelectorAll('a[href="#guide"], a[href="#comparison"]')) {
     link.addEventListener('click', event => {
@@ -716,16 +759,16 @@ if (workspace) {
       showView(link === guideLink);
     });
   }
-  if (radii.length) {
-    byId('radius-label').hidden = tailRadius.hidden = false;
-    for (const radius of radii) tailRadius.add(new Option(`${radius} μm`, radius));
-    if (radii.includes(20)) tailRadius.value = '20';
-  }
 } else {
   byId('all').addEventListener('click', () => setAll(true));
   byId('none').addEventListener('click', () => setAll(false));
   byId('reset').addEventListener('click', reset);
-  records.forEach(addControls);
+  groups.forEach(addControls);
+  if (workspace?.standalone) {
+    byId('comparison-summary').textContent = 'Case9–12 · sensor / object · 亮度匹配成像';
+    byId('scene-filter-control').hidden = false;
+    sceneFilter.addEventListener('change', update);
+  }
   const syncView = () => showView(window.location.hash === '#guide');
   window.addEventListener('hashchange', syncView);
   syncView();

@@ -139,7 +139,7 @@
   <header>
     <div class="masthead">
       <h1>透射衍射对比工作台</h1>
-      <p>4 mm 入瞳 · 236.2 μm Pitch · 17×17 · 500 点/Pitch · 3 mm 焦距 · 1 μm 像元 · D65 · USAF500</p>
+      <p id="comparison-summary">4 mm 入瞳 · 236.2 μm Pitch · 17×17 · 500 点/Pitch · 3 mm 焦距 · 1 μm 像元 · D65 · USAF500</p>
     </div>
   </header>
   <nav class="view-tabs" aria-label="查看仿真结果和读图说明">
@@ -150,6 +150,9 @@
     <aside aria-labelledby="controls-title">
       <div class="control-header"><h2 id="controls-title">方案与显示名称</h2></div>
       <p class="hint">勾选方案，或直接编辑显示名称。</p>
+      <div class="panel-controls" id="scene-filter-control" hidden>
+        <label>场景模式 <select id="scene-filter"><option value="all">全部</option><option value="object">object</option><option value="sensor">sensor</option></select></label>
+      </div>
       <div id="reference-control"></div>
       <div class="control-actions">
         <button type="button" id="all">全选方案</button>

@@ -16,10 +16,19 @@ function plotDiffractionDiagnostics(optics,outputDir)
     colormap(ax,gray); clim(ax,[0,1]); colorbar(ax);
 
     coordinate = optics.coordinate*1e6;
+    options = optics.quality.options;
+    floorDb = [];
+    if isfield(options,'rgbDisplayFloorDb'), floorDb = options.rgbDisplayFloorDb; end
     ax = nexttile(layout);
     reference = max(max(optics.clearKernel,[],'all'),realmin);
-    preview = min(log1p(1000*optics.kernel/reference)/log1p(1000),1);
-    drawMap(ax,coordinate,coordinate,preview,'RGB 衍射强度（对数显示）','传感器 (μm)');
+    if isempty(floorDb)
+        preview = min(log1p(1000*optics.kernel/reference)/log1p(1000),1);
+        rgbTitle = 'RGB 衍射强度（对数显示）';
+    else
+        preview = rgbInDb(optics.kernel,reference,floorDb);
+        rgbTitle = sprintf('RGB 衍射强度（%g 至 0 dB）',floorDb);
+    end
+    drawMap(ax,coordinate,coordinate,preview,rgbTitle,'传感器 (μm)');
 
     ax = nexttile(layout);
     greenPsf = optics.psf(:,:,2);
@@ -39,16 +48,34 @@ function plotDiffractionDiagnostics(optics,outputDir)
     closeFigure = onCleanup(@() close(figureHandle));
     layout = tiledlayout(figureHandle,1,2,'TileSpacing','compact','Padding','compact');
     point = optics.quality.hdrPoint;
-    reference = max([1,max(point.clear,[],'all'),max(point.withMask,[],'all')]);
-    displayScale = log1p(20*reference);
-    selected = abs(coordinate)<=optics.quality.options.hdrDisplayHalfWidthUm;
+    selected = abs(coordinate)<=options.hdrDisplayHalfWidthUm+8*eps(max(abs(coordinate)));
     displayCoordinate = coordinate(selected);
-    drawMap(nexttile(layout),displayCoordinate,displayCoordinate,log1p(20*point.clear(selected,selected,:))/displayScale, ...
-        '无遮挡','传感器 (μm)');
-    drawMap(nexttile(layout),displayCoordinate,displayCoordinate,log1p(20*point.withMask(selected,selected,:))/displayScale, ...
-        '含 UDC 掩膜','传感器 (μm)');
-    title(layout,sprintf('HDR 点光源 · 输入 %.3g · 共同曝光与对数显示',optics.quality.options.hdrPointSignal));
+    clearPoint = point.clear(selected,selected,:);
+    maskedPoint = point.withMask(selected,selected,:);
+    heading = sprintf('HDR 点光源 · 输入 %.3g · 共同曝光',options.hdrPointSignal);
+    if isempty(floorDb)
+        reference = max([1,max(point.clear,[],'all'),max(point.withMask,[],'all')]);
+        displayScale = log1p(20*reference);
+        clearPreview = log1p(20*clearPoint)/displayScale;
+        maskedPreview = log1p(20*maskedPoint)/displayScale;
+        title(layout,string(heading)+"与对数显示");
+    else
+        reference = max(max(point.clear,[],'all'),realmin);
+        clearPreview = rgbInDb(clearPoint,reference,floorDb);
+        maskedPreview = rgbInDb(maskedPoint,reference,floorDb);
+        title(layout,{heading,sprintf('%g 至 0 dB · 0 dB 为无遮挡峰值',floorDb)});
+    end
+    drawMap(nexttile(layout),displayCoordinate,displayCoordinate,clearPreview,'无遮挡','传感器 (μm)');
+    drawMap(nexttile(layout),displayCoordinate,displayCoordinate,maskedPreview,'含 UDC 掩膜','传感器 (μm)');
     exportgraphics(layout,fullfile(outputDir,'udc_hdr_point.png'),'Resolution',160);
+end
+
+function rgb = rgbInDb(energy,reference,floorDb)
+    % 按每个像元最强通道映射亮度，保留该像元原来的 RGB 比例。
+    peak = max(max(energy,[],3),realmin);
+    db = 10*(log10(peak)-log10(reference));
+    level = min(max(1-db/floorDb,0),1);
+    rgb = (energy./peak).*level;
 end
 
 function drawMap(ax,x,y,data,label,unit)

@@ -16,19 +16,28 @@
     30,
     25
   ],
+  "sceneModes": ["sensor", "object"],
   "cfg": {
+    "sceneGeometry": {
+      "mode": "object",
+      "objectSizeMm": [500, 500],
+      "objectDistanceMm": 500,
+      "sensorFrameMm": [4.8, 3.6],
+      "previewWidthPixels": 1200,
+      "backgroundLinear": 0.18
+    },
     "pitch": 0.0004724,
     "periods": [
       9,
       9
     ],
-    "samplesPerPeriod": 1000,
+    "samplesPerPeriod": 1500,
     "heightMap": 0,
     "deltaIndex": 0.2,
     "pupilRadius": 0.002,
     "focalLength": 0.003,
-    "sensorPitch": 1e-06,
-    "outputSize": 201,
+    "sensorPitch": 5e-07,
+    "outputSize": 401,
     "receiverBinSamples": 3,
     "quality": {
       "tailRadiiUm": [
@@ -41,10 +50,11 @@
         100
       ],
       "hdrPointSignal": 1000,
-      "hdrDisplayHalfWidthUm": 50
+      "hdrDisplayHalfWidthUm": 100,
+      "rgbDisplayFloorDb": -60
     },
     "receiverMethod": "fftBins",
-    "receiverFftPaddingFactor": 2
+    "receiverFftPaddingFactor": 3
   },
   "stack": {
     "layerNames": [

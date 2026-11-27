@@ -92,6 +92,69 @@ classdef UDCImagingV2Test < matlab.unittest.TestCase
             testCase.verifyEqual(optics.spectralEnergy,reference,AbsTol=1e-8);
         end
 
+        function focusedObjectProjectionUsesDistanceAndSensorPitch(testCase)
+            cfg = testCase.Config;
+            cfg.receiverMethod = "fftBins";
+            cfg.receiverFftPaddingFactor = 2;
+            cfg.sensorPitch = 1e-6;
+            cfg.sceneGeometry = struct('mode',"object",'objectSizeMm',[0.9,0.45],'objectDistanceMm',30);
+            scene = ones(20,40);
+            stack = testCase.stackFor("nk");
+            [near,nearImages] = runUDCImagingV2(cfg,stack,testCase.InputDir,scene);
+            testCase.verifySize(nearImages.inputLinear,[50,100,3]);
+            testCase.verifyEqual(near.config.sceneProjection.imageDistanceMm,10/3,AbsTol=1e-12);
+            testCase.verifyEqual(near.config.sceneProjection.magnification,1/9,AbsTol=1e-12);
+            cfg.sceneGeometry.objectDistanceMm = 57;
+            [~,farImages] = runUDCImagingV2(cfg,stack,testCase.InputDir,scene);
+            testCase.verifySize(farImages.inputLinear,[25,50,3]);
+            cfg.sceneGeometry.mode = "sensor";
+            [sensor,sensorImages] = runUDCImagingV2(cfg,stack,testCase.InputDir,scene);
+            testCase.verifySize(sensorImages.inputLinear,[20,40,3]);
+            testCase.verifyNotEqual(sensor.psf,near.psf);
+        end
+
+        function sharedFftPreservesEachScenesBinning(testCase)
+            cfg = testCase.Config;
+            cfg.receiverMethod = "fftBins";
+            cfg.receiverFftPaddingFactor = 2;
+            cfg.sensorPitch = 1e-6;
+            cfg.sceneGeometry = struct('mode',"object",'objectSizeMm',[0.9,0.45],'objectDistanceMm',30);
+            scene = reshape(linspace(0,1,800),20,40);
+            stack = testCase.stackFor("nk");
+            scenes = ["object","sensor"];
+            [shared,sharedImages] = runUDCImagingV2(cfg,stack,testCase.InputDir,scene,"linear",scenes);
+            testCase.verifySize(shared,[1,2]);
+            for k = 1:numel(scenes)
+                cfg.sceneGeometry.mode = scenes(k);
+                [single,singleImages] = runUDCImagingV2(cfg,stack,testCase.InputDir,scene);
+                for field = ["spectralEnergy","clearKernel","psf","mtf"]
+                    testCase.verifyEqual(shared(k).(field),single.(field),AbsTol=1e-10);
+                end
+                testCase.verifyEqual(sharedImages(k).fixedExposure,singleImages.fixedExposure,AbsTol=1e-10);
+                testCase.verifyEqual(sharedImages(k).brightnessMatched,singleImages.brightnessMatched,AbsTol=1e-10);
+            end
+        end
+
+        function framedPreviewMatchesNativeConvolutionAndAveraging(testCase)
+            cfg = testCase.Config;
+            cfg.receiverMethod = "fftBins";
+            cfg.receiverFftPaddingFactor = 2;
+            cfg.sensorPitch = 1e-6;
+            cfg.sceneGeometry = struct('mode',"object",'objectSizeMm',[0.9,0.45],'objectDistanceMm',30, ...
+                'sensorFrameMm',[0.16,0.10],'previewWidthPixels',80);
+            [optics,images] = runUDCImagingV2(cfg,testCase.stackFor("nk"),testCase.InputDir,ones(20,40));
+            testCase.verifySize(images.inputLinear,[50,80,3]);
+            testCase.verifyEqual(optics.config.sceneProjection.frame.sizePixels,[160,100]);
+            background = 0.18;
+            target = zeros(100,160);
+            target(26:75,31:130) = 1-background;
+            native = background+conv2(target,optics.psf(:,:,2),'same');
+            expected = (native(1:2:end,1:2:end)+native(2:2:end,1:2:end)+ ...
+                native(1:2:end,2:2:end)+native(2:2:end,2:2:end))/4;
+            testCase.verifyEqual(images.brightnessMatched(:,:,2),expected,AbsTol=1e-12);
+            testCase.verifyEqual(images.inputLinear(1,1,2),background,AbsTol=1e-12);
+        end
+
         function rejectsGrayBeforeResampling(testCase)
             stack = testCase.stackFor("specifiedTransmittance");
             temporary = testCase.applyFixture(matlab.unittest.fixtures.TemporaryFolderFixture());

@@ -1,24 +1,40 @@
-function reportPath = writeUDCReport(projectOutputDir,modes)
+function reportPath = writeUDCReport(projectOutputDir,modes,sceneModes)
 %writeUDCReport 汇总已完成模式的 CSV、配置和图像，生成可离线打开的 HTML。
     arguments
         projectOutputDir (1,1) string
         modes (1,:) string {mustBeNonempty}
+        sceneModes (1,:) string = strings(1,0)
     end
     modes = coreCanonicalUDCModeNames(modes);
     [~,projectName] = fileparts(projectOutputDir);
     heading = escapeHtml(projectName)+" · UDC 成像报告";
-    sections = strings(numel(modes),1);
+    if isempty(sceneModes)
+        sceneModes = "";
+    else
+        mustBeMember(sceneModes,["sensor","object"]);
+    end
+    sections = strings(numel(modes)*numel(sceneModes),1);
     navigation = sections;
-    for k = 1:numel(modes)
-        mode = modes(k);
-        assert(isvarname(char(mode)), 'UDCImagingV2:ReportMode','无效的透射模式名：%s',mode);
-        label = mode;
-        if mode=="specifiedTransmittance", label = "给定功率透过率"; end
-        if mode=="nk", label = "薄膜 n、k 与厚度"; end
-        label = escapeHtml(label);
-        navigation(k) = "<a href=""#"+mode+""">"+label+"</a>";
-        modeOutputDir = coreFindUDCModeResults(projectOutputDir,mode);
-        sections(k) = modeSection(modeOutputDir,mode,label);
+    k = 0;
+    for sceneMode = sceneModes
+        sceneOutputDir = projectOutputDir;
+        if sceneMode=="object", sceneOutputDir = fullfile(projectOutputDir,"object"); end
+        for mode = modes
+            k = k+1;
+            assert(isvarname(char(mode)), 'UDCImagingV2:ReportMode','无效的透射模式名：%s',mode);
+            label = mode;
+            if mode=="specifiedTransmittance", label = "给定功率透过率"; end
+            if mode=="nk", label = "薄膜 n、k 与厚度"; end
+            anchor = mode;
+            if sceneMode~=""
+                anchor = sceneMode+"-"+mode;
+                label = sceneMode+" · "+label;
+            end
+            label = escapeHtml(label);
+            navigation(k) = "<a href=""#"+anchor+""">"+label+"</a>";
+            modeOutputDir = coreFindUDCModeResults(sceneOutputDir,mode);
+            sections(k) = modeSection(modeOutputDir,anchor,label);
+        end
     end
 
     style = [
@@ -70,6 +86,30 @@ function html = modeSection(folder,mode,label)
         cfg.periods(1),cfg.periods(2),2e3*cfg.pupilRadius,1e3*cfg.focalLength, ...
         1e6*cfg.sensorPitch,cfg.outputSize,cfg.outputSize,spanMm, ...
         min(cfg.wavelengths)*1e9,max(cfg.wavelengths)*1e9,numel(cfg.wavelengths));
+    sceneComparison = "";
+    brightnessGallery = "";
+    if isfield(cfg,'sceneProjection')
+        projection = cfg.sceneProjection;
+        setup = string(setup) + sprintf([' 物体成像 · 物体 %.4g×%.4g mm，物距 %.4g mm，像距 %.4g mm。' ...
+            '投影尺寸 %.4g×%.4g mm，对应 %d×%d 像元。'], ...
+            cfg.sceneGeometry.objectSizeMm(1),cfg.sceneGeometry.objectSizeMm(2), ...
+            cfg.sceneGeometry.objectDistanceMm,projection.imageDistanceMm, ...
+            projection.imageSizeMm(1),projection.imageSizeMm(2), ...
+            projection.imageSizePixels(1),projection.imageSizePixels(2));
+        if isfield(projection,'frame')
+            frame = projection.frame;
+            setup = setup + sprintf([' 传感器画幅 %.4g×%.4g mm（%d×%d 原生像元）。' ...
+                '居中目标，背景线性强度 %.3g，整图预览 %d×%d 像素。'], ...
+                frame.sizeMm(1),frame.sizeMm(2),frame.sizePixels(1),frame.sizePixels(2), ...
+                frame.backgroundLinear,frame.previewSizePixels(1),frame.previewSizePixels(2));
+            sceneComparison = "<h3>整图亮度匹配对比</h3><div class=""comparison"">"+ ...
+                figureHtml(folder,"udc_clear.png","无遮挡")+ ...
+                figureHtml(folder,"udc_brightness_matched.png","含掩膜 · 亮度匹配")+"</div>";
+        end
+    end
+    if strlength(sceneComparison)==0
+        brightnessGallery = "<div class=""gallery"">"+figureHtml(folder,"udc_brightness_matched.png","亮度匹配成像")+"</div>";
+    end
     if isfield(cfg,'reusedFromProject')
         setup = string(setup) + sprintf(' 复用 %s 的衍射解。理想中性层强度透过率为 %.3g%%，所有波长相同。', ...
             cfg.reusedFromProject,100*cfg.neutralTransmittance);
@@ -85,6 +125,7 @@ function html = modeSection(folder,mode,label)
         "<h3>同曝光成像对比</h3><div class=""comparison"">"+ ...
         figureHtml(folder,"udc_clear.png","无遮挡 · 仅入瞳与传感器像元积分")+ ...
         figureHtml(folder,"udc_fixed_exposure.png","含 UDC Mask · 同一曝光")+"</div>"+ ...
+        sceneComparison+ ...
         figureHtml(folder,comparisonImage,"无遮挡与含 Mask 的 PSF 全范围、中心放大和 MTF")+ ...
         htmlTable("进光量与偏色", ...
         ["通道","总透过率","窗口捕获透过率","相对无遮挡","窗口内／总透射能量"], ...
@@ -101,8 +142,7 @@ function html = modeSection(folder,mode,label)
         percentText(tail.ClearTailThroughput)])+ ...
         "<p>尾部指标限于计算窗口。横线表示当前网格无法取得有效指标。</p>"+ ...
         figureHtml(folder,"udc_diffraction_diagnostics.png","有效入瞳、RGB 衍射强度、对数 PSF 与二维 MTF")+ ...
-        figureHtml(folder,"udc_hdr_point.png","同曝光 HDR 点光源对照")+ ...
-        "<div class=""gallery"">"+figureHtml(folder,"udc_brightness_matched.png","亮度匹配成像")+"</div></section>";
+        figureHtml(folder,"udc_hdr_point.png","同曝光 HDR 点光源对照")+brightnessGallery+"</section>";
 end
 
 function text = numberText(values)
